@@ -91,7 +91,14 @@ async function makeAttpSticker(text) {
     const frames = [];
     for (const color of COLORS) {
         const svg = buildSvg(lines, color);
-        const buf = await sharp(svg, { density: 150 }).webp({ lossless: true }).toBuffer();
+        // IMPORTANT: force each frame to exactly SIZE×SIZE. With density:150 the
+        // SVG renders larger (~1067px), and a frame/canvas size mismatch makes
+        // node-webpmux produce a corrupt animation that shows up as an empty
+        // sticker in WhatsApp.
+        const buf = await sharp(svg, { density: 150 })
+            .resize(SIZE, SIZE, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+            .webp({ lossless: true })
+            .toBuffer();
         frames.push(await webp.Image.generateFrame({ buffer: buf, delay: 130 }));
     }
     return webp.Image.save(null, {

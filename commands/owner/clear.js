@@ -23,21 +23,40 @@ module.exports = {
     usage:       '.clear',
     category:    'owner',
 
-    async execute({ sock, from, msg, reply, isOwner, isGroup }) {
+    async execute({ sock, from, msg, sender, reply, isOwner, isGroup }) {
         if (!isOwner) return reply('🔒 _This command is reserved for the bot owner only._');
 
         try {
-            // chatModify with delete:true wipes the entire chat on the bot's
-            // local view. lastMessages must contain the anchor message key +
-            // its Unix timestamp (in seconds) so Baileys can build the correct
-            // WA protocol payload.
-            await sock.chatModify({
-                delete: true,
-                lastMessages: [{
-                    key:              msg.key,
-                    messageTimestamp: msg.messageTimestamp,
-                }],
-            }, from);
+            // Build a fully-valid anchor. Baileys' chatModify throws if the
+            // key is incomplete, if a group message that is not fromMe has no
+            // participant, or if the timestamp is missing / non-numeric — any
+            // of which silently broke this command. We normalise all three.
+            const anchorKey = {
+                remoteJid: from,
+                id:        msg.key?.id,
+                fromMe:    !!msg.key?.fromMe,
+            };
+            if (isGroup && !anchorKey.fromMe) {
+                anchorKey.participant = msg.key?.participant || sender;
+            }
+
+            // Coerce the timestamp to a plain integer (it may arrive as a Long
+            // object or be undefined).
+            let ts = msg.messageTimestamp;
+            if (ts && typeof ts === 'object' && typeof ts.toNumber === 'function') ts = ts.toNumber();
+            ts = Number(ts);
+            if (!ts || Number.isNaN(ts)) ts = Math.floor(Date.now() / 1000);
+
+            const lastMessages = [{ key: anchorKey, messageTimestamp: ts }];
+
+            // Try deleting the chat from the bot's view; if the fork/state
+            // rejects a full delete, fall back to clearing its messages.
+            try {
+                await sock.chatModify({ delete: true, lastMessages }, from);
+            } catch (delErr) {
+                console.error('[CLEAR CMD] delete failed, trying clear:', delErr.message);
+                await sock.chatModify({ clear: true, lastMessages }, from);
+            }
 
             // Give WhatsApp server 2 s to process the delete before we reply.
             await new Promise(resolve => setTimeout(resolve, 2000));

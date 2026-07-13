@@ -16,9 +16,11 @@ class Database {
             warnings: this.load('warnings') || {},
             banned: this.load('banned') || {},
             lastSeen: this.load('lastSeen') || {},
+            msgCounts: this.load('msgCounts') || {},
             ownerInfo: this.load('ownerInfo') || {}
         };
         this._lastSeenSaveAt = 0;
+        this._msgCountSaveAt = 0;
     }
 
     // ── Owner Info Overrides (used by .owner / .setname / .setbio) ─────
@@ -50,6 +52,28 @@ class Database {
 
     getLastSeen(groupId, userJid) {
         return this.data.lastSeen?.[groupId]?.[userJid] || 0;
+    }
+
+    // ── Per-member message counters (for .listactive / .listinactive) ──
+    incMessageCount(groupId, userJid) {
+        if (!groupId || !userJid) return;
+        if (!this.data.msgCounts[groupId]) this.data.msgCounts[groupId] = {};
+        this.data.msgCounts[groupId][userJid] = (this.data.msgCounts[groupId][userJid] || 0) + 1;
+        // Throttle disk writes — this runs on every group message.
+        const now = Date.now();
+        if (now - this._msgCountSaveAt > 30000) {
+            this._msgCountSaveAt = now;
+            try { this.save('msgCounts'); } catch (_) {}
+        }
+    }
+
+    getMessageCount(groupId, userJid) {
+        return this.data.msgCounts?.[groupId]?.[userJid] || 0;
+    }
+
+    // Returns a plain object { userJid: count } for the whole group.
+    getMessageCounts(groupId) {
+        return this.data.msgCounts?.[groupId] || {};
     }
 
     ensureDataDir() {
