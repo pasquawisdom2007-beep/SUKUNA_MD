@@ -1,7 +1,7 @@
 /**
- * AutoVV Command — Auto-forward group media to owner DM as view-once
+ * AutoVV Command — Auto-forward group media to owner DM
  * Automatically listens for photos/videos sent in groups
- * When detected, sends them to owner's DM as view-once messages
+ * When detected, sends them to owner's DM as normal messages
  */
 
 const { downloadContentFromMessage } = require('@crysnovax/baileys');
@@ -31,7 +31,7 @@ async function downloadMedia(mediaMsg, mediaType, retries = 3) {
 module.exports = {
     name: 'autovv',
     alias: ['autovv', 'autovvme'],
-    desc: 'Auto-forward group media to owner DM as view-once',
+    desc: 'Auto-forward group media to owner DM',
     category: 'Utility',
     isListener: true,
 
