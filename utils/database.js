@@ -36,7 +36,7 @@ class Database {
     // ── Auto-Approve join requests (bot-wide, not per-group) ───────────────
     // Applies across every group the bot is admin of.
     getAutoAdd() {
-        const DEFAULTS = { enabled: true, delaySeconds: 60, countryCode: 'all' };
+        const DEFAULTS = { enabled: false, delaySeconds: 60, countryCode: 'all' };
         if (!this.data.settings.autoAdd) {
             this.data.settings.autoAdd = { ...DEFAULTS };
             this.save('settings');

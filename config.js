@@ -77,13 +77,13 @@ module.exports = {
     },
 
     // ============================================
-    // ANTI-BAN ENGINE v2.0
+    // OUTBOUND SAFETY THROTTLE
     // ============================================
     antiBan: {
         enabled: true,
-        maxMessagesPerSecond: 2,
-        messageRateLimit: 500,
-        apiThrottleMs: 500,
+        maxMessagesPerSecond: 1,
+        messageRateLimit: 1000,
+        apiThrottleMs: 1000,
         autoPauseThreshold: 5,
         autoPauseDuration: 180000
     }

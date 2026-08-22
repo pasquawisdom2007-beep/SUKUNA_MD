@@ -1,23 +1,23 @@
 /**
  * Anti-Ban Engine v2.0
- * Reduces ban rate from 100% to <2%
+ * Reduces accidental outbound bursts; it cannot prevent platform enforcement.
  */
 
 'use strict';
 
 class AntiBanEngine {
-    constructor(phoneNumber) {
+    constructor(phoneNumber, options = {}) {
         this.phoneNumber = phoneNumber;
         this.messageQueue = [];
         this.isProcessingQueue = false;
-        this.messageRateLimit = 500; // ms between messages
+        this.messageRateLimit = Math.max(250, Number(options.messageRateLimit) || 500);
         this.lastMessageTime = 0;
         this.messagesThisSecond = 0;
         this.secondStartTime = Date.now();
-        this.maxMessagesPerSecond = 2;
+        this.maxMessagesPerSecond = Math.max(1, Number(options.maxMessagesPerSecond) || 2);
         
         this.lastAPICallTime = 0;
-        this.apiThrottleMs = 500;
+        this.apiThrottleMs = Math.max(250, Number(options.apiThrottleMs) || 500);
         this.apiCallQueue = [];
         this.isProcessingAPIQueue = false;
         
@@ -25,7 +25,8 @@ class AntiBanEngine {
         this.errorWindow = 60000;
         this.lastErrorTime = 0;
         this.isAutoPaused = false;
-        this.autoPauseThreshold = 5;
+        this.autoPauseThreshold = Math.max(1, Number(options.autoPauseThreshold) || 5);
+        this.autoPauseDuration = Math.max(30000, Number(options.autoPauseDuration) || 180000);
         
         this.userCommandCooldowns = new Map();
         this.defaultCooldown = 2000;
@@ -33,10 +34,14 @@ class AntiBanEngine {
         this._startQueueProcessor();
     }
     
-    async queueMessage(sock, remoteJid, messageContent) {
+    async queueMessage(sock, remoteJid, messageContent, options) {
         return new Promise((resolve, reject) => {
+            if (this.isAutoPaused) {
+                reject(new Error('Outgoing messages paused by safety throttle'));
+                return;
+            }
             this.messageQueue.push({
-                sock, remoteJid, messageContent,
+                sock, remoteJid, messageContent, options,
                 resolve, reject,
                 addedAt: Date.now()
             });
@@ -74,7 +79,7 @@ class AntiBanEngine {
             this.messagesThisSecond++;
             
             try {
-                const result = await item.sock.sendMessage(item.remoteJid, item.messageContent);
+                const result = await item.sock.sendMessage(item.remoteJid, item.messageContent, item.options);
                 item.resolve(result);
             } catch (err) {
                 this._trackError(err);
@@ -92,7 +97,7 @@ class AntiBanEngine {
         if (msg.includes('403') || msg.includes('429') || msg.includes('401')) {
             console.log(`[ANTI-BAN] Ban-related error detected: ${msg}`);
             this.isAutoPaused = true;
-            setTimeout(() => { this.isAutoPaused = false; }, 120000);
+            setTimeout(() => { this.isAutoPaused = false; this._processMessageQueue(); }, this.autoPauseDuration);
         }
         
         if (now - this.lastErrorTime > this.errorWindow) {
@@ -105,7 +110,7 @@ class AntiBanEngine {
         if (this.errorCount >= this.autoPauseThreshold) {
             console.log(`[ANTI-BAN] Threshold reached (${this.errorCount} errors in 1min) - pausing`);
             this.isAutoPaused = true;
-            setTimeout(() => { this.isAutoPaused = false; }, 180000);
+            setTimeout(() => { this.isAutoPaused = false; this._processMessageQueue(); }, this.autoPauseDuration);
         }
     }
     
