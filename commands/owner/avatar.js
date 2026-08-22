@@ -16,7 +16,7 @@
  */
 'use strict';
 
-const { downloadMediaMessage } = require('@crysnovax/baileys');
+const { downloadMediaMessage } = require('@pasqua-baileys/baileys');
 
 const DEFAULT_QUERIES = ['portrait', 'face', 'person', 'model', 'aesthetic'];
 

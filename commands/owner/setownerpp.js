@@ -1,5 +1,5 @@
 'use strict';
-const { downloadMediaMessage } = require('@crysnovax/baileys');
+const { downloadMediaMessage } = require('@pasqua-baileys/baileys');
 
 module.exports = {
     name: 'setownerpp',

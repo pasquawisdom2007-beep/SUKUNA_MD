@@ -28,6 +28,8 @@ const DESIGNS = [
     'codex',
     // ── Dark design ──
     'dark',
+    // ── Onyx design ──
+    'onyx',
     // ── Kord design ──
     'kord',
 ];
@@ -1044,6 +1046,41 @@ function designDark(ctx) {
     return c;
 }
 
+// ── Design: onyx — dark quote-card menu with compact command sections ──
+function designOnyx(ctx) {
+    const { userTag, creator, mode, total, uptime, prefix, version,
+            sortedCategories, byCategory, CATEGORY_LABELS, status, platform,
+            library, credits } = ctx;
+    const bi = ctx.boldItalic || ((value) => String(value));
+    let c = '';
+
+    c += `> ┏❐  ⌜ *${bi('SUKUNA MD · ONYX')}* ⌟  ❐ \n`;
+    c += `> ┃⭔ user    : ${userTag}\n`;
+    c += `> ┃⭔ owner   : ${creator}\n`;
+    c += `> ┃⭔ mode    : ${mode}\n`;
+    c += `> ┃⭔ uptime  : ${uptime}\n`;
+    c += `> ┃⭔ cmds    : ${total}\n`;
+    c += `> ┃⭔ version : ${version}\n`;
+    c += `> ┃⭔ status  : ${status}\n`;
+    c += `> ┃⭔ platform: ${platform}\n`;
+    c += `> ┃⭔ library : ${library || '@pasqua-baileys/baileys'}\n`;
+    c += `> ┗❐\n\n`;
+    c += `> ┏❐  ⌜ *COMMANDS* ⌟  ❐ \n\n`;
+
+    for (const cat of sortedCategories) {
+        const names = byCategory[cat];
+        if (!names?.length) continue;
+        const label = CATEGORY_LABELS[cat] || (cat[0].toUpperCase() + cat.slice(1));
+        c += `> ━━ ${bi(label.toUpperCase())} ━━\n`;
+        for (const name of names) c += `> ❐ ${prefix}${name}\n`;
+        c += `\n`;
+    }
+
+    c += `> ┗❐ ┈┈┈┈┈┈┈┈┈┈✧\n`;
+    c += `> _${bi('onyx core')} · ${total} commands · ${credits || 'pasqua tech'}_`;
+    return c;
+}
+
 // ── Design: kord — boxed peak header + sectioned command cards ──
 // Matches the pasted "Kord" layout: a single stat box up top, then one
 // bordered card per category with monospace titles and italic entries.
@@ -1143,6 +1180,8 @@ const BUILDERS = {
     codex:    designCodex,
     // ── Dark design ──
     dark:     designDark,
+    // ── Onyx design ──
+    onyx:     designOnyx,
     // ── Kord design ──
     kord:     designKord,
 };

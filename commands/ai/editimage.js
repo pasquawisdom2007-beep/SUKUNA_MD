@@ -15,7 +15,7 @@
  */
 
 const axios = require('axios');
-const { downloadMediaMessage } = require('@crysnovax/baileys');
+const { downloadMediaMessage } = require('@pasqua-baileys/baileys');
 const sharp = require('sharp');
 const config = require('../../config');
 const { extractBestUrl } = require('../../lib/mediaFetch');

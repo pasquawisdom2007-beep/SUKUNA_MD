@@ -1,6 +1,6 @@
 'use strict';
 
-const { generateWAMessageFromContent, proto } = require('@crysnovax/baileys');
+const { generateWAMessageFromContent, proto } = require('@pasqua-baileys/baileys');
 
 /**
  * .gcall <call link> [label]

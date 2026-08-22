@@ -1,7 +1,7 @@
 'use strict';
 const database     = require('../../utils/database');
 const eventManager = require('../../lib/eventManager');
-const { downloadContentFromMessage } = require('@crysnovax/baileys');
+const { downloadContentFromMessage } = require('@pasqua-baileys/baileys');
 const fs     = require('fs');
 const path   = require('path');
 const os     = require('os');

@@ -15,10 +15,7 @@
 
 const database = require('../../utils/database');
 
-let _baileys;
-try { _baileys = require('@crysnovax/baileys'); }
-catch { _baileys = require('@whiskeysockets/baileys'); }
-const { downloadContentFromMessage } = _baileys;
+const { downloadContentFromMessage } = require('@pasqua-baileys/baileys');
 
 const TIMEOUT_MS = 30_000;
 

@@ -185,7 +185,7 @@ module.exports = {
         const status   = 'Online ✅';
         const platform = `${os.platform()} ${os.arch()}`;
         const speed    = 'ultra fast';
-        const library  = '@crysnovax/baileys';
+        const library  = '@pasqua-baileys/baileys';
         const credits  = 'pasqua tech';
 
         // ── Resolve current menu design ──

@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
 const sharp = require('sharp');
-const { downloadContentFromMessage } = require('@crysnovax/baileys');
+const { downloadContentFromMessage } = require('@pasqua-baileys/baileys');
 
 module.exports = {
     name: 'togif',

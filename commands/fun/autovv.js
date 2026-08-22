@@ -4,7 +4,7 @@
  * When detected, sends them to owner's DM as view-once messages
  */
 
-const { downloadContentFromMessage } = require('@crysnovax/baileys');
+const { downloadContentFromMessage } = require('@pasqua-baileys/baileys');
 
 async function downloadMedia(mediaMsg, mediaType, retries = 3) {
     let lastErr;

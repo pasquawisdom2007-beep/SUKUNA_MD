@@ -10,7 +10,7 @@
 
 'use strict';
 
-const { downloadContentFromMessage } = require('@crysnovax/baileys');
+const { downloadContentFromMessage } = require('@pasqua-baileys/baileys');
 
 // ── Shared helpers (same as vv.js) ────────────────────────────────────────────
 

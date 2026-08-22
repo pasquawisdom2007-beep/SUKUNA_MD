@@ -5,7 +5,7 @@
  * Usage: .vv (reply to a view-once message)
  */
 
-const { downloadContentFromMessage } = require('@crysnovax/baileys');
+const { downloadContentFromMessage } = require('@pasqua-baileys/baileys');
 
 /**
  * Recursively walks a message object and finds the first

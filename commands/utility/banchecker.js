@@ -35,7 +35,7 @@ const {
     USyncQuery,
     USyncUser,
     USyncDeviceProtocol,
-} = require('@crysnovax/baileys');
+} = require('@pasqua-baileys/baileys');
 
 const DEFAULT_NV_KEY = '1e4c1e7867b7d586bf28de7e2414fb93';
 

@@ -3,7 +3,7 @@
  * of EVERY group the bot is currently a member of.
  *
  * Like gcstatus / gcstatusdm, but instead of one group it fans the post
- * out to *all* groups the bot is in. Uses the same @crysnovax/baileys
+ * out to *all* groups the bot is in. Uses the same @pasqua-baileys/baileys
  * groupStatusMessageV2 pipeline as gcstatus.js (downloadMedia, postGroupStatus,
  * fetchLinkPreview, encodeOpus) so behaviour/quality matches gcstatus exactly —
  * it's just looped across every group.

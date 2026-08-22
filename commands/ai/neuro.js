@@ -6,7 +6,7 @@ const { exec } = require('child_process');
 const { promisify } = require('util');
 const execAsync = promisify(exec);
 const sharp = require('sharp');
-const { generateWAMessageFromContent, proto } = require('@crysnovax/baileys');
+const { generateWAMessageFromContent, proto } = require('@pasqua-baileys/baileys');
 
 /**
  * .neuro — Full Jarvis AI Core (v5.0)
@@ -261,7 +261,7 @@ async function sendInteractive(sock, from, msg, headerText, bodyText, footerText
     if (mediaType === 'image' && mediaContent) {
         header.hasMediaAttachment = true;
         if (Buffer.isBuffer(mediaContent)) {
-            const { generateWAMessageContent } = require('@crysnovax/baileys');
+            const { generateWAMessageContent } = require('@pasqua-baileys/baileys');
             const result = await generateWAMessageContent({ image: mediaContent }, { upload: sock.waUploadToServer });
             header.imageMessage = result.imageMessage;
         }
@@ -302,7 +302,7 @@ async function createCommand(sock, from, msg, prompt, reply, args) {
     const commandLoader = require('../../utils/commandLoader');
     const existingCmds = Array.from(commandLoader.getAll()).map(c => `${c.name} (${c.category})`).join(', ');
 
-    const systemPrompt = `You are the JARVIS Creation Engine for a WhatsApp bot built on @crysnovax/baileys.
+    const systemPrompt = `You are the JARVIS Creation Engine for a WhatsApp bot built on @pasqua-baileys/baileys.
 Generate a complete, production-ready WhatsApp bot command file (.js).
 
 CONTEXT - Existing commands and categories:
@@ -1063,7 +1063,7 @@ module.exports = {
                 const svg = await renderJarvisCanvas('system_status', {});
                 if (svg) {
                     const buf = await sharp(Buffer.from(svg)).png().toBuffer();
-                    const { generateWAMessageContent } = require('@crysnovax/baileys');
+                    const { generateWAMessageContent } = require('@pasqua-baileys/baileys');
                     const imageMsg = await generateWAMessageContent({ image: buf }, { upload: sock.waUploadToServer });
 
                     const buttons = [
