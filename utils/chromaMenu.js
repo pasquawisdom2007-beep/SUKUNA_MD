@@ -13,7 +13,7 @@
 'use strict';
 
 const fs = require('fs');
-const { generateWAMessageFromContent, proto } = require('@crysnovax/baileys');
+const { generateWAMessageFromContent, proto } = require('@pasqua-baileys/baileys');
 
 const CHANNEL_URL = 'https://whatsapp.com/channel/0029VbCJho147XeEEuR1LA3s';
 
@@ -72,7 +72,7 @@ async function sendChromaMenu({
 
     if (imagePath && fs.existsSync(imagePath)) {
         try {
-            const img = await require('@crysnovax/baileys').generateWAMessageContent(
+            const img = await require('@pasqua-baileys/baileys').generateWAMessageContent(
                 { image: { url: imagePath } },
                 { upload: sock.waUploadToServer }
             );

@@ -16,7 +16,7 @@ const DESIGNS = [
     // ── 10 new peak designs ──
     'crimson', 'oracle', 'glitch', 'runic', 'obsidian',
     'vapor', 'mirage', 'eclipse', 'phantom', 'monolith',
-    // ── Interactive design (renders quick-reply buttons via @crysnovax/baileys) ──
+    // ── Interactive design (renders quick-reply buttons via @pasqua-baileys/baileys) ──
     'chroma',
     // ── Pasqua signature design ──
     'crysnovax',
