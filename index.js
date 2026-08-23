@@ -46,7 +46,7 @@ async function pairFlow() {
             continue;
         }
         if (result.code) {
-            console.log(chalk.green.bold(`\n[PAIR] ${config.pairCodeLabel || 'PASQUAMD'} CODE: ${result.code}`));
+            console.log(chalk.green.bold(`\n[PAIR] ${config.pairingCode || 'PASQUAMD'} CODE: ${result.code}`));
             console.log(chalk.cyan('[PAIR] Open WhatsApp → Linked Devices → Link with phone number → enter the code above.\n'));
         } else {
             console.log(chalk.green(`[PAIR] ${number} is already linked.`));
@@ -120,7 +120,7 @@ async function main() {
                 const result = await sessionManager.createSession(pairNumber);
                 if (result.code) {
                     console.log(chalk.green.bold(`\n[PAIR] ╔══════════════════════════════════════╗`));
-                    console.log(chalk.green.bold(`[PAIR] ║  ${config.pairCodeLabel || 'PASQUAMD'} CODE: ${result.code}            `));
+                    console.log(chalk.green.bold(`[PAIR] ║  ${config.pairingCode || 'PASQUAMD'} CODE: ${result.code}            `));
                     console.log(chalk.green.bold(`[PAIR] ╚══════════════════════════════════════╝\n`));
                     console.log(chalk.cyan('[PAIR] Open WhatsApp → Linked Devices → Link with phone number → enter the code above.\n'));
                 } else if (!result.success) {
