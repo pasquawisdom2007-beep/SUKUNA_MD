@@ -76,8 +76,6 @@ module.exports = {
             );
         }
 
-        await sock.sendMessage(from, { react: { text: '⏳', key: msg.key } }).catch(() => {});
-
         try {
             let buf;
             if (videoNode) {
@@ -94,7 +92,6 @@ module.exports = {
             fs.mkdirSync(path.dirname(VIDEO_PATH), { recursive: true });
             fs.writeFileSync(VIDEO_PATH, buf);
 
-            await sock.sendMessage(from, { react: { text: '✅', key: msg.key } }).catch(() => {});
             await sock.sendMessage(from, {
                 video:    { url: VIDEO_PATH },
                 mimetype: 'video/mp4',
@@ -106,7 +103,6 @@ module.exports = {
             }, { quoted: msg });
         } catch (e) {
             console.error('[setmenuvideo]', e.message);
-            await sock.sendMessage(from, { react: { text: '❌', key: msg.key } }).catch(() => {});
             return reply('❌ Failed to save menu video: ' + e.message);
         }
     }
