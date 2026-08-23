@@ -22,6 +22,7 @@
 const fs            = require('fs');
 const path          = require('path');
 const https         = require('https');
+const crypto        = require('crypto');
 const zlib          = require('zlib');
 const { exec }      = require('child_process');
 const { promisify } = require('util');
@@ -119,6 +120,93 @@ function trim(text, max = 1500) {
     if (!text) return '';
     const s = String(text);
     return s.length > max ? s.slice(0, max) + '\n…(truncated)' : s;
+}
+
+function getJson(url) {
+    return new Promise((resolve, reject) => {
+        const req = https.get(url, {
+            headers: {
+                'User-Agent': 'SUKUNA-MD-UpdateCheck',
+                Accept: 'application/vnd.github+json',
+            },
+        }, res => {
+            const chunks = [];
+            res.on('data', chunk => chunks.push(chunk));
+            res.on('end', () => {
+                const body = Buffer.concat(chunks).toString('utf8');
+                if (res.statusCode < 200 || res.statusCode >= 300) {
+                    reject(new Error(`GitHub API HTTP ${res.statusCode}: ${trim(body, 240)}`));
+                    return;
+                }
+                try { resolve(JSON.parse(body)); }
+                catch { reject(new Error('GitHub API returned invalid JSON')); }
+            });
+            res.on('error', reject);
+        });
+        req.on('error', reject);
+        req.setTimeout(15000, () => req.destroy(new Error('GitHub API timeout')));
+    });
+}
+
+async function githubSnapshot() {
+    const commit = await getJson(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/commits/${REPO_BRANCH}`);
+    const sha = String(commit.sha || '');
+    if (!/^[0-9a-f]{40}$/i.test(sha)) throw new Error('GitHub API returned no valid commit SHA');
+    const tree = await getJson(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/git/trees/${sha}?recursive=1`);
+    if (!Array.isArray(tree.tree) || tree.truncated) {
+        throw new Error('GitHub source tree is unavailable or truncated');
+    }
+    return {
+        sha,
+        shortSha: sha.slice(0, 7),
+        subject: String(commit.commit?.message || '').split('\n')[0],
+        tree: tree.tree,
+    };
+}
+
+function shouldSkipLocalPath(relativePath) {
+    const first = relativePath.split('/')[0];
+    return first === '.git' || first === 'node_modules' || PRESERVE.has(first) || first === '.update-tmp';
+}
+
+function collectLocalFiles(dir, relative = '') {
+    const result = [];
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const rel = relative ? `${relative}/${entry.name}` : entry.name;
+        if (shouldSkipLocalPath(rel)) continue;
+        const absolute = path.join(dir, entry.name);
+        if (entry.isDirectory()) result.push(...collectLocalFiles(absolute, rel));
+        else if (entry.isFile()) result.push({ path: rel, absolute });
+    }
+    return result;
+}
+
+function gitBlobSha(buffer) {
+    const header = Buffer.from(`blob ${buffer.length}\0`);
+    return crypto.createHash('sha1').update(Buffer.concat([header, buffer])).digest('hex');
+}
+
+function compareLocalTree(remoteTree) {
+    const remote = new Map(remoteTree
+        .filter(item => item.type === 'blob' && !shouldSkipLocalPath(item.path))
+        .map(item => [item.path, item.sha]));
+    const local = new Map();
+    for (const file of collectLocalFiles(REPO_ROOT)) {
+        try {
+            local.set(file.path, gitBlobSha(fs.readFileSync(file.absolute)));
+        } catch {
+            local.set(file.path, 'unreadable');
+        }
+    }
+
+    const changed = new Set();
+    for (const [filePath, sha] of remote) {
+        if (local.get(filePath) !== sha) changed.add(filePath);
+    }
+    for (const filePath of local.keys()) {
+        if (!remote.has(filePath)) changed.add(filePath);
+    }
+    return [...changed].sort();
 }
 
 // ── tarball fallback (used when .git is missing) ────────────────────────────
@@ -219,25 +307,66 @@ module.exports = {
 
             // ── CHECK MODE ──
             if (mode === 'check') {
-                if (!usingGit) {
-                    return reply('ℹ️ No `.git` directory found. Running `.update` will use the tarball fallback.\nRepo: ' + REPO_URL);
+                try {
+                    // Compare the deployed files with GitHub’s current tree. This
+                    // also works on panel deployments that contain no .git directory.
+                    const remote = await githubSnapshot();
+                    const changed = compareLocalTree(remote.tree);
+                    const local = usingGit ? await gitShortSha('HEAD') : 'panel deployment';
+                    if (changed.length === 0) {
+                        return reply([
+                            '✅ *No pending updates.*',
+                            `Remote: ${remote.shortSha} — ${remote.subject || '(no message)'}`,
+                            `Local files match origin/${REPO_BRANCH}.`,
+                        ].join('\n'));
+                    }
+                    const preview = changed.slice(0, 20).map(file => `— ${file}`);
+                    return reply([
+                        '🆕 *Pending updates found*',
+                        '',
+                        `Local: ${local}`,
+                        `Remote: ${remote.shortSha} — ${remote.subject || '(no message)'}`,
+                        `Files needing sync: ${changed.length}`,
+                        '',
+                        ...preview,
+                        ...(changed.length > 20 ? [`…and ${changed.length - 20} more`] : []),
+                        '',
+                        'Run .update to apply, or .update restart to apply + restart.',
+                    ].join('\n'));
+                } catch (apiError) {
+                    // Preserve the original git-based check as a fallback when
+                    // GitHub API access is unavailable on the panel.
+                    if (!usingGit) {
+                        return reply([
+                            '⚠️ *Unable to check updates.*',
+                            '',
+                            `GitHub check failed: ${trim(apiError.message, 500)}`,
+                            'This deployment has no .git metadata, so the local revision cannot be identified.',
+                            'Run .update to use the tarball fallback.',
+                        ].join('\n'));
+                    }
+                    await ensureRemote();
+                    await run(`git fetch origin ${REPO_BRANCH}`);
+                    const local  = await gitShortSha('HEAD');
+                    const remote = await gitShortSha(`origin/${REPO_BRANCH}`);
+                    const subj   = await gitCommitSubject(`origin/${REPO_BRANCH}`);
+                    if (local === remote) {
+                        return reply(`✅ *No pending updates.*\nCommit: ${local}`);
+                    }
+                    const changed = await gitChangedFiles('HEAD', `origin/${REPO_BRANCH}`);
+                    return reply([
+                        '🆕 *Pending updates found*',
+                        '',
+                        `Local: ${local}`,
+                        `Remote: ${remote} — ${subj || '(no message)'}`,
+                        `Files needing sync: ${changed.length}`,
+                        '',
+                        ...changed.slice(0, 20).map(file => `— ${file}`),
+                        ...(changed.length > 20 ? [`…and ${changed.length - 20} more`] : []),
+                        '',
+                        'Run .update to apply, or .update restart to apply + restart.',
+                    ].join('\n'));
                 }
-                await ensureRemote();
-                await run(`git fetch origin ${REPO_BRANCH}`);
-                const local  = await gitShortSha('HEAD');
-                const remote = await gitShortSha(`origin/${REPO_BRANCH}`);
-                const subj   = await gitCommitSubject(`origin/${REPO_BRANCH}`);
-                if (local === remote) {
-                    return reply(`✅ *Already up to date.*\nCommit: \`${local}\``);
-                }
-                const changed = await gitChangedFiles('HEAD', `origin/${REPO_BRANCH}`);
-                return reply(
-                    `🆕 *Update available*\n\n` +
-                    `• Local:  \`${local}\`\n` +
-                    `• Remote: \`${remote}\` — ${subj || '(no message)'}\n` +
-                    `• Files changed: ${changed.length}\n\n` +
-                    `Run \`.update\` to apply, or \`.update restart\` to apply + restart.`
-                );
             }
 
             let oldSha = 'n/a', newSha = 'n/a', subject = '', changed = [];
