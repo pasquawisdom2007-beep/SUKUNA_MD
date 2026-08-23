@@ -21,6 +21,8 @@ module.exports = {
     // ============================================
     ownerNumber: process.env.OWNER_NUMBER || '2349127857212',
     pairNumber:  process.env.PAIR_NUMBER  || '2349127857212',
+    // Panel label only. WhatsApp still supplies the real 8-character code.
+    pairCodeLabel: process.env.PAIR_CODE_LABEL || 'PASQUAMD',
 
     // ============================================
     // SESSION ID (skip pair code, auto-connect)
