@@ -321,14 +321,16 @@ module.exports = {
                 );
             }
             if (fs.existsSync(VIDEO_PATH)) {
-                // NOTE: NO gifPlayback — that flag makes WhatsApp render the
-                // video as a silent GIF. We want sound, so send it as a
-                // normal video.
+                // Keep this as a normal inline video (not a document and not
+                // gifPlayback), but pass the file URL so Baileys streams the
+                // original stored bytes without an extra fs.readFileSync copy.
+                // This preserves the highest quality available in the source;
+                // WhatsApp may still apply its own server-side video policy.
                 sock.__skipBrand = true;
                 return await sock.sendMessage(
                     from,
                     {
-                        video:    fs.readFileSync(VIDEO_PATH),
+                        video:    { url: VIDEO_PATH },
                         mimetype: 'video/mp4',
                         caption,
                         mentions,

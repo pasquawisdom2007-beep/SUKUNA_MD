@@ -2,7 +2,7 @@
 
 const os = require('os');
 const config = require('../../config');
-const pkg = require('../../package.json');
+const { renderUptimeCard } = require('../../utils/canvasRender');
 const { getRuntimeMetrics } = require('../../utils/runtimeMetrics');
 
 const fmt = (seconds) => {
@@ -18,56 +18,19 @@ const fmt = (seconds) => {
 
 const fmtMs = (value) => value > 0 ? `${Math.round(value)} ms` : 'No samples';
 
-function wrapCell(value, width) {
-    const text = String(value ?? '—').replace(/\s+/g, ' ').trim() || '—';
-    const words = text.split(' ');
-    const lines = [];
-    let line = '';
-    for (const word of words) {
-        if (!line) {
-            line = word;
-            continue;
-        }
-        if ((line + ' ' + word).length <= width) {
-            line += ` ${word}`;
-        } else {
-            lines.push(line);
-            line = word;
-        }
-    }
-    if (line) lines.push(line);
-    return lines.length ? lines : ['—'];
-}
-
-function padCell(value, width) {
-    const text = String(value ?? '').slice(0, width);
-    return text + ' '.repeat(Math.max(0, width - text.length));
-}
-
-function renderInfoTable(rows) {
-    const labelWidth = 22;
-    const valueWidth = 34;
-    const top = `┌${'─'.repeat(labelWidth + 2)}┬${'─'.repeat(valueWidth + 2)}┐`;
-    const divider = `├${'─'.repeat(labelWidth + 2)}┼${'─'.repeat(valueWidth + 2)}┤`;
-    const bottom = `└${'─'.repeat(labelWidth + 2)}┴${'─'.repeat(valueWidth + 2)}┘`;
-    const output = [top];
-    rows.forEach(([label, value], index) => {
-        const left = wrapCell(label, labelWidth);
-        const right = wrapCell(value, valueWidth);
-        const height = Math.max(left.length, right.length);
-        for (let line = 0; line < height; line += 1) {
-            output.push(`│ ${padCell(left[line] || '', labelWidth)} │ ${padCell(right[line] || '', valueWidth)} │`);
-        }
-        if (index < rows.length - 1) output.push(divider);
-    });
-    output.push(bottom);
-    return output.join('\n');
+function telemetryLines(metrics, prefix) {
+    const top = metrics.topCommand ? `${prefix}${metrics.topCommand.name} (${metrics.topCommand.count} runs)` : '—';
+    const last = metrics.lastCommand ? `${prefix}${metrics.lastCommand.name} (${metrics.lastCommand.durationMs} ms)` : '—';
+    const response = metrics.samples
+        ? `last ${fmtMs(metrics.lastCommand?.durationMs)} · avg ${fmtMs(metrics.averageResponseMs)} · p95 ${fmtMs(metrics.p95ResponseMs)}`
+        : 'No command samples yet';
+    return { top, last, response };
 }
 
 module.exports = {
     name: 'botstat',
     aliases: ['botstats', 'stats'],
-    description: 'Show a two-column system profile with live bot telemetry',
+    description: 'Show detailed bot and server statistics',
     category: 'admin',
 
     async execute({ sock, msg, from, reply, prefix = '.' }) {
@@ -79,44 +42,41 @@ module.exports = {
         const freeMem = (os.freemem() / 1024 / 1024 / 1024).toFixed(2);
         const botMem = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(1);
         const cpus = os.cpus();
-        const cpuModel = (cpus[0]?.model || 'Unknown').trim().split(/\s+/).slice(0, 5).join(' ');
+        const cpuModel = (cpus[0]?.model || 'Unknown').trim().split(/\s+/).slice(0, 4).join(' ');
         const metrics = getRuntimeMetrics();
-        const top = metrics.topCommand ? `${prefix}${metrics.topCommand.name} · ${metrics.topCommand.count} runs` : 'No command samples';
-        const last = metrics.lastCommand ? `${prefix}${metrics.lastCommand.name} · ${metrics.lastCommand.durationMs} ms` : 'No command samples';
-        const panelResponse = metrics.samples
-            ? `last ${fmtMs(metrics.lastCommand?.durationMs)} · avg ${fmtMs(metrics.averageResponseMs)} · p95 ${fmtMs(metrics.p95ResponseMs)}`
-            : 'No command samples yet';
+        const { top, last, response } = telemetryLines(metrics, prefix);
         const botName = (config.botName || 'SUKUNA · MD').toUpperCase();
-        const version = pkg.version || '—';
-        const timestamp = new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
-        const rows = [
-            ['🤖 Bot', botName],
-            ['📦 Package', '@pasqua-baileys/baileys'],
-            ['📝 Status', 'ONLINE'],
-            ['🏷️ Version', version],
-            ['⌨️ Prefix', prefix],
-            ['⏱️ Uptime', botUptime],
-            ['⚡ Panel Response', panelResponse],
-            ['🧮 Commands Run', metrics.totalCommands.toLocaleString('en-US')],
-            ['🧩 Unique Commands', metrics.uniqueCommands.toLocaleString('en-US')],
-            ['🏆 Top Command', top],
-            ['🕘 Last Command', last],
-            ['💾 Memory', `${botMem} MB heap · ${freeMem}/${totalMem} GB free`],
-            ['🖥️ Runtime', `Node ${process.version} · ${platform}/${arch}`],
-            ['⚙️ CPU', `${cpus.length} cores · ${cpuModel}`],
-            ['🕒 Updated', timestamp],
-        ];
-        const table = renderInfoTable(rows);
-        const text = `📊 *SUKUNA BOTSTAT*\n\n${table}\n\n_Metrics cover commands handled since the current bot process started._`;
+        const caption =
+            `📊 *Bot Statistics*\n\n` +
+            `🤖 Uptime: *${botUptime}* · 💻 Sys: *${sysUptime}*\n` +
+            `💾 RAM: ${freeMem}/${totalMem} GB · Bot: ${botMem} MB\n` +
+            `🖥️ ${platform}/${arch} · ${cpus.length} cores\n` +
+            `⚙️ ${cpuModel}\n` +
+            `🟢 Node ${process.version}\n\n` +
+            `🧮 Commands run: *${metrics.totalCommands.toLocaleString('en-US')}*\n` +
+            `🧩 Unique commands: *${metrics.uniqueCommands}*\n` +
+            `⚡ Panel response: *${response}*\n` +
+            `🏆 Top command: *${top}*\n` +
+            `🕘 Last command: *${last}*\n` +
+            `_Telemetry resets when this bot process restarts._`;
 
         try {
-            // Send directly instead of through reply(), because reply() boxifies text.
-            await sock.sendMessage(from, { text }, { quoted: msg });
+            const buf = await renderUptimeCard({
+                botUptime,
+                sysUptime,
+                platform,
+                arch,
+                totalMem,
+                freeMem,
+                botMem,
+                botName,
+            });
+            await sock.sendMessage(from, { image: buf, caption }, { quoted: msg });
         } catch (error) {
-            console.error('[BOTSTAT table]', error.message);
-            await reply(text, { raw: true });
+            console.error('[BOTSTAT canvas]', error.message);
+            await reply(caption);
         }
     },
 
-    renderInfoTable,
+    telemetryLines,
 };
