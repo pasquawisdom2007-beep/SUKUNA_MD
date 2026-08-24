@@ -5,4 +5,5 @@ module.exports = makeNsfwCommand({
     endpoint: 'https://prexzyapis.com/nsfw/fuck',
     emoji: '🔥',
     label: 'Fuck',
+    timeout: 60000,
 });
