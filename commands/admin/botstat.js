@@ -3,7 +3,6 @@
 const os = require('os');
 const config = require('../../config');
 const pkg = require('../../package.json');
-const { renderBotStatsCard } = require('../../utils/canvasRender');
 const { getRuntimeMetrics } = require('../../utils/runtimeMetrics');
 
 const fmt = (seconds) => {
@@ -19,10 +18,56 @@ const fmt = (seconds) => {
 
 const fmtMs = (value) => value > 0 ? `${Math.round(value)} ms` : 'No samples';
 
+function wrapCell(value, width) {
+    const text = String(value ?? '—').replace(/\s+/g, ' ').trim() || '—';
+    const words = text.split(' ');
+    const lines = [];
+    let line = '';
+    for (const word of words) {
+        if (!line) {
+            line = word;
+            continue;
+        }
+        if ((line + ' ' + word).length <= width) {
+            line += ` ${word}`;
+        } else {
+            lines.push(line);
+            line = word;
+        }
+    }
+    if (line) lines.push(line);
+    return lines.length ? lines : ['—'];
+}
+
+function padCell(value, width) {
+    const text = String(value ?? '').slice(0, width);
+    return text + ' '.repeat(Math.max(0, width - text.length));
+}
+
+function renderInfoTable(rows) {
+    const labelWidth = 22;
+    const valueWidth = 34;
+    const top = `┌${'─'.repeat(labelWidth + 2)}┬${'─'.repeat(valueWidth + 2)}┐`;
+    const divider = `├${'─'.repeat(labelWidth + 2)}┼${'─'.repeat(valueWidth + 2)}┤`;
+    const bottom = `└${'─'.repeat(labelWidth + 2)}┴${'─'.repeat(valueWidth + 2)}┘`;
+    const output = [top];
+    rows.forEach(([label, value], index) => {
+        const left = wrapCell(label, labelWidth);
+        const right = wrapCell(value, valueWidth);
+        const height = Math.max(left.length, right.length);
+        for (let line = 0; line < height; line += 1) {
+            output.push(`│ ${padCell(left[line] || '', labelWidth)} │ ${padCell(right[line] || '', valueWidth)} │`);
+        }
+        if (index < rows.length - 1) output.push(divider);
+    });
+    output.push(bottom);
+    return output.join('\n');
+}
+
 module.exports = {
     name: 'botstat',
     aliases: ['botstats', 'stats'],
-    description: 'Show the dark system-profile bot statistics card',
+    description: 'Show a two-column system profile with live bot telemetry',
     category: 'admin',
 
     async execute({ sock, msg, from, reply, prefix = '.' }) {
@@ -41,52 +86,37 @@ module.exports = {
         const panelResponse = metrics.samples
             ? `last ${fmtMs(metrics.lastCommand?.durationMs)} · avg ${fmtMs(metrics.averageResponseMs)} · p95 ${fmtMs(metrics.p95ResponseMs)}`
             : 'No command samples yet';
-        const timestamp = new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
         const botName = (config.botName || 'SUKUNA · MD').toUpperCase();
         const version = pkg.version || '—';
+        const timestamp = new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+        const rows = [
+            ['🤖 Bot', botName],
+            ['📦 Package', '@pasqua-baileys/baileys'],
+            ['📝 Status', 'ONLINE'],
+            ['🏷️ Version', version],
+            ['⌨️ Prefix', prefix],
+            ['⏱️ Uptime', botUptime],
+            ['⚡ Panel Response', panelResponse],
+            ['🧮 Commands Run', metrics.totalCommands.toLocaleString('en-US')],
+            ['🧩 Unique Commands', metrics.uniqueCommands.toLocaleString('en-US')],
+            ['🏆 Top Command', top],
+            ['🕘 Last Command', last],
+            ['💾 Memory', `${botMem} MB heap · ${freeMem}/${totalMem} GB free`],
+            ['🖥️ Runtime', `Node ${process.version} · ${platform}/${arch}`],
+            ['⚙️ CPU', `${cpus.length} cores · ${cpuModel}`],
+            ['🕒 Updated', timestamp],
+        ];
+        const table = renderInfoTable(rows);
+        const text = `📊 *SUKUNA BOTSTAT*\n\n${table}\n\n_Metrics cover commands handled since the current bot process started._`;
 
         try {
-            const buf = await renderBotStatsCard({
-                botName,
-                status: 'ONLINE',
-                packageName: '@pasqua-baileys/baileys',
-                version,
-                prefix,
-                uptime: botUptime,
-                panelResponse,
-                commandTotal: metrics.totalCommands,
-                uniqueCommands: metrics.uniqueCommands,
-                topCommand: top,
-                lastCommand: last,
-                runtime: `Node ${process.version} · ${platform}/${arch}`,
-                memory: `${botMem} MB heap · ${freeMem}/${totalMem} GB free`,
-                cpu: `${cpus.length} cores · ${cpuModel}`,
-                timestamp,
-            });
-            await sock.sendMessage(from, {
-                image: buf,
-                caption: `📊 *BOTSTAT · SYSTEM PROFILE*\n\n` +
-                    `Commands run: *${metrics.totalCommands.toLocaleString('en-US')}* · Unique: *${metrics.uniqueCommands}*\n` +
-                    `Panel response: *${panelResponse}*\n` +
-                    `Metrics reset when this bot process restarts.`,
-            }, { quoted: msg });
+            // Send directly instead of through reply(), because reply() boxifies text.
+            await sock.sendMessage(from, { text }, { quoted: msg });
         } catch (error) {
-            console.error('[BOTSTAT card]', error.message);
-            await reply(
-                `📊 *BOTSTAT · SYSTEM PROFILE*\n\n` +
-                `🤖 Bot: ${botName}\n` +
-                `📦 Package: @pasqua-baileys/baileys\n` +
-                `🏷️ Version: ${version}\n` +
-                `⌨️ Prefix: ${prefix}\n` +
-                `⏱️ Uptime: ${botUptime}\n` +
-                `⚡ Panel response: ${panelResponse}\n` +
-                `🧮 Commands run: ${metrics.totalCommands.toLocaleString('en-US')}\n` +
-                `🧩 Unique commands: ${metrics.uniqueCommands}\n` +
-                `🏆 Top command: ${top}\n` +
-                `🕘 Last command: ${last}\n` +
-                `💾 Memory: ${botMem} MB heap · ${freeMem}/${totalMem} GB free\n` +
-                `🖥️ Runtime: Node ${process.version} · ${platform}/${arch}`
-            );
+            console.error('[BOTSTAT table]', error.message);
+            await reply(text, { raw: true });
         }
     },
+
+    renderInfoTable,
 };
