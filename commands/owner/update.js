@@ -165,8 +165,18 @@ async function githubSnapshot() {
 }
 
 function shouldSkipLocalPath(relativePath) {
-    const first = relativePath.split('/')[0];
-    return first === '.git' || first === 'node_modules' || PRESERVE.has(first) || first === '.update-tmp';
+    const normalized = String(relativePath || '').replace(/\\/g, '/');
+    const first = normalized.split('/')[0];
+    const base = path.basename(normalized);
+    return first === '.git'
+        || first === 'node_modules'
+        || PRESERVE.has(first)
+        || first === '.update-tmp'
+        || first === '.cache'
+        || first === 'cache'
+        || first === 'logs'
+        || first === 'tmp'
+        || /\\.(log|tmp|cache)$/i.test(base);
 }
 
 function collectLocalFiles(dir, relative = '') {
@@ -184,6 +194,57 @@ function collectLocalFiles(dir, relative = '') {
 function gitBlobSha(buffer) {
     const header = Buffer.from(`blob ${buffer.length}\0`);
     return crypto.createHash('sha1').update(Buffer.concat([header, buffer])).digest('hex');
+}
+
+function humanChangeName(filePath) {
+    const normalized = String(filePath || '').replace(/\\/g, '/');
+    const commandMatch = normalized.match(/^commands\/([^/]+)\/([^/]+)\.(?:js|cjs|mjs)$/i);
+    if (commandMatch) {
+        const category = commandMatch[1].replace(/[-_]+/g, ' ');
+        const command = commandMatch[2].replace(/\.(?:js|cjs|mjs)$/i, '').replace(/[-_]+/g, ' ');
+        return `Command .${command} (${category})`;
+    }
+    const known = [
+        [/^lib\/guard\.js$/i, 'Guard verification engine'],
+        [/^lib\/sessionManager\.js$/i, 'WhatsApp session and message handling'],
+        [/^utils\/database\.js$/i, 'Group settings and database'],
+        [/^utils\/commandLoader\.js$/i, 'Command loading system'],
+        [/^config\.js$/i, 'Bot configuration'],
+        [/^package\.json$/i, 'Bot dependencies'],
+        [/^README(?:\.md)?$/i, 'Bot documentation'],
+    ];
+    for (const [pattern, label] of known) if (pattern.test(normalized)) return label;
+    const base = path.basename(normalized).replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ');
+    const folder = path.dirname(normalized).replace(/[\/_-]+/g, ' ').trim();
+    return folder ? `${base} (${folder})` : base;
+}
+
+function humanChangeAction(filePath) {
+    const normalized = String(filePath || '').replace(/\\/g, '/');
+    if (normalized.startsWith('commands/')) return 'command changed';
+    if (normalized.startsWith('lib/')) return 'bot engine changed';
+    if (normalized.startsWith('utils/')) return 'support system changed';
+    if (/package\.json|lock/i.test(normalized)) return 'dependency list changed';
+    return 'file changed';
+}
+
+function formatUpdateReport({ remote, changed }) {
+    const visible = changed.filter(file => !shouldSkipLocalPath(file));
+    const lines = visible.slice(0, 30).map((file, index) =>
+        `${index + 1}. ${humanChangeName(file)} — ${humanChangeAction(file)}`
+    );
+    if (visible.length > 30) lines.push(`…and ${visible.length - 30} more pending changes.`);
+    return [
+        '🆕 *Pending updates found*',
+        '',
+        `Remote update: ${remote.subject || 'New bot changes are available.'}`,
+        `Pending changes: ${visible.length}`,
+        '',
+        '*Changes in order:*',
+        ...lines,
+        '',
+        'Run .update to apply them, or .update restart to apply and restart.',
+    ].join('\n');
 }
 
 function compareLocalTree(remoteTree) {
@@ -316,23 +377,11 @@ module.exports = {
                     if (changed.length === 0) {
                         return reply([
                             '✅ *No pending updates.*',
-                            `Remote: ${remote.shortSha} — ${remote.subject || '(no message)'}`,
-                            `Local files match origin/${REPO_BRANCH}.`,
+                            `Your bot already has the latest ${REPO_BRANCH} changes.`,
+                            'No commands or bot files are waiting to be updated.',
                         ].join('\n'));
                     }
-                    const preview = changed.slice(0, 20).map(file => `— ${file}`);
-                    return reply([
-                        '🆕 *Pending updates found*',
-                        '',
-                        `Local: ${local}`,
-                        `Remote: ${remote.shortSha} — ${remote.subject || '(no message)'}`,
-                        `Files needing sync: ${changed.length}`,
-                        '',
-                        ...preview,
-                        ...(changed.length > 20 ? [`…and ${changed.length - 20} more`] : []),
-                        '',
-                        'Run .update to apply, or .update restart to apply + restart.',
-                    ].join('\n'));
+                    return reply(formatUpdateReport({ remote, changed }));
                 } catch (apiError) {
                     // Preserve the original git-based check as a fallback when
                     // GitHub API access is unavailable on the panel.
@@ -351,21 +400,12 @@ module.exports = {
                     const remote = await gitShortSha(`origin/${REPO_BRANCH}`);
                     const subj   = await gitCommitSubject(`origin/${REPO_BRANCH}`);
                     if (local === remote) {
-                        return reply(`✅ *No pending updates.*\nCommit: ${local}`);
+                        return reply('✅ *No pending updates.*\nYour bot already has the latest main-branch changes.');
                     }
-                    const changed = await gitChangedFiles('HEAD', `origin/${REPO_BRANCH}`);
-                    return reply([
-                        '🆕 *Pending updates found*',
-                        '',
-                        `Local: ${local}`,
-                        `Remote: ${remote} — ${subj || '(no message)'}`,
-                        `Files needing sync: ${changed.length}`,
-                        '',
-                        ...changed.slice(0, 20).map(file => `— ${file}`),
-                        ...(changed.length > 20 ? [`…and ${changed.length - 20} more`] : []),
-                        '',
-                        'Run .update to apply, or .update restart to apply + restart.',
-                    ].join('\n'));
+                    return reply(formatUpdateReport({
+                        remote: { subject: subj },
+                        changed,
+                    }));
                 }
             }
 
@@ -470,4 +510,5 @@ module.exports = {
             UPDATE_IN_PROGRESS = false;
         }
     },
+    __test: { humanChangeName, humanChangeAction, formatUpdateReport, shouldSkipLocalPath },
 };
