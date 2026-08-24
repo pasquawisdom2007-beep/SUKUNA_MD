@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="280" viewBox="0 0 1200 280" role="img" aria-labelledby="title desc">
   <title id="title">SUKUNA MD by PASQUA</title>
-  <desc id="desc">Animated text-only title for the Sukuna MD README.</desc>
+  <desc id="desc">A text-only typewriter animation that types Sukuna MD, then by PASQUA.</desc>
   <defs>
     <linearGradient id="titleGradient" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#ffffff"/>
@@ -19,20 +19,39 @@
         <feMergeNode in="SourceGraphic"/>
       </feMerge>
     </filter>
-    <clipPath id="titleClip">
-      <rect x="128" y="52" width="944" height="84" rx="4"/>
-    </clipPath>
     <style>
       .main { font: 700 66px Arial, Helvetica, sans-serif; letter-spacing: 14px; }
       .sub { font: 600 28px Arial, Helvetica, sans-serif; letter-spacing: 8px; }
-      .rule { animation: ruleIn 1.5s ease-out both; transform-origin: center; }
-      .mainText { animation: reveal 2.3s cubic-bezier(.2,.75,.25,1) both; }
-      .subText { animation: subIn 2.2s ease-out 1.05s both; }
-      .glint { animation: glint 3.8s ease-in-out 1.5s infinite; }
-      @keyframes reveal { from { opacity: 0; transform: translateY(26px); } to { opacity: 1; transform: translateY(0); } }
-      @keyframes subIn { from { opacity: 0; letter-spacing: 18px; } to { opacity: 1; letter-spacing: 8px; } }
-      @keyframes ruleIn { from { opacity: 0; transform: scaleX(0); } to { opacity: 1; transform: scaleX(1); } }
-      @keyframes glint { 0%, 35% { transform: translateX(-320px); opacity: 0; } 48% { opacity: .8; } 62%, 100% { transform: translateX(320px); opacity: 0; } }
+      .char { opacity: 1; animation: type .14s steps(1, end) both; }
+      .main .c1 { animation-delay: .20s; }
+      .main .c2 { animation-delay: .37s; }
+      .main .c3 { animation-delay: .54s; }
+      .main .c4 { animation-delay: .71s; }
+      .main .c5 { animation-delay: .88s; }
+      .main .c6 { animation-delay: 1.05s; }
+      .main .c7 { animation-delay: 1.22s; }
+      .main .c8 { animation-delay: 1.39s; }
+      .main .c9 { animation-delay: 1.56s; }
+      .sub .c1 { animation-delay: 1.95s; }
+      .sub .c2 { animation-delay: 2.10s; }
+      .sub .c3 { animation-delay: 2.25s; }
+      .sub .c4 { animation-delay: 2.40s; }
+      .sub .c5 { animation-delay: 2.55s; }
+      .sub .c6 { animation-delay: 2.70s; }
+      .sub .c7 { animation-delay: 2.85s; }
+      .sub .c8 { animation-delay: 3.00s; }
+      .sub .c9 { animation-delay: 3.15s; }
+      .rule { animation: ruleIn 1.2s ease-out both; }
+      .caretMain { animation: caretMain 1.65s steps(1, end) both, blink .75s step-end 1.65s infinite; }
+      .caretSub { animation: caretSub 1.7s steps(1, end) 1.75s both, blink .75s step-end 3.15s infinite; }
+      @keyframes type { from { opacity: 0; } to { opacity: 1; } }
+      @keyframes ruleIn { from { opacity: 0; transform: scaleX(0); } to { opacity: .9; transform: scaleX(1); } }
+      @keyframes caretMain { from { opacity: 1; } to { opacity: 0; } }
+      @keyframes caretSub { from { opacity: 0; } to { opacity: 1; } }
+      @keyframes blink { 0%, 48% { opacity: 1; } 49%, 100% { opacity: 0; } }
+      @media (prefers-reduced-motion: reduce) {
+        .char, .rule, .caretMain, .caretSub { animation: none; opacity: 1; }
+      }
     </style>
   </defs>
   <rect width="1200" height="280" fill="#050505"/>
@@ -40,9 +59,8 @@
     <rect x="250" y="35" width="700" height="2" fill="url(#accentGradient)"/>
     <rect x="360" y="214" width="480" height="2" fill="url(#accentGradient)"/>
   </g>
-  <g clip-path="url(#titleClip)">
-    <text class="main mainText" x="600" y="125" text-anchor="middle" fill="url(#titleGradient)">SUKUNA MD</text>
-    <rect class="glint" x="120" y="54" width="14" height="90" rx="7" fill="#ffffff" filter="url(#softGlow)"/>
-  </g>
-  <text class="sub subText" x="600" y="190" text-anchor="middle" fill="#ef4444">by PASQUA</text>
+  <text class="main" x="600" y="125" text-anchor="middle" fill="url(#titleGradient)"><tspan class="char c1">S</tspan><tspan class="char c2">U</tspan><tspan class="char c3">K</tspan><tspan class="char c4">U</tspan><tspan class="char c5">N</tspan><tspan class="char c6">A</tspan><tspan class="char c7"> </tspan><tspan class="char c8">M</tspan><tspan class="char c9">D</tspan></text>
+  <rect class="caretMain" x="1004" y="70" width="5" height="64" rx="2" fill="#ef4444" filter="url(#softGlow)"/>
+  <text class="sub" x="600" y="190" text-anchor="middle" fill="#ef4444"><tspan class="char c1">b</tspan><tspan class="char c2">y</tspan><tspan class="char c3"> </tspan><tspan class="char c4">P</tspan><tspan class="char c5">A</tspan><tspan class="char c6">S</tspan><tspan class="char c7">Q</tspan><tspan class="char c8">U</tspan><tspan class="char c9">A</tspan></text>
+  <rect class="caretSub" x="802" y="159" width="3" height="34" rx="1.5" fill="#ef4444" filter="url(#softGlow)"/>
 </svg>
