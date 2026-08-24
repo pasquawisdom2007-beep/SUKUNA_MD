@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="280" viewBox="0 0 1200 280" role="img" aria-labelledby="title desc">
-  <title id="title">SUKUNA MD by PASQUA</title>
-  <desc id="desc">A looping typewriter animation that types and deletes Sukuna MD, then by PASQUA.</desc>
+  <title id="title">SUKUNA MD by PASQUA — Pasqua Baileys Engine</title>
+  <desc id="desc">A slow looping typewriter animation: Sukuna MD, by PASQUA, then Pasqua Baileys Engine.</desc>
   <defs>
     <linearGradient id="accentGradient" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#7f1d1d"/>
@@ -10,25 +10,33 @@
     <style>
       .main { font: 700 66px Arial, Helvetica, sans-serif; letter-spacing: 14px; }
       .sub { font: 600 28px Arial, Helvetica, sans-serif; letter-spacing: 8px; }
-      .rule { opacity: .9; }
-      .mainMask { animation: typeMain 8s steps(9, end) infinite; }
-      .subMask { animation: typeSub 8s steps(9, end) infinite; }
+      .engine { font: 700 50px Arial, Helvetica, sans-serif; letter-spacing: 7px; }
+      .mainMask { animation: typeMain 30s steps(9, end) infinite; }
+      .subMask { animation: typeSub 30s steps(9, end) infinite; }
+      .engineMask { animation: typeEngine 30s steps(21, end) infinite; }
       @keyframes typeMain {
-        0%, 4% { width: 0; }
-        4%, 22% { width: 720px; }
-        22%, 31% { width: 720px; }
-        31%, 49% { width: 0; }
-        49%, 100% { width: 0; }
+        0%, 5% { width: 0; }
+        5%, 25% { width: 720px; }
+        25%, 35% { width: 720px; }
+        35%, 45% { width: 0; }
+        45%, 100% { width: 0; }
       }
       @keyframes typeSub {
-        0%, 50% { width: 0; }
-        50%, 66% { width: 480px; }
-        66%, 75% { width: 480px; }
-        75%, 93% { width: 0; }
-        93%, 100% { width: 0; }
+        0%, 25% { width: 0; }
+        25%, 45% { width: 480px; }
+        45%, 55% { width: 480px; }
+        55%, 65% { width: 0; }
+        65%, 100% { width: 0; }
+      }
+      @keyframes typeEngine {
+        0%, 65% { width: 0; }
+        65%, 90% { width: 960px; }
+        90%, 95% { width: 960px; }
+        95%, 100% { width: 0; }
       }
       @media (prefers-reduced-motion: reduce) {
         .mainMask, .subMask { animation: none; width: 720px; }
+        .engineMask { animation: none; width: 0; }
       }
     </style>
     <clipPath id="mainClip" clipPathUnits="userSpaceOnUse">
@@ -37,12 +45,15 @@
     <clipPath id="subClip" clipPathUnits="userSpaceOnUse">
       <rect class="subMask" x="360" y="157" width="480" height="50"/>
     </clipPath>
+    <clipPath id="engineClip" clipPathUnits="userSpaceOnUse">
+      <rect class="engineMask" x="120" y="105" width="960" height="72"/>
+    </clipPath>
   </defs>
   <rect width="1200" height="280" fill="#050505"/>
-  <g class="rule">
-    <rect x="250" y="35" width="700" height="2" fill="url(#accentGradient)"/>
-    <rect x="360" y="214" width="480" height="2" fill="url(#accentGradient)"/>
-  </g>
+  <rect x="250" y="35" width="700" height="2" fill="url(#accentGradient)" opacity=".9"/>
+  <rect x="360" y="214" width="480" height="2" fill="url(#accentGradient)" opacity=".9"/>
+
   <text class="main" x="245" y="125" fill="#f8fafc" clip-path="url(#mainClip)">SUKUNA MD</text>
   <text class="sub" x="360" y="190" fill="#ef4444" clip-path="url(#subClip)">by PASQUA</text>
+  <text class="engine" x="600" y="157" text-anchor="middle" fill="#f8fafc" clip-path="url(#engineClip)">Pasqua Baileys Engine</text>
 </svg>
