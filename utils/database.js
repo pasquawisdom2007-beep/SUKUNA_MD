@@ -166,6 +166,13 @@ class Database {
             antibotMode: 'kick',
             antisticker: false,
             antiviewonce: false,
+            antivideo: false,
+            antipicture: false,
+            guard: false,
+            guardQuestion: 'Are you human?',
+            guardOptions: ['I am human', 'I am a robot'],
+            guardCorrect: 0,
+            guardTimeoutMs: 120000,
         };
 
         if (!this.data.groups[groupId]) {
