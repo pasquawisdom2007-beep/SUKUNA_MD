@@ -14,7 +14,8 @@ module.exports = {
     description: 'Change the menu design style',
     category: 'admin',
 
-    async execute({ args, reply, phoneNumber }) {
+    async execute({ args, reply, phoneNumber, prefix }) {
+        const px = prefix || '.';
         const choice = (args[0] || '').toLowerCase().trim();
         const current = database.getMenuDesign(phoneNumber);
 
@@ -25,7 +26,7 @@ module.exports = {
                 `│ Current : ${current}\n` +
                 `│\n${list.split('\n').map(l => '│ ' + l).join('\n')}\n` +
                 `╰────────────⛧\n` +
-                `\nUse: .setdesign <name>\nExample: .setdesign neon`
+                `\nUse: ${px}setdesign <name>\nExample: ${px}setdesign pasqua`
             );
         }
 
@@ -39,7 +40,7 @@ module.exports = {
         return reply(
             `✦ ${boldItalic('Menu design updated')}\n` +
             `Now using: ${choice}\n` +
-            `Run .menu to see it.`
+                `Run ${px}menu to see it.`
         );
     }
 };

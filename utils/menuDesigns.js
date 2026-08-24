@@ -18,8 +18,8 @@ const DESIGNS = [
     'vapor', 'mirage', 'eclipse', 'phantom', 'monolith',
     // ── Interactive design (renders quick-reply buttons via @pasqua-baileys/baileys) ──
     'chroma',
-    // ── Pasqua signature design ──
-    'crysnovax',
+    // ── Pasqua signature designs ──
+    'crysnovax', 'pasqua',
     // ── Freeway design ──
     'freeway',
     // ── Three new peak designs ──
@@ -715,9 +715,9 @@ function designChroma(ctx) {
 }
 
 // ── Design: crysnovax — CRYSNOVAX signature style ──────────────────
-// Inspired by the ⌘ ══�� 〕══ ⌘ ZEE-style aesthetic with ⿻ separators,
+// Inspired by the ⌘ ══〔 〕══ ⌘ ZEE-style aesthetic with ⿻ separators,
 // 𒆜 category headers, and ❏◦ ➫ command listings.
-function designPasqua(ctx) {
+function designCrysnovax(ctx) {
     const { userTag, creator, mode, total, uptime, prefix, version,
             sortedCategories, byCategory, CATEGORY_LABELS, boldItalic,
             date, time, status, platform } = ctx;
@@ -755,6 +755,67 @@ function designPasqua(ctx) {
     c += `❏◦ Total ·  ⇆ ${total} commands loaded\n`;
     c += `${SEP}\n`;
     c += `⌘ ══〔 ⛧ ${bi('CRYSNOVAX')} 〕══ ⌘`;
+    return c;
+}
+
+// ── Design: pasqua — signature system-profile menu ─────────────────
+// Exact PASQUA layout requested by the owner, with the system block kept
+// live and the three visible sections populated from the command registry.
+function designPasqua(ctx) {
+    const { userTag, creator, total, uptime, version, platform,
+            byCategory, boldItalic, mode, status } = ctx;
+    const bi = boldItalic;
+    const clean = value => String(value ?? '').trim();
+    const pad2 = value => String(value).padStart(2, '0');
+    const formattedUptime = (() => {
+        const match = clean(uptime).match(/(?:(\d+)d\s+)?(\d+)h\s+(\d+)m\s+(\d+)s/i);
+        if (!match) return clean(uptime);
+        return `${match[1] ? `${pad2(match[1])}d ` : ''}${pad2(match[2])}h ${pad2(match[3])}m ${pad2(match[4])}s`;
+    })();
+    const owner = clean(creator || 'PASQUA').toUpperCase();
+    const online = clean(status).replace(/[^a-z]/gi, '').toUpperCase() || 'ONLINE';
+    const systemPlatform = clean(platform).toUpperCase() || 'LINUX X64';
+    const category = key => Array.isArray(byCategory?.[key]) ? byCategory[key] : [];
+    const ownerCommands = [...new Set([...category('owner'), ...category('admin')])].sort();
+    const groupCommands = [...new Set([...category('group')])].sort();
+    const excluded = new Set(['owner', 'admin', 'group']);
+    const toolCommands = Object.entries(byCategory || {})
+        .filter(([key]) => !excluded.has(key))
+        .flatMap(([, names]) => Array.isArray(names) ? names : [])
+        .filter(Boolean);
+    const tools = [...new Set(toolCommands)].sort();
+
+    let c = '';
+    c += `╼━━━ ${bi('𝑺𝑼𝑲𝑼𝑵𝑨 𝑴𝑫')} ━━━╾\n`;
+    c += `                ${bi(`𝑽${version || '3.0.0'}`)}\n`;
+    c += '          ───────────────────\n\n';
+    c += `┌─「 ${bi('𝐒𝐘𝐒𝐓𝐄𝐌')} 」\n`;
+    c += '│\n';
+    c += `│  ║ User      › ${userTag || '@user'}\n`;
+    c += `│  ║ Creator   › ${owner}\n`;
+    c += `│  ║ Mode      › ${clean(mode || 'private').toUpperCase()}\n`;
+    c += `│  ║ Plugins   › ${total || 0}\n`;
+    c += `│  ║ Uptime    › ${formattedUptime}\n`;
+    c += `│  ║ Version   › ${version || '3.0.0'}\n`;
+    c += `│  ║ Status    › ${online}\n`;
+    c += `│  ║ Platform  › ${systemPlatform}\n`;
+    c += '│\n';
+    c += '└──────────────────────────\n';
+
+    const section = (title, names) => {
+        c += `\n╾─「 ${title} 」──────────────\n\n`;
+        if (!names.length) {
+            c += '   ○ No commands loaded\n';
+            return;
+        }
+        for (const name of names) c += `   ○ ${name}\n`;
+    };
+    section('𝐎𝐖𝐍𝐄𝐑', ownerCommands);
+    section('𝐆𝐑𝐎𝐔𝐏', groupCommands);
+    section('𝐓𝐎𝐎𝐋𝐒', tools);
+    c += '\n────────────────────────────\n';
+    c += `          ${bi('𖤐 PASQUA-TECH 𖤐')}\n`;
+    c += '────────────────────────────';
     return c;
 }
 
@@ -1168,8 +1229,9 @@ const BUILDERS = {
     // Chroma renders interactive buttons in commands/admin/menu.js. The
     // caption text falls back to the default `nor` design.
     chroma:   designChroma,
-    // ── Pasqua signature design ──
-    crysnovax: designPasqua,
+    // ── Pasqua signature designs ──
+    crysnovax: designCrysnovax,
+    pasqua: designPasqua,
     // ── Freeway design ──
     freeway:  designFreeway,
     // ── Three new peak designs ──
