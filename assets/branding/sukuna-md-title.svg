@@ -1,7 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="280" viewBox="0 0 1200 280" role="img" aria-labelledby="title desc">
   <title id="title">SUKUNA MD by PASQUA — Pasqua Baileys Engine</title>
-  <desc id="desc">A slow looping typewriter animation: Sukuna MD, by PASQUA, then Pasqua Baileys Engine.</desc>
+  <desc id="desc">A transparent slow typewriter animation with red glowing text.</desc>
   <defs>
+    <filter id="redGlow" x="-30%" y="-60%" width="160%" height="220%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="3.2" in="SourceGraphic" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0.55  0 0 0 0 0  0 0 0 0 0  0 0 0 .72 0" result="redBlur"/>
+      <feMerge>
+        <feMergeNode in="redBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
     <linearGradient id="accentGradient" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#7f1d1d"/>
       <stop offset="0.5" stop-color="#ef4444"/>
@@ -14,29 +22,37 @@
       .mainMask { animation: typeMain 30s steps(9, end) infinite; }
       .subMask { animation: typeSub 30s steps(9, end) infinite; }
       .engineMask { animation: typeEngine 30s steps(21, end) infinite; }
+      .brandText { animation: brandFade 30s linear infinite; }
+      .engineText { animation: engineFade 30s linear infinite; }
       @keyframes typeMain {
-        0%, 5% { width: 0; }
-        5%, 25% { width: 720px; }
-        25%, 35% { width: 720px; }
-        35%, 45% { width: 0; }
-        45%, 100% { width: 0; }
+        0%, 2% { width: 0; }
+        2%, 27% { width: 720px; }
+        27%, 100% { width: 720px; }
       }
       @keyframes typeSub {
-        0%, 25% { width: 0; }
-        25%, 45% { width: 480px; }
-        45%, 55% { width: 480px; }
-        55%, 65% { width: 0; }
-        65%, 100% { width: 0; }
+        0%, 27% { width: 0; }
+        27%, 52% { width: 480px; }
+        52%, 100% { width: 480px; }
       }
       @keyframes typeEngine {
-        0%, 65% { width: 0; }
-        65%, 90% { width: 960px; }
-        90%, 95% { width: 960px; }
-        95%, 100% { width: 0; }
+        0%, 60% { width: 0; }
+        60%, 90% { width: 960px; }
+        90%, 100% { width: 960px; }
+      }
+      @keyframes brandFade {
+        0%, 52% { opacity: 1; }
+        52%, 60% { opacity: 0; }
+        60%, 100% { opacity: 0; }
+      }
+      @keyframes engineFade {
+        0%, 60% { opacity: 0; }
+        60%, 90% { opacity: 1; }
+        90%, 100% { opacity: 0; }
       }
       @media (prefers-reduced-motion: reduce) {
         .mainMask, .subMask { animation: none; width: 720px; }
-        .engineMask { animation: none; width: 0; }
+        .brandText { animation: none; opacity: 1; }
+        .engineMask, .engineText { animation: none; width: 0; opacity: 0; }
       }
     </style>
     <clipPath id="mainClip" clipPathUnits="userSpaceOnUse">
@@ -49,11 +65,16 @@
       <rect class="engineMask" x="120" y="105" width="960" height="72"/>
     </clipPath>
   </defs>
-  <rect width="1200" height="280" fill="#050505"/>
-  <rect x="250" y="35" width="700" height="2" fill="url(#accentGradient)" opacity=".9"/>
-  <rect x="360" y="214" width="480" height="2" fill="url(#accentGradient)" opacity=".9"/>
 
-  <text class="main" x="245" y="125" fill="#f8fafc" clip-path="url(#mainClip)">SUKUNA MD</text>
-  <text class="sub" x="360" y="190" fill="#ef4444" clip-path="url(#subClip)">by PASQUA</text>
-  <text class="engine" x="600" y="157" text-anchor="middle" fill="#f8fafc" clip-path="url(#engineClip)">Pasqua Baileys Engine</text>
+  <rect x="250" y="35" width="700" height="2" fill="url(#accentGradient)" opacity=".75"/>
+  <rect x="360" y="214" width="480" height="2" fill="url(#accentGradient)" opacity=".75"/>
+
+  <g class="brandText" fill="#ef4444" filter="url(#redGlow)">
+    <text class="main" x="245" y="125" clip-path="url(#mainClip)">SUKUNA MD</text>
+    <text class="sub" x="360" y="190" clip-path="url(#subClip)">by PASQUA</text>
+  </g>
+
+  <g class="engineText" fill="#ef4444" filter="url(#redGlow)">
+    <text class="engine" x="600" y="157" text-anchor="middle" clip-path="url(#engineClip)">Pasqua Baileys Engine</text>
+  </g>
 </svg>
