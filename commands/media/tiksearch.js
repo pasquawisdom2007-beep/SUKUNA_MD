@@ -4,14 +4,12 @@
  *
  * Robust pipeline:
  *   1. Search across multiple providers until one returns hits.
- *      - tiktokapi.store /api/v1/search/video  (keyed, primary — needs
- *        TIKTOKAPI_STORE_KEY in .env, 100 req/day free tier)
- *      - tikwm.com /api/feed/search             (POST, currently
- *        Cloudflare-walled — falls back to a headless-browser solve,
- *        which fails fast if Chromium can't launch on this host)
- *      - prexzyapis.com                         (proxies tikwm, so it's
- *        walled whenever tikwm is)
- *      - delirius-apiofc.vercel.app             (deployment removed)
+ *      - prexzyapis.com                         (the configured key-free provider)
+ *      - tiktokapi.store /api/v1/search/video  (keyed, optional)
+ *      - tikwm.com /api/feed/search             (POST, Cloudflare-walled —
+ *        falls back to a headless-browser solve)
+ *      - delirius-apiofc.vercel.app             (legacy fallback)
+ *      - TikTok web search via a headless browser
  *   2. For up to 8 hits, try each candidate URL (hdplay > play > wmplay).
  *   3. For each URL, retry up to 2x with backoff and browser headers.
  *   4. If every direct URL fails for a hit but we have the original tiktok
@@ -75,7 +73,20 @@ const cache = new Map(); // query -> { ts, result }
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function rawItem(item) {
-    return item?.item && typeof item.item === 'object' ? item.item : item;
+    let raw = item;
+    for (let i = 0; i < 3; i += 1) {
+        if (raw?.item && typeof raw.item === 'object' && !Array.isArray(raw.item)) {
+            raw = raw.item;
+            continue;
+        }
+        if (raw?.data && typeof raw.data === 'object' && !Array.isArray(raw.data)
+            && (raw.data.video || raw.data.id || raw.data.video_url || raw.data.play || raw.data.hdplay)) {
+            raw = raw.data;
+            continue;
+        }
+        break;
+    }
+    return raw;
 }
 
 function pickUrls(item) {
@@ -84,8 +95,10 @@ function pickUrls(item) {
     return [
         raw.hdplay, raw.hdPlay, raw.play, raw.play_url, raw.playUrl, raw.wmplay,
         raw.video_url, raw.videoUrl, raw.download_addr, raw.downloadAddr,
-        raw.playAddr, raw.play_addr, video.playAddr, video.play_addr,
+        raw.playAddr, raw.play_addr, raw.no_watermark, raw.noWatermark,
+        raw.download, raw.url, video.playAddr, video.play_addr,
         video.downloadAddr, video.download_addr, video.playUrl,
+        video.no_watermark, video.noWatermark, video.download, video.url,
     ].filter(u => typeof u === 'string' && /^https?:\/\//i.test(u));
 }
 
@@ -182,15 +195,64 @@ async function searchTikTokApiStore(query) {
     } catch (err) { logProviderFailure('tiktokapi.store', null, err); return []; }
 }
 
-async function searchPrexzyvilla(query) {
+async function searchPrexzy(query) {
     try {
         const res = await axios.get('https://prexzyapis.com/search/tiktoksearch', {
-            params: { q: query }, timeout: 20000, validateStatus: () => true,
+            params: { q: query },
+            timeout: 30000,
+            validateStatus: () => true,
+            headers: { ...BROWSER_HEADERS, Accept: 'application/json, text/plain, */*' },
         });
-        const arr = Array.isArray(res.data?.data) ? res.data.data : collectSearchItems(res.data);
+        const payload = res.data;
+        const upstreamError = payload?.data && !Array.isArray(payload.data)
+            && typeof payload.data.message === 'string'
+            && /failed|error|403|forbidden/i.test(payload.data.message);
+        if (upstreamError) {
+            console.error(`[tiksearch] prexzyapis upstream search failed: ${payload.data.message}`);
+            return [];
+        }
+        const arr = Array.isArray(payload?.data?.videos) ? payload.data.videos
+            : Array.isArray(payload?.data?.results) ? payload.data.results
+            : Array.isArray(payload?.data) ? payload.data
+            : collectSearchItems(payload);
         if (!Array.isArray(arr) || !arr.length) { logProviderFailure('prexzyapis', res); return []; }
         return arr;
     } catch (err) { logProviderFailure('prexzyapis', null, err); return []; }
+}
+
+function prexzyDownloadUrls(payload) {
+    const data = payload?.data && typeof payload.data === 'object' ? payload.data : payload;
+    const groups = [data?.video_downloads, data?.videos, data?.downloads];
+    const urls = [];
+    for (const group of groups) {
+        if (!Array.isArray(group)) continue;
+        for (const item of group) {
+            const url = typeof item === 'string' ? item : item?.url || item?.download_url || item?.downloadUrl;
+            if (typeof url === 'string' && /^https?:\/\//i.test(url)) urls.push({ url, quality: String(item?.quality || item?.text || '') });
+        }
+    }
+    for (const item of [data?.hd, data?.hd_url, data?.hdUrl, data?.video_url, data?.videoUrl, data?.url]) {
+        if (typeof item === 'string' && /^https?:\/\//i.test(item)) urls.push({ url: item, quality: 'HD' });
+    }
+    return [...new Map(urls.reverse().map(item => [item.url, item])).values()]
+        .sort((a, b) => Number(/hd/i.test(b.quality)) - Number(/hd/i.test(a.quality)))
+        .map(item => item.url);
+}
+
+async function resolvePrexzyUrls(pageUrl) {
+    if (!pageUrl) return [];
+    try {
+        const res = await axios.get('https://prexzyapis.com/download/tik', {
+            params: { url: pageUrl },
+            timeout: 30000,
+            validateStatus: () => true,
+            headers: { ...BROWSER_HEADERS, Accept: 'application/json, text/plain, */*' },
+        });
+        if (res.status < 200 || res.status >= 300 || res.data?.status === false) return [];
+        return prexzyDownloadUrls(res.data);
+    } catch (_) {
+        return [];
+    }
 }
 
 function isCloudflareChallenge(res) {
@@ -280,7 +342,7 @@ async function searchTikTokBrowser(query) {
         await page.goto(`https://www.tiktok.com/search?q=${encodeURIComponent(query)}`, {
             waitUntil: 'domcontentloaded', timeout: BROWSER_SEARCH_TIMEOUT_MS,
         });
-        await page.waitForTimeout(4_000);
+        await sleep(4_000);
         const payloads = await Promise.all(responsePromises);
         const raw = payloads.flatMap(payload => collectSearchItems(payload));
         if (!raw.length) console.error('[tiksearch] browser search returned no internal results');
@@ -295,7 +357,7 @@ async function searchTikTokBrowser(query) {
 }
 
 async function findCandidates(query) {
-    for (const fn of [searchTikTokApiStore, searchTikwm, searchPrexzyvilla, searchDelirius, searchTikTokBrowser]) {
+    for (const fn of [searchTikTokApiStore, searchPrexzy, searchTikwm, searchDelirius, searchTikTokBrowser]) {
         const arr = await fn(query);
         const mapped = arr.map(shapeItem).filter(Boolean);
         if (mapped.length) return mapped.slice(0, MAX_CANDIDATES);
@@ -359,10 +421,19 @@ async function downloadCandidate(candidate) {
         const buf = await downloadOne(u);
         if (buf) return buf;
     }
+    // Prexzy’s downloader can resolve a TikTok page when a search result only
+    // contains metadata or a page URL. Try it before the older TikWM resolver.
+    const prexzy = await resolvePrexzyUrls(candidate.pageUrl);
+    for (const u of prexzy) {
+        if (candidate.urls.includes(u)) continue;
+        const buf = await downloadOne(u);
+        if (buf) return buf;
+    }
+
     // Last resort: re-resolve through tikwm with the page URL.
     const fresh = await resolveFreshUrls(candidate.pageUrl);
     for (const u of fresh) {
-        if (candidate.urls.includes(u)) continue;
+        if (candidate.urls.includes(u) || prexzy.includes(u)) continue;
         const buf = await downloadOne(u);
         if (buf) return buf;
     }
