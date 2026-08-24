@@ -171,7 +171,7 @@ function buildChain() {
         name: 'openrouter',
         url: 'https://openrouter.ai/api/v1/chat/completions',
         key: process.env.OPENROUTER_API_KEY,
-        models: ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemini-2.0-flash-exp:free'],
+        models: ['openrouter/auto', 'openrouter/free', 'meta-llama/llama-3.3-70b-instruct'],
     }));
     // Vercel AI Gateway as a FALLBACK (only reached if the fast providers
     // above all fail). Uses VERCEL_AI_GATEWAY_KEY or AI_GATEWAY_API_KEY.

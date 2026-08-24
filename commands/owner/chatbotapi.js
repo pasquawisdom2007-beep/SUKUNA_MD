@@ -1,11 +1,12 @@
 /**
- * .chatbotapi — hot-swap the chatbot's AI key (Groq or OpenAI).
+ * .chatbotapi — hot-swap the chatbot's AI provider key.
  *
  * Usage:
- *   .chatbotapi groq <key>     — set a Groq key (gsk_...)
- *   .chatbotapi openai <key>   — set an OpenAI key (sk-...)
- *   .chatbotapi status         — show active provider + masked key
- *   .chatbotapi reset          — restore the original default Groq key
+ *   .chatbotapi groq <key>       — set a Groq key (gsk_...)
+ *   .chatbotapi openai <key>     — set an OpenAI key (sk-...)
+ *   .chatbotapi openrouter <key> — set an OpenRouter key (sk-or-...)
+ *   .chatbotapi status           — show active provider + masked key
+ *   .chatbotapi reset            — restore the original default Groq key
  *
  * Rewrites the AI CONFIG block inside utils/smartAI.js, validates the key
  * with a tiny live call, then clears the require cache so the chatbot
@@ -34,9 +35,9 @@ const PROVIDERS = {
     },
     openrouter: {
         url: 'https://openrouter.ai/api/v1/chat/completions',
-        models: ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemini-2.0-flash-exp:free'],
+        models: ['openrouter/auto', 'openrouter/free', 'meta-llama/llama-3.3-70b-instruct'],
         prefix: 'sk-or-',
-        testModel: 'meta-llama/llama-3.3-70b-instruct:free',
+        testModel: 'openrouter/auto',
         kind: 'openai',
     },
     gemini: {
@@ -165,8 +166,8 @@ function readCurrent() {
 module.exports = {
     name: 'chatbotapi',
     aliases: ['setchatbotapi', 'chatapi'],
-    description: 'Set or replace the chatbot AI API key (Groq or OpenAI)',
-    usage: '.chatbotapi groq|openai <key> | status | reset',
+    description: 'Set or replace the chatbot AI API key (Groq, OpenAI, OpenRouter, or Gemini)',
+    usage: '.chatbotapi groq|openai|openrouter|gemini <key> | status | reset',
     category: 'owner',
 
     async execute({ reply, args }) {
