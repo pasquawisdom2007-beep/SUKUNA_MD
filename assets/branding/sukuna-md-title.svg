@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="280" viewBox="0 0 1200 280" role="img" aria-labelledby="title desc">
   <title id="title">SUKUNA MD by PASQUA — Pasqua Baileys Engine</title>
-  <desc id="desc">A transparent slow typewriter animation with red glowing text.</desc>
+  <desc id="desc">A slow professional typewriter animation with isolated red glowing text stages.</desc>
   <defs>
     <filter id="redGlow" x="-30%" y="-60%" width="160%" height="220%" color-interpolation-filters="sRGB">
       <feGaussianBlur stdDeviation="3.2" in="SourceGraphic" result="blur"/>
@@ -19,40 +19,48 @@
       .main { font: 700 66px Arial, Helvetica, sans-serif; letter-spacing: 14px; }
       .sub { font: 600 28px Arial, Helvetica, sans-serif; letter-spacing: 8px; }
       .engine { font: 700 50px Arial, Helvetica, sans-serif; letter-spacing: 7px; }
-      .mainMask { animation: typeMain 30s steps(9, end) infinite; }
-      .subMask { animation: typeSub 30s steps(9, end) infinite; }
-      .engineMask { animation: typeEngine 30s steps(21, end) infinite; }
-      .brandText { animation: brandFade 30s linear infinite; }
-      .engineText { animation: engineFade 30s linear infinite; }
+      /* Keyframes begin each mask at zero; full width attributes keep a readable fallback if motion is unavailable. */
+      .mainMask { animation: typeMain 50s steps(9, end) infinite; }
+      .subMask { animation: typeSub 50s steps(9, end) infinite; }
+      .engineMask { animation: typeEngine 50s steps(21, end) infinite; }
+      .brandText { animation: brandFade 50s linear infinite; }
+      .engineText { opacity: 0; animation: engineFade 50s linear infinite; }
       @keyframes typeMain {
-        0%, 2% { width: 0; }
-        2%, 27% { width: 720px; }
-        27%, 100% { width: 720px; }
+        0%, 30% { width: 0; }
+        30%, 64% { width: 720px; }
+        64%, 72% { width: 0; }
+        72%, 100% { width: 0; }
       }
       @keyframes typeSub {
-        0%, 27% { width: 0; }
-        27%, 52% { width: 480px; }
-        52%, 100% { width: 480px; }
+        0%, 30% { width: 0; }
+        30%, 56% { width: 480px; }
+        56%, 64% { width: 480px; }
+        64%, 72% { width: 0; }
+        72%, 100% { width: 0; }
       }
       @keyframes typeEngine {
-        0%, 60% { width: 0; }
-        60%, 90% { width: 960px; }
-        90%, 100% { width: 960px; }
+        0%, 78% { width: 0; }
+        78%, 94% { width: 960px; }
+        94%, 96% { width: 960px; }
+        96%, 100% { width: 0; }
       }
+      /* Main and subtitle disappear together after both have finished typing. */
       @keyframes brandFade {
-        0%, 52% { opacity: 1; }
-        52%, 60% { opacity: 0; }
-        60%, 100% { opacity: 0; }
+        0%, 64% { opacity: 1; }
+        64%, 72% { opacity: 0; }
+        72%, 100% { opacity: 0; }
       }
+      /* The engine is fully invisible until the brand stage has cleared. */
       @keyframes engineFade {
-        0%, 60% { opacity: 0; }
-        60%, 90% { opacity: 1; }
-        90%, 100% { opacity: 0; }
+        0%, 78% { opacity: 0; }
+        78%, 96% { opacity: 1; }
+        96%, 100% { opacity: 0; }
       }
       @media (prefers-reduced-motion: reduce) {
         .mainMask, .subMask { animation: none; width: 720px; }
         .brandText { animation: none; opacity: 1; }
-        .engineMask, .engineText { animation: none; width: 0; opacity: 0; }
+        .engineMask { animation: none; width: 0; }
+        .engineText { animation: none; opacity: 0; }
       }
     </style>
     <clipPath id="mainClip" clipPathUnits="userSpaceOnUse">
