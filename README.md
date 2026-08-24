@@ -1,12 +1,12 @@
 <p align="center">
-  <a href="https://github.com/pasquawisdom2007-beep/SUKUNA_MD">
-    <img src="./assets/branding/sukuna-md-visual.png" width="520" alt="Sukuna MD by PASQUA">
-  </a>
+  <img src="./assets/branding/sukuna-md-title.svg" width="720" alt="SUKUNA MD by PASQUA">
 </p>
 
-<h1 align="center">SUKUNA MD</h1>
-
-<p align="center"><strong>by PASQUA</strong></p>
+<p align="center">
+  <a href="https://github.com/pasquawisdom2007-beep/SUKUNA_MD">
+    <img src="./assets/branding/sukuna-md-visual.png" width="520" alt="Sukuna MD red-eye visual by PASQUA">
+  </a>
+</p>
 
 <p align="center">
   <em>The King of Curses — a panel-paired WhatsApp MD bot.</em>
@@ -19,13 +19,7 @@
   <a href="https://github.com/pasquawisdom2007-beep/SUKUNA_MD"><img src="https://img.shields.io/github/repo-size/pasquawisdom2007-beep/SUKUNA_MD?style=for-the-badge&color=22c55e" alt="Repository size"></a>
 </p>
 
-<p align="center">
-  <a href="https://github.com/pasquawisdom2007-beep/SUKUNA_MD/blob/main/assets/branding/sukuna-md-by-pasqua.mp4">
-    <img src="./assets/branding/sukuna-md-by-pasqua.gif" width="360" alt="Sukuna MD by PASQUA animated branding preview">
-  </a>
-</p>
-
-<p align="center"><sub>Click the animation preview to open the full branded MP4.</sub></p>
+<p align="center"><sub>Text animation first. Sukuna visual immediately after.</sub></p>
 
 ---
 
@@ -33,7 +27,7 @@
 
 **SUKUNA MD** is a multi-user WhatsApp bot built around panel-friendly pairing, modular commands, group administration, utilities, media tools, and independent protection engines. The project is maintained by **PASQUA** and uses the Pasqua Baileys fork configured by the repository.
 
-The visual identity in this README uses the new red-eye Sukuna artwork as its anchor, with a black-and-crimson palette, restrained cinematic motion, and an exact animated title treatment reading **SUKUNA MD — by PASQUA**.
+The visual identity in this README uses a text-only animated title above the new red-eye Sukuna artwork. The title is rendered exactly as **SUKUNA MD** and **by PASQUA**, with a black-and-crimson presentation that remains lightweight and repository-friendly.
 
 ## Highlights
 
@@ -148,9 +142,8 @@ The README branding files are kept in [`assets/branding`](./assets/branding):
 
 | File | Purpose |
 |---|---|
-| [`sukuna-md-visual.png`](./assets/branding/sukuna-md-visual.png) | Clean red-eye Sukuna visual used as the README hero image |
-| [`sukuna-md-by-pasqua.gif`](./assets/branding/sukuna-md-by-pasqua.gif) | Lightweight original animated README preview with the Sukuna MD title treatment |
-| [`sukuna-md-by-pasqua.mp4`](./assets/branding/sukuna-md-by-pasqua.mp4) | Full original vertical animation linked from the README preview |
+| [`sukuna-md-title.svg`](./assets/branding/sukuna-md-title.svg) | Text-only animated title shown before the hero image |
+| [`sukuna-md-visual.png`](./assets/branding/sukuna-md-visual.png) | New red-eye Sukuna visual used as the README hero image |
 
 ## Credits
 

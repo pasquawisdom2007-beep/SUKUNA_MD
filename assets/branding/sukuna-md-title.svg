@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="280" viewBox="0 0 1200 280" role="img" aria-labelledby="title desc">
+  <title id="title">SUKUNA MD by PASQUA</title>
+  <desc id="desc">Animated text-only title for the Sukuna MD README.</desc>
+  <defs>
+    <linearGradient id="titleGradient" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.52" stop-color="#f8fafc"/>
+      <stop offset="1" stop-color="#fecaca"/>
+    </linearGradient>
+    <linearGradient id="accentGradient" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7f1d1d"/>
+      <stop offset="0.5" stop-color="#ef4444"/>
+      <stop offset="1" stop-color="#7f1d1d"/>
+    </linearGradient>
+    <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="7" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <clipPath id="titleClip">
+      <rect x="128" y="52" width="944" height="84" rx="4"/>
+    </clipPath>
+    <style>
+      .main { font: 700 66px Arial, Helvetica, sans-serif; letter-spacing: 14px; }
+      .sub { font: 600 28px Arial, Helvetica, sans-serif; letter-spacing: 8px; }
+      .rule { animation: ruleIn 1.5s ease-out both; transform-origin: center; }
+      .mainText { animation: reveal 2.3s cubic-bezier(.2,.75,.25,1) both; }
+      .subText { animation: subIn 2.2s ease-out 1.05s both; }
+      .glint { animation: glint 3.8s ease-in-out 1.5s infinite; }
+      @keyframes reveal { from { opacity: 0; transform: translateY(26px); } to { opacity: 1; transform: translateY(0); } }
+      @keyframes subIn { from { opacity: 0; letter-spacing: 18px; } to { opacity: 1; letter-spacing: 8px; } }
+      @keyframes ruleIn { from { opacity: 0; transform: scaleX(0); } to { opacity: 1; transform: scaleX(1); } }
+      @keyframes glint { 0%, 35% { transform: translateX(-320px); opacity: 0; } 48% { opacity: .8; } 62%, 100% { transform: translateX(320px); opacity: 0; } }
+    </style>
+  </defs>
+  <rect width="1200" height="280" fill="#050505"/>
+  <g class="rule" opacity=".9">
+    <rect x="250" y="35" width="700" height="2" fill="url(#accentGradient)"/>
+    <rect x="360" y="214" width="480" height="2" fill="url(#accentGradient)"/>
+  </g>
+  <g clip-path="url(#titleClip)">
+    <text class="main mainText" x="600" y="125" text-anchor="middle" fill="url(#titleGradient)">SUKUNA MD</text>
+    <rect class="glint" x="120" y="54" width="14" height="90" rx="7" fill="#ffffff" filter="url(#softGlow)"/>
+  </g>
+  <text class="sub subText" x="600" y="190" text-anchor="middle" fill="#ef4444">by PASQUA</text>
+</svg>
