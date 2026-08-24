@@ -317,7 +317,7 @@ async function runApkScan(context) {
     const quotedUnwrapped = quoted?.ephemeralMessage?.message || quoted?.viewOnceMessage?.message || quoted;
     const quotedInfo = quotedUnwrapped?.documentMessage || quotedUnwrapped?.documentWithCaptionMessage?.message?.documentMessage;
     const document = info || quotedInfo;
-    if (!document) return context.reply('📦 Reply to an APK document or attach an APK with appscan. The bot will inspect it without installing or executing it.');
+    if (!document) return context.reply('📦 Reply to an APK document or attach an APK with .apkscan. The bot will inspect it without installing or executing it.');
     const fileName = String(document.fileName || 'uploaded.apk');
     if (!/\.apk$/i.test(fileName) && !String(document.mimetype || '').includes('android.package-archive')) return context.reply('❌ That file does not look like an Android APK.');
     if (Number(document.fileLength || 0) > MAX_APK_BYTES) return context.reply('❌ APK is larger than the 200 MB scan limit.');
