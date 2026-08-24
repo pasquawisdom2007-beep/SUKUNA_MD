@@ -156,8 +156,10 @@ async function handleJoin(sock, event) {
     const config = database.getGroup(event.id);
     if (!config.antibot) return;
 
+    // Metadata can briefly lag immediately after a join. Continue with an
+    // empty snapshot so the newcomer is still challenged; removal paths retry
+    // metadata later before enforcing a kick.
     const meta = await sock.groupMetadata(event.id).catch(() => null);
-    if (!meta) return;
     const canRemove = botIsAdmin(meta, sock);
     if (!canRemove) {
         await sock.sendMessage(event.id, { text: '⚠️ *AntiBot is enabled,* but I need group-admin rights to enforce it.' }).catch(() => {});
@@ -212,13 +214,21 @@ async function handleMessage(sock, message) {
     }
 
     const detection = detectBotSignals({ jid, participant: findParticipant(meta, jid), messageId: message?.key?.id });
-    if (!detection.highConfidence) return;
-    const canRemove = botIsAdmin(meta, sock);
-    if (config.antibotMode === 'warn' || !canRemove) {
-        await sendWarning(sock, groupId, jid, `⚠️ *AntiBot:* @${shortJid(jid)} matched ${detection.reason || 'a high-confidence bot signature'}.`);
-    } else {
-        await removeMember(sock, groupId, jid, detection.reason || 'High-confidence bot signature.', canRemove);
+    if (detection.highConfidence) {
+        const canRemove = botIsAdmin(meta, sock);
+        if (config.antibotMode === 'warn' || !canRemove) {
+            await sendWarning(sock, groupId, jid, `⚠️ *AntiBot:* @${shortJid(jid)} matched ${detection.reason || 'a high-confidence bot signature'}.`);
+        } else {
+            await removeMember(sock, groupId, jid, detection.reason || 'High-confidence bot signature.', canRemove);
+        }
+        return;
     }
+
+    // Join events can be missed during reconnects, and bots may already be in
+    // the group when AntiBot is enabled. Challenge the first message from any
+    // non-admin member as a universal fallback; this is independent of which
+    // WhatsApp library produced the message.
+    await issueChallenge(sock, groupId, jid, config, state);
 }
 
 async function challengeGroupMembers(sock, groupId) {
