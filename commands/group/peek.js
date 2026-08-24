@@ -12,6 +12,67 @@
 
 'use strict';
 
+function formatCount(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number.toLocaleString('en-US') : String(value || 'Unknown');
+}
+
+async function previewChannel({ sock, msg, from, text }) {
+    const match = text.match(/(?:https?:\/\/)?(?:www\.)?whatsapp\.com\/channel\/([A-Za-z0-9_-]+)/i);
+    if (!match || !match[1] || match[1].length < 8) return null;
+    if (typeof sock.newsletterMetadata !== 'function') {
+        throw new Error('this Baileys build does not expose newsletter channel metadata');
+    }
+
+    let info;
+    try {
+        info = await sock.newsletterMetadata('invite', match[1]);
+    } catch (err) {
+        console.error('[peek:channel]', err?.message || err);
+        const errMsg = err?.toString?.() || '';
+        if (errMsg.includes('404') || errMsg.includes('not-found')) throw new Error('Invalid or unavailable channel link');
+        if (errMsg.includes('401') || errMsg.includes('403')) throw new Error('Not authorized to preview this channel');
+        throw new Error('Could not resolve this channel link');
+    }
+    if (!info?.id) throw new Error('Channel metadata was unavailable');
+
+    const channelName = info.name || info.subject || 'Unknown channel';
+    const followers = formatCount(info.subscribers ?? info.subscriberCount ?? 'Unknown');
+    const description = String(info.description || info.desc || 'No description set').trim();
+    const createdAt = info.creation_time || info.creation
+        ? new Date(Number(info.creation_time || info.creation) * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+        : 'Unknown';
+    const verificationValue = String(info.verification || '').toLowerCase();
+    const verification = info.isVerified === true || ['verified', 'blue', 'green'].includes(verificationValue)
+        ? 'Verified'
+        : info.verification
+            ? String(info.verification)
+            : 'Not verified';
+    const channelUrl = `https://whatsapp.com/channel/${match[1]}`;
+    const out =
+        `📡 *CHANNEL PREVIEW*\n` +
+        `┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄\n` +
+        `📛 *Name :* ${channelName}\n` +
+        `👥 *Followers :* ${followers}\n` +
+        `✅ *Status :* ${verification}\n` +
+        `📅 *Created :* ${createdAt}\n` +
+        `🔗 *Link :* ${channelUrl}\n` +
+        `┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄\n` +
+        `📝 *Description :*\n${description}\n\n` +
+        `> Previewed only — not followed.`;
+
+    let profileUrl = null;
+    if (typeof sock.profilePictureUrl === 'function') {
+        try { profileUrl = await sock.profilePictureUrl(info.id, 'image'); } catch (_) {}
+    }
+    if (profileUrl) {
+        await sock.sendMessage(from, { image: { url: profileUrl }, caption: out }, { quoted: msg });
+    } else {
+        await sock.sendMessage(from, { text: out }, { quoted: msg });
+    }
+    return true;
+}
+
 module.exports = {
     name: 'peek',
     aliases: ['ginfo', 'inviteinfo', 'groupinvitepreview'],
@@ -35,9 +96,17 @@ module.exports = {
                     `Usage:\n` +
                     `${prefix}peek https://chat.whatsapp.com/XXXXXXXX\n` +
                     `or reply to a message containing the link\n\n` +
+                    `You can also use a public channel link:\n` +
+                    `${prefix}peek https://whatsapp.com/channel/XXXXXXXX\n\n` +
                     `> Shows name, description, member count & creator —\n` +
                     `> without joining the group.`
                 );
+            }
+
+            // ── Public channel preview uses the same metadata + profile-photo flow ──
+            if (/(?:https?:\/\/)?(?:www\.)?whatsapp\.com\/channel\//i.test(text)) {
+                await previewChannel({ sock, msg, from, text });
+                return;
             }
 
             // ── Extract invite code from the link ──────────────────────
