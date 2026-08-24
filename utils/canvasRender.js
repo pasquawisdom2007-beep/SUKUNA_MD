@@ -1144,6 +1144,107 @@ async function renderCalendarCard({
     return svgToPng(svg);
 }
 
+// ── BOTSTATS INFORMATION TABLE (reference-style portrait card) ────────────────
+async function renderBotStatsCard({
+    botName = 'SUKUNA · MD',
+    status = 'ONLINE',
+    packageName = '@pasqua-baileys/baileys',
+    version = '—',
+    prefix = '.',
+    uptime = '—',
+    panelResponse = '—',
+    commandTotal = 0,
+    uniqueCommands = 0,
+    topCommand = '—',
+    lastCommand = '—',
+    runtime = '—',
+    memory = '—',
+    cpu = '—',
+    timestamp = '—',
+} = {}) {
+    const W = 1000;
+    const leftW = 310;
+    const rowTop = 158;
+    const rowGap = 8;
+    const rowPad = 18;
+    const fontSize = 22;
+    const lineH = 29;
+    const maxValueChars = 34;
+    const wrap = value => {
+        const text = String(value ?? '—').trim() || '—';
+        const words = text.split(/\s+/);
+        const lines = [];
+        let line = '';
+        for (const word of words) {
+            if (!line) { line = word; continue; }
+            if ((line + ' ' + word).length <= maxValueChars) line += ' ' + word;
+            else { lines.push(line); line = word; }
+        }
+        if (line) lines.push(line);
+        return lines.slice(0, 4);
+    };
+    const rows = [
+        ['🤖 Bot', botName],
+        ['📦 Package', packageName],
+        ['📝 Status', status],
+        ['🏷️ Version', version],
+        ['⌨️ Prefix', prefix],
+        ['⏱️ Uptime', uptime],
+        ['⚡ Panel Response', panelResponse],
+        ['🧮 Commands Run', Number(commandTotal).toLocaleString('en-US')],
+        ['🧩 Unique Commands', Number(uniqueCommands).toLocaleString('en-US')],
+        ['🏆 Top Command', topCommand],
+        ['🕘 Last Command', lastCommand],
+        ['💾 Memory', memory],
+        ['🖥️ Runtime', runtime],
+        ['⚙️ CPU', cpu],
+        ['🕒 Updated', timestamp],
+    ];
+    const layouts = rows.map(([label, value]) => ({ label, lines: wrap(value) }));
+    const heights = layouts.map(row => Math.max(66, rowPad * 2 + row.lines.length * lineH));
+    const H = rowTop + heights.reduce((sum, height) => sum + height + rowGap, 0) + 82;
+    const escText = value => esc(value);
+    let y = rowTop;
+    const rowSvg = layouts.map((row, index) => {
+        const h = heights[index];
+        const valueLines = row.lines.map((line, lineIndex) =>
+            `<text x="${leftW + 38}" y="${y + 36 + lineIndex * lineH}" font-family="Arial, sans-serif" font-size="${fontSize}" fill="#f1f5f9">${escText(line)}</text>`
+        ).join('');
+        const result = `
+          <g>
+            <rect x="28" y="${y}" width="${W - 56}" height="${h}" fill="#15191c" stroke="#30373b" stroke-width="1"/>
+            <line x1="${leftW}" y1="${y}" x2="${leftW}" y2="${y + h}" stroke="#3a4247" stroke-width="1"/>
+            <text x="50" y="${y + 36}" font-family="Arial, sans-serif" font-size="${fontSize}" fill="#f8fafc">${escText(row.label)}</text>
+            ${valueLines}
+          </g>`;
+        y += h + rowGap;
+        return result;
+    }).join('');
+    const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+      <defs>
+        <linearGradient id="statsBg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#070a0c"/>
+          <stop offset="100%" stop-color="#111619"/>
+        </linearGradient>
+        <pattern id="statsGrid" width="42" height="42" patternUnits="userSpaceOnUse">
+          <path d="M 42 0 L 0 0 0 42" fill="none" stroke="#cbd5e1" stroke-opacity="0.035"/>
+        </pattern>
+      </defs>
+      <rect width="${W}" height="${H}" fill="url(#statsBg)"/>
+      <rect width="${W}" height="${H}" fill="url(#statsGrid)"/>
+      <rect x="14" y="14" width="${W - 28}" height="${H - 28}" fill="none" stroke="#394247" stroke-width="2"/>
+      <text x="40" y="66" font-family="Arial, sans-serif" font-size="18" letter-spacing="5" fill="#aab4ba">BOTSTAT · SYSTEM PROFILE</text>
+      <text x="${W - 40}" y="66" text-anchor="end" font-family="Arial, sans-serif" font-size="17" letter-spacing="3" fill="#72e0a2">● ${escText(status)}</text>
+      <text x="40" y="108" font-family="Arial, sans-serif" font-size="30" font-weight="bold" fill="#f8fafc">${escText(botName)}</text>
+      <text x="${W - 40}" y="108" text-anchor="end" font-family="Arial, sans-serif" font-size="15" fill="#8d999f">METRICS SINCE PROCESS START</text>
+      <line x1="40" y1="128" x2="${W - 40}" y2="128" stroke="#3a4247"/>
+      ${rowSvg}
+      <text x="${W / 2}" y="${H - 30}" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" letter-spacing="4" fill="#7e8a90">SUKUNA MD · LIVE TELEMETRY</text>
+    </svg>`;
+    return svgToPng(svg);
+}
+
 module.exports = {
     renderWalletCard,
     renderEarningsCard,
@@ -1160,6 +1261,7 @@ module.exports = {
     renderTttBoardCard,
     renderRepoCard,
     renderUptimeCard,
+    renderBotStatsCard,
     renderTextCard,
     renderCalendarCard,
 };
