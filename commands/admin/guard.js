@@ -51,7 +51,7 @@ function usage(prefix) {
 
 module.exports = {
     name: 'guard',
-    description: 'Verify new group members with a two-minute poll challenge',
+    description: 'Verify new group members with a 60-second poll challenge',
     category: 'admin',
     usage: '.guard on|off|status|set|reset',
 
