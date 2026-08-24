@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="280" viewBox="0 0 1200 280" role="img" aria-labelledby="title desc" text-rendering="geometricPrecision">
   <title id="title">SUKUNA MD by PASQUA — Pasqua Baileys Engine</title>
-  <desc id="desc">A slow, strictly sequential red-glow typewriter animation on a transparent background.</desc>
+  <desc id="desc">A smooth, strictly sequential red-glow typewriter animation on a transparent background.</desc>
   <defs>
     <filter id="redGlow" x="-30%" y="-60%" width="160%" height="220%" color-interpolation-filters="sRGB">
       <feGaussianBlur stdDeviation="3.2" in="SourceGraphic" result="blur"/>
@@ -12,16 +12,16 @@
     </filter>
     <clipPath id="mainClip" clipPathUnits="userSpaceOnUse">
       <rect x="245" y="56" width="720" height="90">
-        <!-- 4s pause, then one character every ~1.33s; hold, then clear. -->
-        <animate attributeName="width" dur="60s" repeatCount="indefinite" calcMode="discrete"
+        <!-- Short pause, then one character every ~1.22s; hold, then clear. -->
+        <animate attributeName="width" dur="55s" repeatCount="indefinite" calcMode="discrete"
           values="0;0;80;160;240;320;400;480;560;640;720;720;0;0"
           keyTimes="0;0.0667;0.0889;0.1111;0.1333;0.1556;0.1778;0.2;0.2222;0.2444;0.2667;0.5833;0.6167;1"/>
       </rect>
     </clipPath>
     <clipPath id="subClip" clipPathUnits="userSpaceOnUse">
       <rect x="360" y="157" width="480" height="50">
-        <!-- Starts only after Sukuna MD has finished; one character every ~1.33s. -->
-        <animate attributeName="width" dur="60s" repeatCount="indefinite" calcMode="discrete"
+        <!-- Starts only after Sukuna MD has finished; one character every ~1.22s. -->
+        <animate attributeName="width" dur="55s" repeatCount="indefinite" calcMode="discrete"
           values="0;0;53;107;160;213;267;320;373;427;480;480;0;0"
           keyTimes="0;0.3167;0.3389;0.3611;0.3833;0.4056;0.4278;0.45;0.4722;0.4944;0.5167;0.5833;0.6167;1"/>
       </rect>
@@ -29,7 +29,7 @@
     <clipPath id="engineClip" clipPathUnits="userSpaceOnUse">
       <rect x="120" y="105" width="960" height="72">
         <!-- Fully hidden until both brand lines have cleared; then one character at a time. -->
-        <animate attributeName="width" dur="60s" repeatCount="indefinite" calcMode="discrete"
+        <animate attributeName="width" dur="55s" repeatCount="indefinite" calcMode="discrete"
           values="0;0;46;91;137;183;229;274;320;366;411;457;503;549;594;640;686;731;777;823;869;914;960;960;0"
           keyTimes="0;0.6667;0.6794;0.6921;0.7048;0.7175;0.7302;0.7429;0.7556;0.7683;0.781;0.7937;0.8063;0.819;0.8317;0.8444;0.8571;0.8698;0.8825;0.8952;0.9079;0.9206;0.9333;0.9833;1"/>
       </rect>
@@ -38,7 +38,7 @@
 
   <!-- Stage 1 and 2: only these two lines exist until they disappear together. -->
   <g id="brandStage" fill="#ef4444" filter="url(#redGlow)" visibility="visible">
-    <animate attributeName="visibility" dur="60s" repeatCount="indefinite" calcMode="discrete"
+    <animate attributeName="visibility" dur="55s" repeatCount="indefinite" calcMode="discrete"
       values="visible;visible;hidden;hidden;visible"
       keyTimes="0;0.5833;0.6167;0.9999;1"/>
     <text x="245" y="125" font-family="Arial, Helvetica, sans-serif" font-size="66" font-weight="700" letter-spacing="14" clip-path="url(#mainClip)">SUKUNA MD</text>
@@ -47,7 +47,7 @@
 
   <!-- Stage 3: this group is hidden, not merely transparent, until Stage 1 and 2 are gone. -->
   <g id="engineStage" fill="#ef4444" filter="url(#redGlow)" visibility="hidden">
-    <animate attributeName="visibility" dur="60s" repeatCount="indefinite" calcMode="discrete"
+    <animate attributeName="visibility" dur="55s" repeatCount="indefinite" calcMode="discrete"
       values="hidden;hidden;visible;visible;hidden"
       keyTimes="0;0.6666;0.6667;0.9833;1"/>
     <text x="600" y="157" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="50" font-weight="700" letter-spacing="7" clip-path="url(#engineClip)">Pasqua Baileys Engine</text>
