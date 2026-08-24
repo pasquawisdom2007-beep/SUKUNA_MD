@@ -25,6 +25,7 @@ const {
     sameIdentity,
     shortJid,
 } = require('../../utils/antiBotSignals');
+const { challengeGroupMembers } = require('../../utils/antiBotEngine');
 
 module.exports = {
     name: 'antibot',
@@ -122,11 +123,18 @@ module.exports = {
                 });
 
                 if (!detected.length) {
+                    let challengeSummary = '';
+                    try {
+                        const sweep = await challengeGroupMembers(sock, from);
+                        challengeSummary = `\n\n🛡️ Started sender-bound verification for *${sweep.issued}* non-admin member(s).\n_This catches bots from other libraries by their inability to complete the challenge._`;
+                    } catch (error) {
+                        challengeSummary = `\n\n⚠️ Could not start the verification sweep: ${error.message}.`;
+                    }
                     return reply(
-                        `✅ *No high-confidence bots detected!*\n\n` +
+                        `✅ *No high-confidence bot signatures detected.*\n\n` +
                         `Scanned ${meta.participants.length} members.\n` +
-                        `${candidates.length ? `⚠️ ${candidates.length} linked-device candidate(s) remain protected by newcomer verification.\n` : ''}` +
-                        `_Ordinary linked-device JIDs are not treated as proof of automation._`
+                        `${candidates.length ? `⚠️ ${candidates.length} linked-device candidate(s) remain protected by newcomer verification.` : '_Ordinary linked-device JIDs are not treated as proof of automation._'}` +
+                        challengeSummary
                     );
                 }
 
@@ -158,7 +166,12 @@ module.exports = {
                     } catch (_) {}
                 }
 
-                return reply(`✅ Removed *${removed}/${detected.length}* bot(s) from the group.`);
+                let sweepSummary = '';
+                try {
+                    const sweep = await challengeGroupMembers(sock, from);
+                    sweepSummary = ` Newcomer verification is active for *${sweep.issued}* remaining non-admin member(s).`;
+                } catch (_) {}
+                return reply(`✅ Removed *${removed}/${detected.length}* bot(s) from the group.${sweepSummary}`);
             } catch (err) {
                 return reply(`❌ Scan failed: ${err.message}`);
             }
