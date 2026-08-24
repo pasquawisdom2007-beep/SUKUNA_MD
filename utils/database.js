@@ -172,7 +172,7 @@ class Database {
             guardQuestion: 'Are you human?',
             guardOptions: ['I am human', 'I am a robot'],
             guardCorrect: 0,
-            guardTimeoutMs: 120000,
+            guardTimeoutMs: 60000,
         };
 
         if (!this.data.groups[groupId]) {

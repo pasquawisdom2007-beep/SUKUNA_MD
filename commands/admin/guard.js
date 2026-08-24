@@ -44,7 +44,7 @@ function usage(prefix) {
         `• ${prefix}guard status\n` +
         `• ${prefix}guard set <question> | <option 1> | <option 2> | <correct 1-2>\n` +
         `• ${prefix}guard reset\n\n` +
-        `New members receive one two-option poll and have 2 minutes to answer. ` +
+        `New members receive one two-option poll and have 60 seconds to answer. ` +
         `Incorrect or expired verification results in removal when I am a group admin.`
     );
 }
@@ -74,7 +74,7 @@ module.exports = {
                 `Question: ${group.guardQuestion || DEFAULT_QUESTION}\n` +
                 `Options: 1) ${options[0]}  2) ${options[1]}\n` +
                 `Correct option: ${Number(group.guardCorrect) === 1 ? 2 : 1}\n` +
-                `Time limit: 2 minutes`
+                `Time limit: 60 seconds`
             );
         }
 
@@ -103,7 +103,7 @@ module.exports = {
         if (action === 'on') {
             if (!botAdmin) return reply('❌ I must be a group admin before Guard can verify or remove newcomers.');
             database.setGroup(from, 'guard', true);
-            return reply(`✅ *Guard enabled.* New members will receive a two-option verification poll and have 2 minutes to answer.`);
+            return reply(`✅ *Guard enabled.* New members will receive a two-option verification poll and have 60 seconds to answer.`);
         }
 
         database.setGroup(from, 'guard', false);
