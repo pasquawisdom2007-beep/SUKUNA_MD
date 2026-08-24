@@ -98,6 +98,20 @@ async function gitChangedFiles(from, to) {
     } catch { return []; }
 }
 
+async function gitChangedEntries(from, to) {
+    try {
+        const { stdout } = await run(`git diff --name-status ${from} ${to}`);
+        return stdout.split('\n').map(line => {
+            const match = line.trim().match(/^([AMD])\s+(.+)$/);
+            if (!match) return null;
+            return {
+                path: match[2].trim(),
+                status: match[1] === 'A' ? 'new' : match[1] === 'D' ? 'removed' : 'edited',
+            };
+        }).filter(Boolean);
+    } catch { return []; }
+}
+
 async function ensureRemote() {
     try {
         await run('git remote get-url origin', { timeout: 5000 });
@@ -202,47 +216,53 @@ function humanChangeName(filePath) {
     if (commandMatch) {
         const category = commandMatch[1].replace(/[-_]+/g, ' ');
         const command = commandMatch[2].replace(/\.(?:js|cjs|mjs)$/i, '').replace(/[-_]+/g, ' ');
-        return `Command .${command} (${category})`;
+        return `${category}/${command}`;
     }
     const known = [
-        [/^lib\/guard\.js$/i, 'Guard verification engine'],
-        [/^lib\/sessionManager\.js$/i, 'WhatsApp session and message handling'],
-        [/^utils\/database\.js$/i, 'Group settings and database'],
-        [/^utils\/commandLoader\.js$/i, 'Command loading system'],
+        [/^lib\/sessionManager\.js$/i, 'Session manager'],
+        [/^lib\/guard\.js$/i, 'Guard verification'],
+        [/^utils\/database\.js$/i, 'Group settings database'],
+        [/^utils\/commandLoader\.js$/i, 'Command loader'],
         [/^config\.js$/i, 'Bot configuration'],
-        [/^package\.json$/i, 'Bot dependencies'],
-        [/^README(?:\.md)?$/i, 'Bot documentation'],
+        [/^package\.json$/i, 'Dependencies'],
+        [/^README(?:\.md)?$/i, 'Documentation'],
     ];
     for (const [pattern, label] of known) if (pattern.test(normalized)) return label;
     const base = path.basename(normalized).replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ');
-    const folder = path.dirname(normalized).replace(/[\/_-]+/g, ' ').trim();
-    return folder ? `${base} (${folder})` : base;
+    const folder = path.dirname(normalized).replace(/[\\/_-]+/g, '/').replace(/^\/+|\/+$/g, '');
+    return folder ? `${folder}/${base}` : base;
 }
 
-function humanChangeAction(filePath) {
-    const normalized = String(filePath || '').replace(/\\/g, '/');
-    if (normalized.startsWith('commands/')) return 'command changed';
-    if (normalized.startsWith('lib/')) return 'bot engine changed';
-    if (normalized.startsWith('utils/')) return 'support system changed';
-    if (/package\.json|lock/i.test(normalized)) return 'dependency list changed';
-    return 'file changed';
+function humanChangeStatus(filePath, status) {
+    if (status === 'new') return String(filePath).startsWith('commands/') ? 'new command' : 'new file';
+    if (status === 'removed') return 'removed';
+    return 'edited';
+}
+
+function normalizeChangeEntries(changed) {
+    return changed
+        .filter(item => {
+            const filePath = typeof item === 'string' ? item : item.path;
+            return !shouldSkipLocalPath(filePath);
+        })
+        .map(item => {
+            if (typeof item === 'string') return { path: item, status: 'edited' };
+            return item;
+        });
 }
 
 function formatUpdateReport({ remote, changed }) {
-    const visible = changed.filter(file => !shouldSkipLocalPath(file));
-    const lines = visible.slice(0, 30).map((file, index) =>
-        `${index + 1}. ${humanChangeName(file)} — ${humanChangeAction(file)}`
+    const entries = normalizeChangeEntries(changed);
+    const lines = entries.slice(0, 40).map((entry, index) =>
+        `${index + 1}. ${humanChangeName(entry.path)} — ${humanChangeStatus(entry.path, entry.status)}`
     );
-    if (visible.length > 30) lines.push(`…and ${visible.length - 30} more pending changes.`);
+    if (entries.length > 40) lines.push(`…and ${entries.length - 40} more pending updates.`);
     return [
-        '🆕 *Pending updates found*',
+        '🆕 *Pending updates*',
         '',
-        `Remote update: ${remote.subject || 'New bot changes are available.'}`,
-        `Pending changes: ${visible.length}`,
-        '',
-        '*Changes in order:*',
         ...lines,
         '',
+        `Total pending updates: ${entries.length}`,
         'Run .update to apply them, or .update restart to apply and restart.',
     ].join('\n');
 }
@@ -260,14 +280,15 @@ function compareLocalTree(remoteTree) {
         }
     }
 
-    const changed = new Set();
+    const changed = [];
     for (const [filePath, sha] of remote) {
-        if (local.get(filePath) !== sha) changed.add(filePath);
+        if (!local.has(filePath)) changed.push({ path: filePath, status: 'new' });
+        else if (local.get(filePath) !== sha) changed.push({ path: filePath, status: 'edited' });
     }
     for (const filePath of local.keys()) {
-        if (!remote.has(filePath)) changed.add(filePath);
+        if (!remote.has(filePath)) changed.push({ path: filePath, status: 'removed' });
     }
-    return [...changed].sort();
+    return changed.sort((a, b) => a.path.localeCompare(b.path));
 }
 
 // ── tarball fallback (used when .git is missing) ────────────────────────────
@@ -402,6 +423,7 @@ module.exports = {
                     if (local === remote) {
                         return reply('✅ *No pending updates.*\nYour bot already has the latest main-branch changes.');
                     }
+                    const changed = await gitChangedEntries('HEAD', `origin/${REPO_BRANCH}`);
                     return reply(formatUpdateReport({
                         remote: { subject: subj },
                         changed,
@@ -510,5 +532,5 @@ module.exports = {
             UPDATE_IN_PROGRESS = false;
         }
     },
-    __test: { humanChangeName, humanChangeAction, formatUpdateReport, shouldSkipLocalPath },
+    __test: { humanChangeName, humanChangeStatus, formatUpdateReport, shouldSkipLocalPath },
 };
