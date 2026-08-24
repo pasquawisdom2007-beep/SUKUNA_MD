@@ -45,6 +45,7 @@ function usage(prefix) {
         `• ${prefix}guard set <question> | <option 1> | <option 2> | <correct 1-2>\n` +
         `• ${prefix}guard reset\n\n` +
         `New members receive one two-option poll and have 60 seconds to answer. ` +
+        `If WhatsApp does not register a selection, the challenged member may reply with the configured correct option. ` +
         `Incorrect or expired verification results in removal when I am a group admin.`
     );
 }
@@ -103,7 +104,7 @@ module.exports = {
         if (action === 'on') {
             if (!botAdmin) return reply('❌ I must be a group admin before Guard can verify or remove newcomers.');
             database.setGroup(from, 'guard', true);
-            return reply(`✅ *Guard enabled.* New members will receive a two-option verification poll and have 60 seconds to answer.`);
+            return reply(`✅ *Guard enabled.* New members will receive a two-option verification poll and have 60 seconds to answer. If the poll is not registered, they can reply with the configured correct option.`);
         }
 
         database.setGroup(from, 'guard', false);
