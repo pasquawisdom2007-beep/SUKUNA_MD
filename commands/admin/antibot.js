@@ -2,16 +2,15 @@
  * AntiBot Command — Admin Only
  *
  * Detection methods (layered):
- *  1. JOIN event: multi-device JID (number:N@s.whatsapp.net, N > 0)
- *  2. MESSAGE: multi-device JID of the sender (same check, on every message)
- *  3. MESSAGE: known bot-library message-ID stamp (see utils/botIdStamp.js —
- *     catches bots built on forks that embed a literal marker, e.g.
- *     "STARFALL"/"PLOGME", in every generated message ID)
- *  4. SCAN: checks all current members for multi-device JIDs
+ *  1. JOIN event: every non-admin newcomer receives Guard verification
+ *  2. MESSAGE: explicit bot metadata or known bot-library message-ID stamp
+ *  3. JOIN/SCAN: linked-device JIDs are weak candidates only, never an
+ *     automatic kick by themselves because legitimate companion devices use them
+ *  4. SCAN: checks current members for high-confidence signatures
  *
  * Usage:
- *   .antibot on     — enable, warn first then kick on 2nd hit
- *   .antibot kick   — enable, kick immediately on first hit
+ *   .antibot on     — enable verification and high-confidence enforcement
+ *   .antibot kick   — enable verification and remove confirmed bot signatures
  *   .antibot warn   — enable, warn only (no kick)
  *   .antibot off    — disable
  *   .antibot status — show current settings
@@ -19,12 +18,13 @@
  */
 
 const database = require('../../utils/database');
-
-// Multi-device JID: number:device@s.whatsapp.net where device > 0
-function isMdBotJid(jid) {
-    const m = String(jid).match(/^(\d+):(\d+)@s\.whatsapp\.net$/);
-    return m && parseInt(m[2], 10) > 0;
-}
+const {
+    detectBotSignals,
+    findParticipant,
+    participantIdentifiers,
+    sameIdentity,
+    shortJid,
+} = require('../../utils/antiBotSignals');
 
 module.exports = {
     name: 'antibot',
@@ -49,16 +49,17 @@ module.exports = {
                 `Status: ${isEnabled ? '✅ ACTIVE' : '❌ INACTIVE'}\n` +
                 `Mode: *${currentMode.toUpperCase()}*\n\n` +
                 `*Usage:*\n` +
-                `▸ .antibot on     — enable (warn → kick)\n` +
-                `▸ .antibot kick   — instant kick on detection\n` +
+                `▸ .antibot on     — enable verification + enforcement\n` +
+                `▸ .antibot kick   — remove high-confidence bot signatures\n` +
                 `▸ .antibot warn   — warn only, no kick\n` +
                 `▸ .antibot off    — disable\n` +
                 `▸ .antibot scan   — scan & remove bots now\n` +
                 `▸ .antibot status — current settings\n\n` +
-                `*Detects:*\n` +
-                `✓ Multi-device bot JIDs (on join + on message)\n` +
-                `✓ Known bot-library message-ID stamps\n` +
-                `✓ Scan of all current members\n\n` +
+                `*Protects and detects:*\n` +
+                `✓ Sender-bound verification for every non-admin newcomer\n` +
+                `✓ Explicit bot metadata and known bot-library ID stamps\n` +
+                `✓ Linked-device JIDs treated as candidates, not proof\n` +
+                `✓ Scan of current members for high-confidence signatures\n\n` +
                 `_Group admins and the bot itself are always exempt._`
             );
         }
@@ -70,8 +71,8 @@ module.exports = {
                 `Mode: *${currentMode.toUpperCase()}*\n\n` +
                 `_${isEnabled
                     ? currentMode === 'kick'
-                        ? 'Bots will be warned on first detection, kicked on second.'
-                        : 'Bots will be warned but not kicked.'
+                    ? 'New members must pass verification; high-confidence bot signatures are removed.'
+                    : 'New members must pass verification; detected bots are warned only.'
                     : 'Enable with .antibot on or .antibot kick'
                 }_`
             );
@@ -89,9 +90,9 @@ module.exports = {
             return reply(
                 `✅ *Anti-Bot ENABLED*\n\n` +
                 `Mode: *${mode.toUpperCase()}*\n\n` +
-                `_${mode === 'kick'
-                    ? '🦾 Bots warned on 1st detection, kicked on 2nd.'
-                    : '⚠️ Bots will receive a warning only.'
+                    `_${mode === 'kick'
+                    ? '🦾 New members are verified; high-confidence bots are removed.'
+                    : '⚠️ New members are verified; detected bots receive warnings only.'
                 }_`
             );
         }
@@ -100,35 +101,40 @@ module.exports = {
             await reply('🔍 *Scanning group for bots...*');
             try {
                 const meta = await sock.groupMetadata(from);
-                const botSelf = sock.user?.id;
-                const botPhone = (botSelf || '').split('@')[0].split(':')[0].replace(/\D/g, '');
-                const botJids = new Set([botSelf, `${botPhone}@s.whatsapp.net`].filter(Boolean));
-
-                // Check if bot is admin
-                const botIsAdmin = meta.participants.some(p => {
-                    const pPhone = String(p.id).split('@')[0].split(':')[0].replace(/\D/g, '');
-                    return (botJids.has(p.id) || pPhone === botPhone) && p.admin;
-                });
-
-                const adminSet = new Set(
-                    meta.participants.filter(p => p.admin).map(p => p.id)
+                const botIdentities = [sock.user?.id, sock.user?.lid, sock.user?.jid, sock.user?.phoneNumber].filter(Boolean);
+                const botParticipant = meta.participants.find(p =>
+                    participantIdentifiers(p).some(id => botIdentities.some(bot => sameIdentity(id, bot)))
                 );
+                const botIsAdmin = !!botParticipant?.admin;
 
                 const detected = meta.participants.filter(p => {
-                    if (botJids.has(p.id)) return false;
-                    if (adminSet.has(p.id)) return false;
-                    return isMdBotJid(p.id);
+                    const jid = p.id || p.jid || p.phoneNumber || p.lid;
+                    if (!jid || botIdentities.some(bot => sameIdentity(jid, bot))) return false;
+                    if (p.admin) return false;
+                    return detectBotSignals({ jid, participant: p }).highConfidence;
+                });
+
+                const candidates = meta.participants.filter(p => {
+                    const jid = p.id || p.jid || p.phoneNumber || p.lid;
+                    if (!jid || botIdentities.some(bot => sameIdentity(jid, bot)) || p.admin) return false;
+                    const detection = detectBotSignals({ jid, participant: p });
+                    return detection.candidate && !detection.highConfidence;
                 });
 
                 if (!detected.length) {
                     return reply(
-                        `✅ *No bots detected!*\n\n` +
+                        `✅ *No high-confidence bots detected!*\n\n` +
                         `Scanned ${meta.participants.length} members.\n` +
-                        `_Your group looks clean._`
+                        `${candidates.length ? `⚠️ ${candidates.length} linked-device candidate(s) remain protected by newcomer verification.\n` : ''}` +
+                        `_Ordinary linked-device JIDs are not treated as proof of automation._`
                     );
                 }
 
-                const list = detected.map(p => `• @${p.id.split('@')[0]}`).join('\n');
+                const list = detected.map(p => {
+                    const jid = p.id || p.jid || p.phoneNumber || p.lid;
+                    const detection = detectBotSignals({ jid, participant: p });
+                    return `• @${shortJid(jid)} — ${detection.reason || 'high-confidence signature'}`;
+                }).join('\n');
                 if (!botIsAdmin) {
                     return reply(
                         `🤖 *${detected.length} bot(s) found:*\n\n${list}\n\n` +
@@ -145,7 +151,8 @@ module.exports = {
                 let removed = 0;
                 for (const bot of detected) {
                     try {
-                        await sock.groupParticipantsUpdate(from, [bot.id], 'remove');
+                        const botJid = bot.id || bot.jid || bot.phoneNumber || bot.lid;
+                        await sock.groupParticipantsUpdate(from, [botJid], 'remove');
                         removed++;
                         await new Promise(r => setTimeout(r, 600));
                     } catch (_) {}
