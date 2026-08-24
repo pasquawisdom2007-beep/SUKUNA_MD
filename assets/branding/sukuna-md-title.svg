@@ -1,66 +1,48 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="280" viewBox="0 0 1200 280" role="img" aria-labelledby="title desc">
   <title id="title">SUKUNA MD by PASQUA</title>
-  <desc id="desc">A text-only typewriter animation that types Sukuna MD, then by PASQUA.</desc>
+  <desc id="desc">A looping typewriter animation that types and deletes Sukuna MD, then by PASQUA.</desc>
   <defs>
-    <linearGradient id="titleGradient" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#ffffff"/>
-      <stop offset="0.52" stop-color="#f8fafc"/>
-      <stop offset="1" stop-color="#fecaca"/>
-    </linearGradient>
     <linearGradient id="accentGradient" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#7f1d1d"/>
       <stop offset="0.5" stop-color="#ef4444"/>
       <stop offset="1" stop-color="#7f1d1d"/>
     </linearGradient>
-    <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="7" result="blur"/>
-      <feMerge>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
     <style>
       .main { font: 700 66px Arial, Helvetica, sans-serif; letter-spacing: 14px; }
       .sub { font: 600 28px Arial, Helvetica, sans-serif; letter-spacing: 8px; }
-      .char { opacity: 1; animation: type .14s steps(1, end) both; }
-      .main .c1 { animation-delay: .20s; }
-      .main .c2 { animation-delay: .37s; }
-      .main .c3 { animation-delay: .54s; }
-      .main .c4 { animation-delay: .71s; }
-      .main .c5 { animation-delay: .88s; }
-      .main .c6 { animation-delay: 1.05s; }
-      .main .c7 { animation-delay: 1.22s; }
-      .main .c8 { animation-delay: 1.39s; }
-      .main .c9 { animation-delay: 1.56s; }
-      .sub .c1 { animation-delay: 1.95s; }
-      .sub .c2 { animation-delay: 2.10s; }
-      .sub .c3 { animation-delay: 2.25s; }
-      .sub .c4 { animation-delay: 2.40s; }
-      .sub .c5 { animation-delay: 2.55s; }
-      .sub .c6 { animation-delay: 2.70s; }
-      .sub .c7 { animation-delay: 2.85s; }
-      .sub .c8 { animation-delay: 3.00s; }
-      .sub .c9 { animation-delay: 3.15s; }
-      .rule { animation: ruleIn 1.2s ease-out both; }
-      .caretMain { animation: caretMain 1.65s steps(1, end) both, blink .75s step-end 1.65s infinite; }
-      .caretSub { animation: caretSub 1.7s steps(1, end) 1.75s both, blink .75s step-end 3.15s infinite; }
-      @keyframes type { from { opacity: 0; } to { opacity: 1; } }
-      @keyframes ruleIn { from { opacity: 0; transform: scaleX(0); } to { opacity: .9; transform: scaleX(1); } }
-      @keyframes caretMain { from { opacity: 1; } to { opacity: 0; } }
-      @keyframes caretSub { from { opacity: 0; } to { opacity: 1; } }
-      @keyframes blink { 0%, 48% { opacity: 1; } 49%, 100% { opacity: 0; } }
+      .rule { opacity: .9; }
+      .mainMask { animation: typeMain 8s steps(9, end) infinite; }
+      .subMask { animation: typeSub 8s steps(9, end) infinite; }
+      @keyframes typeMain {
+        0%, 4% { width: 0; }
+        4%, 22% { width: 720px; }
+        22%, 31% { width: 720px; }
+        31%, 49% { width: 0; }
+        49%, 100% { width: 0; }
+      }
+      @keyframes typeSub {
+        0%, 50% { width: 0; }
+        50%, 66% { width: 480px; }
+        66%, 75% { width: 480px; }
+        75%, 93% { width: 0; }
+        93%, 100% { width: 0; }
+      }
       @media (prefers-reduced-motion: reduce) {
-        .char, .rule, .caretMain, .caretSub { animation: none; opacity: 1; }
+        .mainMask, .subMask { animation: none; width: 720px; }
       }
     </style>
+    <clipPath id="mainClip" clipPathUnits="userSpaceOnUse">
+      <rect class="mainMask" x="245" y="56" width="720" height="90"/>
+    </clipPath>
+    <clipPath id="subClip" clipPathUnits="userSpaceOnUse">
+      <rect class="subMask" x="360" y="157" width="480" height="50"/>
+    </clipPath>
   </defs>
   <rect width="1200" height="280" fill="#050505"/>
-  <g class="rule" opacity=".9">
+  <g class="rule">
     <rect x="250" y="35" width="700" height="2" fill="url(#accentGradient)"/>
     <rect x="360" y="214" width="480" height="2" fill="url(#accentGradient)"/>
   </g>
-  <text class="main" x="600" y="125" text-anchor="middle" fill="url(#titleGradient)"><tspan class="char c1">S</tspan><tspan class="char c2">U</tspan><tspan class="char c3">K</tspan><tspan class="char c4">U</tspan><tspan class="char c5">N</tspan><tspan class="char c6">A</tspan><tspan class="char c7"> </tspan><tspan class="char c8">M</tspan><tspan class="char c9">D</tspan></text>
-  <rect class="caretMain" x="1004" y="70" width="5" height="64" rx="2" fill="#ef4444" filter="url(#softGlow)"/>
-  <text class="sub" x="600" y="190" text-anchor="middle" fill="#ef4444"><tspan class="char c1">b</tspan><tspan class="char c2">y</tspan><tspan class="char c3"> </tspan><tspan class="char c4">P</tspan><tspan class="char c5">A</tspan><tspan class="char c6">S</tspan><tspan class="char c7">Q</tspan><tspan class="char c8">U</tspan><tspan class="char c9">A</tspan></text>
-  <rect class="caretSub" x="802" y="159" width="3" height="34" rx="1.5" fill="#ef4444" filter="url(#softGlow)"/>
+  <text class="main" x="245" y="125" fill="#f8fafc" clip-path="url(#mainClip)">SUKUNA MD</text>
+  <text class="sub" x="360" y="190" fill="#ef4444" clip-path="url(#subClip)">by PASQUA</text>
 </svg>
