@@ -189,8 +189,8 @@ module.exports = {
         const credits  = 'pasqua tech';
 
         // ── Resolve current menu design ──
-        let designKey = 'nor';
-        try { designKey = (database.getMenuDesign(phoneNumber) || 'nor').toLowerCase(); }
+        let designKey = 'pasqua';
+        try { designKey = (database.getMenuDesign(phoneNumber) || 'pasqua').toLowerCase(); }
         catch (_) {}
 
         // ── Resolve the active font once so every text path uses it ──

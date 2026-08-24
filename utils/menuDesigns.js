@@ -1249,8 +1249,8 @@ const BUILDERS = {
 };
 
 function buildCaption(designKey, ctx) {
-    const key = String(designKey || 'nor').toLowerCase();
-    const fn = BUILDERS[key] || BUILDERS.nor;
+    const key = String(designKey || 'pasqua').toLowerCase();
+    const fn = BUILDERS[key] || BUILDERS.pasqua;
     return fn(ctx);
 }
 

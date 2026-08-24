@@ -217,12 +217,12 @@ class Database {
     // ── Menu design (per session) ────────────────────────────────────
     getMenuDesign(phoneNumber) {
         if (!this.data.users[phoneNumber]) this.data.users[phoneNumber] = {};
-        return this.data.users[phoneNumber].menuDesign || 'nor';
+        return this.data.users[phoneNumber].menuDesign || 'pasqua';
     }
 
     setMenuDesign(phoneNumber, value) {
         if (!this.data.users[phoneNumber]) this.data.users[phoneNumber] = {};
-        this.data.users[phoneNumber].menuDesign = String(value || 'nor').toLowerCase();
+        this.data.users[phoneNumber].menuDesign = String(value || 'pasqua').toLowerCase();
         this.save('users');
     }
 
