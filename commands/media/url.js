@@ -1,6 +1,7 @@
 'use strict';
 
 const path = require('path');
+const { generateWAMessageFromContent, proto } = require('@pasqua-baileys/baileys');
 const { resolveMedia, downloadResolvedMedia, fetchUrlBuffer } = require('../../utils/mediaCommand');
 const { normalizeHttpUrl, prefixOf, truncate } = require('../../utils/commandHelpers');
 
@@ -63,6 +64,37 @@ async function uploadPublic(buffer, filename, mimetype) {
     throw new Error(errors.join(' | '));
 }
 
+async function sendCopyableResult(sock, from, msg, text, url) {
+    const buttons = [{
+        name: 'cta_copy',
+        buttonParamsJson: JSON.stringify({ display_text: 'Copy link', copy_code: url }),
+    }];
+    try {
+        if (typeof sock?.relayMessage !== 'function') throw new Error('interactive relay unavailable');
+        const message = generateWAMessageFromContent(
+            from,
+            {
+                viewOnceMessage: {
+                    message: {
+                        messageContextInfo: { deviceListMetadataVersion: 2, deviceListMetadata: {} },
+                        interactiveMessage: proto.Message.InteractiveMessage.fromObject({
+                            body: { text },
+                            footer: { text: 'SUKUNA MD · Public Media URL' },
+                            nativeFlowMessage: { buttons, messageParamsJson: '' },
+                        }),
+                    },
+                },
+            },
+            { userJid: sock.user?.id, quoted: msg }
+        );
+        await sock.relayMessage(from, message.message, { messageId: message.key.id });
+        return message;
+    } catch (error) {
+        console.error('[url:copy-button]', error.message);
+        return sock.sendMessage(from, { text }, { quoted: msg });
+    }
+}
+
 module.exports = {
     name: 'url',
     aliases: ['uploadurl', 'mediaurl', 'toupload'],
@@ -99,14 +131,14 @@ module.exports = {
             }
             if (buffer.length > MAX_UPLOAD_BYTES) return reply('❌ Media exceeds the 30 MB public-upload limit.');
             const url = await uploadPublic(buffer, filename, mimetype);
-            return reply(
+            const resultText =
                 '✅ *Public Media URL*\n' +
                 `Type: ${mimetype}\n` +
                 `Size: ${(buffer.length / 1024 / 1024).toFixed(2)} MB\n` +
                 `Source: ${truncate(source, 220)}\n` +
                 `URL: ${url}\n\n` +
-                '_Anyone with the link may be able to access the file while the host keeps it._'
-            );
+                '_Anyone with the link may be able to access the file while the host keeps it._';
+            return sendCopyableResult(sock, msg?.key?.remoteJid || from, msg, resultText, url);
         } catch (error) {
             console.error('[url]', error.message);
             return reply(`❌ Public upload failed: ${truncate(error.message, 320)}`);

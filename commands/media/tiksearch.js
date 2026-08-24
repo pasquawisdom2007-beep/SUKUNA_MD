@@ -22,7 +22,12 @@
 'use strict';
 
 const axios = require('axios');
+const puppeteer = require('puppeteer-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const tikwmBrowser = require('../../lib/tikwmBrowser');
+const { prefixOf, truncate } = require('../../utils/commandHelpers');
+
+puppeteer.use(StealthPlugin());
 
 const BROWSER_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -60,6 +65,8 @@ const MIN_VIDEO_BYTES = 10 * 1024;       // < 10 KB => junk / error page
 const MAX_CANDIDATES  = 8;
 const URL_RETRIES     = 2;
 const CACHE_TTL_MS    = 5 * 60 * 1000;
+const BROWSER_SEARCH_ENABLED = process.env.TIKSEARCH_BROWSER !== '0';
+const BROWSER_SEARCH_TIMEOUT_MS = 12_000;
 
 const cache = new Map(); // query -> { ts, result }
 
@@ -67,24 +74,75 @@ const cache = new Map(); // query -> { ts, result }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+function rawItem(item) {
+    return item?.item && typeof item.item === 'object' ? item.item : item;
+}
+
 function pickUrls(item) {
-    return [item?.hdplay, item?.play, item?.wmplay]
-        .filter(u => typeof u === 'string' && /^https?:\/\//.test(u));
+    const raw = rawItem(item) || {};
+    const video = raw.video || {};
+    return [
+        raw.hdplay, raw.hdPlay, raw.play, raw.play_url, raw.playUrl, raw.wmplay,
+        raw.video_url, raw.videoUrl, raw.download_addr, raw.downloadAddr,
+        raw.playAddr, raw.play_addr, video.playAddr, video.play_addr,
+        video.downloadAddr, video.download_addr, video.playUrl,
+    ].filter(u => typeof u === 'string' && /^https?:\/\//i.test(u));
+}
+
+function numeric(value) {
+    const parsed = Number(value || 0);
+    return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function shapeItem(item) {
-    if (!item) return null;
-    const urls = pickUrls(item);
-    if (!urls.length && !item?.video_id && !item?.id) return null;
+    const raw = rawItem(item);
+    if (!raw) return null;
+    const urls = [...new Set(pickUrls(raw))];
+    const author = typeof raw.author === 'string' ? raw.author : raw.author || {};
+    const stats = raw.stats || raw.statistics || {};
+    const id = raw.id || raw.video_id || raw.videoId;
+    if (!urls.length && !id) return null;
     return {
         urls,
-        pageUrl:  item.share_url || item.webVideoUrl || (item.id ? `https://www.tiktok.com/@${item.author?.unique_id || 'user'}/video/${item.id}` : null),
-        title:    (item.title || item.desc || 'TikTok Video').slice(0, 100),
-        author:   item.author?.nickname || item.author?.unique_id || item.author?.uniqueId || 'Unknown',
-        duration: item.duration || 0,
-        plays:    item.play_count || item.playCount || 0,
-        likes:    item.digg_count || item.diggCount || 0,
+        pageUrl: raw.share_url || raw.shareUrl || raw.webVideoUrl || raw.web_video_url
+            || (id ? `https://www.tiktok.com/@${author.unique_id || author.uniqueId || 'user'}/video/${id}` : null),
+        title: String(raw.title || raw.desc || raw.description || 'TikTok Video').slice(0, 100),
+        author: String(author.nickname || author.unique_id || author.uniqueId || raw.author_name || 'Unknown'),
+        duration: numeric(raw.duration || raw.video?.duration),
+        plays: numeric(raw.play_count || raw.playCount || stats.playCount || stats.play_count),
+        likes: numeric(raw.digg_count || raw.diggCount || stats.diggCount || stats.likes),
     };
+}
+
+function collectSearchItems(payload) {
+    const found = [];
+    const seen = new Set();
+    const visit = (node, depth = 0) => {
+        if (!node || depth > 7) return;
+        if (Array.isArray(node)) {
+            for (const entry of node) visit(entry, depth + 1);
+            return;
+        }
+        if (typeof node !== 'object') return;
+        if (node.item && typeof node.item === 'object' && (node.item.video || node.item.id || node.item.video_url || node.item.play || node.item.hdplay || node.item.playAddr)) {
+            const candidate = shapeItem(node.item);
+            if (candidate && !seen.has(candidate.pageUrl || candidate.urls[0])) {
+                seen.add(candidate.pageUrl || candidate.urls[0]);
+                found.push(node.item);
+            }
+        } else if (node.video || node.video_url || node.downloadAddr || node.playAddr || node.play || node.hdplay || node.wmplay || node.playUrl) {
+            const candidate = shapeItem(node);
+            if (candidate && !seen.has(candidate.pageUrl || candidate.urls[0])) {
+                seen.add(candidate.pageUrl || candidate.urls[0]);
+                found.push(node);
+            }
+        }
+        for (const key of ['data', 'videos', 'items', 'itemList', 'list', 'results', 'videoList']) {
+            if (node[key]) visit(node[key], depth + 1);
+        }
+    };
+    visit(payload);
+    return found;
 }
 
 // ─── search providers ────────────────────────────────────────────────────────
@@ -116,8 +174,10 @@ async function searchTikTokApiStore(query) {
         if (res.status === 401) { console.error('[tiksearch] tiktokapi.store: invalid/missing API key'); return []; }
         if (res.status === 429) { console.error('[tiksearch] tiktokapi.store: per-minute rate limit hit'); return []; }
         if (res.status === 402) { console.error('[tiksearch] tiktokapi.store: daily/monthly quota exhausted'); return []; }
-        const arr = res.data?.data?.videos;
-        if (!Array.isArray(arr)) { logProviderFailure('tiktokapi.store', res); return []; }
+        const arr = Array.isArray(res.data?.data?.videos)
+            ? res.data.data.videos
+            : collectSearchItems(res.data);
+        if (!Array.isArray(arr) || !arr.length) { logProviderFailure('tiktokapi.store', res); return []; }
         return arr;
     } catch (err) { logProviderFailure('tiktokapi.store', null, err); return []; }
 }
@@ -127,8 +187,8 @@ async function searchPrexzyvilla(query) {
         const res = await axios.get('https://prexzyapis.com/search/tiktoksearch', {
             params: { q: query }, timeout: 20000, validateStatus: () => true,
         });
-        const arr = res.data?.data;
-        if (!Array.isArray(arr)) { logProviderFailure('prexzyapis', res); return []; }
+        const arr = Array.isArray(res.data?.data) ? res.data.data : collectSearchItems(res.data);
+        if (!Array.isArray(arr) || !arr.length) { logProviderFailure('prexzyapis', res); return []; }
         return arr;
     } catch (err) { logProviderFailure('prexzyapis', null, err); return []; }
 }
@@ -178,8 +238,10 @@ async function searchTikwm(query) {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...headers },
             }
         ));
-        const arr = res.data?.data?.videos;
-        if (!Array.isArray(arr)) { logProviderFailure('tikwm', res); return []; }
+        const arr = Array.isArray(res.data?.data?.videos)
+            ? res.data.data.videos
+            : collectSearchItems(res.data);
+        if (!Array.isArray(arr) || !arr.length) { logProviderFailure('tikwm', res); return []; }
         return arr;
     } catch (err) { logProviderFailure('tikwm', null, err); return []; }
 }
@@ -189,14 +251,51 @@ async function searchDelirius(query) {
         const res = await axios.get('https://delirius-apiofc.vercel.app/search/tiktoksearch', {
             params: { query }, timeout: 20000, validateStatus: () => true,
         });
-        const arr = res.data?.meta || res.data?.data;
-        if (!Array.isArray(arr)) { logProviderFailure('delirius', res); return []; }
+        const arr = Array.isArray(res.data?.meta) ? res.data.meta
+            : Array.isArray(res.data?.data) ? res.data.data
+            : collectSearchItems(res.data);
+        if (!Array.isArray(arr) || !arr.length) { logProviderFailure('delirius', res); return []; }
         return arr;
     } catch (err) { logProviderFailure('delirius', null, err); return []; }
 }
 
+async function searchTikTokBrowser(query) {
+    if (!BROWSER_SEARCH_ENABLED) return [];
+    let browser;
+    let page;
+    const responsePromises = [];
+    try {
+        browser = await puppeteer.launch({
+            headless: 'new',
+            timeout: BROWSER_SEARCH_TIMEOUT_MS,
+            protocolTimeout: BROWSER_SEARCH_TIMEOUT_MS,
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+        });
+        page = await browser.newPage();
+        await page.setViewport({ width: 1280, height: 800 });
+        page.on('response', response => {
+            if (!response.url().includes('/api/search/general/full/')) return;
+            responsePromises.push(response.json().catch(() => null));
+        });
+        await page.goto(`https://www.tiktok.com/search?q=${encodeURIComponent(query)}`, {
+            waitUntil: 'domcontentloaded', timeout: BROWSER_SEARCH_TIMEOUT_MS,
+        });
+        await page.waitForTimeout(4_000);
+        const payloads = await Promise.all(responsePromises);
+        const raw = payloads.flatMap(payload => collectSearchItems(payload));
+        if (!raw.length) console.error('[tiksearch] browser search returned no internal results');
+        return raw;
+    } catch (error) {
+        console.error('[tiksearch] browser search failed:', error.message);
+        return [];
+    } finally {
+        if (page) await page.close().catch(() => {});
+        if (browser) await browser.close().catch(() => {});
+    }
+}
+
 async function findCandidates(query) {
-    for (const fn of [searchTikTokApiStore, searchTikwm, searchPrexzyvilla, searchDelirius]) {
+    for (const fn of [searchTikTokApiStore, searchTikwm, searchPrexzyvilla, searchDelirius, searchTikTokBrowser]) {
         const arr = await fn(query);
         const mapped = arr.map(shapeItem).filter(Boolean);
         if (mapped.length) return mapped.slice(0, MAX_CANDIDATES);
@@ -279,16 +378,18 @@ module.exports = {
     category: 'media',
     usage: '.tiksearch <search query>',
 
-    async execute({ sock, msg, from, reply, args }) {
-        if (!args.length) {
+    async execute({ sock, msg, from, reply, args, prefix }) {
+        const px = prefixOf(prefix);
+        const values = Array.isArray(args) ? args : [];
+        if (!values.length) {
             return reply(
                 `🎬 *TikTok Search*\n\n` +
-                `Usage: .tiksearch <search query>\n` +
-                `Example: .tiksearch Sukuna edit`
+                `Usage: ${px}tiksearch <search query>\n` +
+                `Example: ${px}tiksearch Sukuna edit`
             );
         }
 
-        const query = args.join(' ').trim();
+        const query = values.join(' ').trim().slice(0, 120);
         const cacheKey = query.toLowerCase();
 
         try {
