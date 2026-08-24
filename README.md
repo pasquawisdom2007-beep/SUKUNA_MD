@@ -71,37 +71,84 @@ To pair another account, type `y` when the panel asks whether another number sho
 
 ## Pterodactyl deployment
 
-### Requirements
+This is the deployment flow demonstrated in the walkthrough video. It uses the GitHub ZIP upload method and keeps the extracted project files in the server root.
 
-- Node.js 18 or newer
-- A panel or container with permission to install dependencies and persist the sessions directory
+### 1. Download the repository
 
-### Setup
+Open the main repository:
 
-```bash
-npm install --omit=dev
+[https://github.com/pasquawisdom2007-beep/SUKUNA_MD](https://github.com/pasquawisdom2007-beep/SUKUNA_MD)
+
+Choose **Code → Download ZIP** and save the downloaded file as `SUKUNA_MD-main.zip`. The repository may be starred first, but starring is not required for the bot to run.
+
+### 2. Open the Pterodactyl server
+
+Log in to your Pterodactyl panel, open the server where SUKUNA MD will run, and select the **Files** tab.
+
+### 3. Upload and extract the ZIP
+
+Click **Upload**, select `SUKUNA_MD-main.zip`, and wait for the upload to finish. Open the file menu represented by the three dots, choose **Unarchive**, and wait for the `SUKUNA_MD-main` folder to appear.
+
+Open `SUKUNA_MD-main`, select all files and folders inside it, choose **Move**, enter `../` in the **File Name** field, and confirm **Move**. This places `index.js`, `config.js`, `package.json`, `commands/`, `lib/`, `utils/`, and the other project files directly in the server root. Do not leave the application nested inside `SUKUNA_MD-main`.
+
+### 4. Configure the pairing numbers
+
+From the server root, open `config.js`, locate the owner and pairing settings, and replace both values with the same WhatsApp number:
+
+```js
+ownerNumber: '2347085635373',
+pairNumber:  '2347085635373',
 ```
 
-### Start
+Use your own number. Enter it with the country code, without a leading `+`, spaces, brackets, or dashes. The repository’s default pairing code is `PASQUAMD`; leave it unchanged unless you have a specific reason to configure another supported code.
+
+Click **Save Content** after editing the file.
+
+### 5. Start the server
+
+Open the **Console** tab and click **Start**. On the first start, wait while the panel installs the dependencies and launches the application. The relevant commands are:
 
 ```bash
+npm install
 node index.js
 ```
 
-### Optional environment variables
-
-| Variable | Purpose |
-|---|---|
-| `OWNER_NUMBER` | Owner WhatsApp number used by owner-only features |
-| `PAIR_NUMBER` | Number to pair automatically on boot |
-| `OPENAI_API_KEY` | OpenAI-powered integrations that require it |
-| `WEATHER_API_KEY` | Weather integrations that require it |
-
-If the panel does not support interactive console input, set `PAIR_NUMBER` before starting:
+`npm start` is also supported because the repository defines it as an alias for `node index.js`:
 
 ```bash
-PAIR_NUMBER=2349127857212 node index.js
+npm start
 ```
+
+Keep the console open until the bot displays its startup information and pairing-code prompt. Do not repeatedly click **Start** while installation is still in progress.
+
+### 6. Link WhatsApp
+
+When the console displays the pairing code, open WhatsApp on the phone whose number was entered in `config.js` and follow this path:
+
+**Linked Devices → Link a Device → Link with phone number instead**
+
+Enter the pairing code shown in the Pterodactyl console and wait for the login process to complete.
+
+### 7. Verify the deployment
+
+After the account is linked, SUKUNA MD sends a Getting Started message to the linked account. In the WhatsApp chat, test the deployment with:
+
+```text
+.ping
+.menu
+```
+
+The first command checks that the bot is responding, and the second displays the available command menu. The configured prefix can be changed later; the examples use the repository default `.`.
+
+### Important Pterodactyl checks
+
+| Check | Expected result |
+|---|---|
+| Project location | `index.js` and `package.json` are in the server root |
+| Configuration | `ownerNumber` and `pairNumber` contain the same number without `+` or spaces |
+| First start | Dependencies finish installing before the bot is restarted |
+| Pairing | The code is entered through WhatsApp’s **Link with phone number instead** flow |
+| Persistence | The `sessions/` directory is retained between restarts |
 
 ## VPS deployment
 
