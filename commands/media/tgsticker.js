@@ -13,7 +13,7 @@
  *   - axios
  *
  * For .tgs animated Lottie stickers (optional):
- *   pip install rlottie-python Pillow --break-system-packages
+ *   pip install 'rlottie-python[full]' --break-system-packages
  *   Without it, .tgs stickers are skipped and the summary tells you.
  */
 'use strict';
@@ -28,8 +28,12 @@ const zlib   = require('zlib');
 const { spawn, execSync } = require('child_process');
 
 let FFMPEG;
-try { FFMPEG = require('ffmpeg-static'); }
-catch { FFMPEG = 'ffmpeg'; }
+try {
+    const staticPath = require('ffmpeg-static');
+    FFMPEG = staticPath && fs.existsSync(staticPath) ? staticPath : 'ffmpeg';
+} catch {
+    FFMPEG = 'ffmpeg';
+}
 
 const TG_TOKEN = process.env.TG_BOT_TOKEN || '8761223803:AAHcVKeOB4hg1m8PpTCX-6HDar9-AKEWhtI';
 const TG_API   = TG_TOKEN ? `https://api.telegram.org/bot${TG_TOKEN}` : '';
@@ -75,24 +79,43 @@ async function staticToWebp(buf) {
         .toBuffer();
 }
 
-/** Any video/gif buffer → animated WebP via ffmpeg stdin→stdout pipe. */
-function ffmpegToAnimatedWebp(inputBuf, inputFps = 15) {
+/**
+ * FFmpeg writes a zero RIFF length when WebP is streamed to stdout. WhatsApp
+ * and ffprobe can reject that container even when its frame chunks are valid.
+ */
+function normalizeWebpContainer(buf) {
+    if (!Buffer.isBuffer(buf) || buf.length < 12) return null;
+    if (buf.toString('ascii', 0, 4) !== 'RIFF' || buf.toString('ascii', 8, 12) !== 'WEBP') return null;
+    const expectedSize = buf.length - 8;
+    if (buf.readUInt32LE(4) === expectedSize) return buf;
+    const normalized = Buffer.from(buf);
+    normalized.writeUInt32LE(expectedSize >>> 0, 4);
+    return normalized;
+}
+
+function hasAnimationChunks(buf) {
+    let offset = 12;
+    while (offset + 8 <= buf.length) {
+        const chunk = buf.toString('ascii', offset, offset + 4);
+        const size = buf.readUInt32LE(offset + 4);
+        if (chunk === 'ANIM' || chunk === 'ANMF') return true;
+        if (size > buf.length - offset - 8) return false;
+        offset += 8 + size + (size % 2);
+    }
+    return false;
+}
+
+function validateAnimatedWebp(buf) {
+    const out = normalizeWebpContainer(buf);
+    if (!out || out.length < 1024 || !hasAnimationChunks(out)) return null;
+    return sharp(out, { animated: true }).metadata()
+        .then(meta => meta.width && meta.height && (!meta.pages || meta.pages >= 2) ? out : null)
+        .catch(() => null);
+}
+
+function runFfmpegToAnimatedWebp(args, inputBuf = null) {
     return new Promise((resolve) => {
         if (!FFMPEG) return resolve(null);
-        const args = [
-            '-hide_banner', '-loglevel', 'error',
-            '-i', 'pipe:0',
-            '-vf', `scale=512:512:force_original_aspect_ratio=decrease,fps=${inputFps}`,
-            '-vcodec', 'libwebp',
-            '-lossless', '0',
-            '-compression_level', '6',
-            '-q:v', '75',
-            '-loop', '0',
-            '-preset', 'default',
-            '-an', '-vsync', '0',
-            '-f', 'webp',
-            'pipe:1',
-        ];
         let settled = false;
         const finish = val => { if (!settled) { settled = true; resolve(val); } };
         const ff = spawn(FFMPEG, args);
@@ -101,23 +124,79 @@ function ffmpegToAnimatedWebp(inputBuf, inputFps = 15) {
         ff.stdout.on('data', c => chunks.push(c));
         ff.stderr.on('data', () => {});
         ff.on('error', () => { clearTimeout(timer); finish(null); });
-        ff.on('close', code => {
+        ff.on('close', async code => {
             clearTimeout(timer);
-            if (code !== 0 || !chunks.length) return finish(null);
-            const out = Buffer.concat(chunks);
-            if (out.length < 1024) return finish(null);
-            finish(out);
+            if (code !== 0 || !chunks.length) {
+                console.error(`[tgsticker] FFmpeg animation exit=${code}, bytes=${chunks.reduce((sum, chunk) => sum + chunk.length, 0)}`);
+                return finish(null);
+            }
+            const output = await validateAnimatedWebp(Buffer.concat(chunks));
+            if (!output) console.error('[tgsticker] FFmpeg output failed animated-WebP validation');
+            finish(output);
         });
         ff.stdin.on('error', () => {});
-        ff.stdin.end(inputBuf);
+        if (inputBuf) ff.stdin.end(inputBuf);
+        else ff.stdin.end();
     });
 }
 
-/** .tgs (gzipped Lottie JSON) → animated WebP. */
+/** Any video/gif buffer → animated WebP via ffmpeg stdin→stdout pipe. */
+function ffmpegToAnimatedWebp(inputBuf, inputFps = 15) {
+    return runFfmpegToAnimatedWebp([
+        '-hide_banner', '-loglevel', 'error',
+        '-i', 'pipe:0',
+        '-vf', `scale=512:512:force_original_aspect_ratio=decrease,fps=${inputFps}`,
+        '-vcodec', 'libwebp_anim',
+        '-lossless', '0',
+        '-compression_level', '6',
+        '-q:v', '75',
+        '-loop', '0',
+        '-preset', 'default',
+        '-an', '-vsync', '0',
+        '-f', 'webp',
+        'pipe:1',
+    ], inputBuf);
+}
+
+/** PNG frames rendered from a TGS Lottie file → animated WebP. */
+function ffmpegFramesToAnimatedWebp(framesDir, inputFps = 30) {
+    return runFfmpegToAnimatedWebp([
+        '-hide_banner', '-loglevel', 'error',
+        '-framerate', String(inputFps),
+        '-i', path.join(framesDir, 'frame_%04d.png'),
+        '-vf', 'scale=512:512:force_original_aspect_ratio=decrease',
+        '-vcodec', 'libwebp_anim',
+        '-lossless', '0',
+        '-compression_level', '6',
+        '-q:v', '75',
+        '-loop', '0',
+        '-preset', 'default',
+        '-an', '-vsync', '0',
+        '-f', 'webp',
+        'pipe:1',
+    ]);
+}
+
+/** Build a static tray cover from the first available sticker. */
+async function makePackCover(stickerItems) {
+    const staticItem = stickerItems.find(item => !item.isAnimated);
+    if (staticItem) return staticToWebp(staticItem.data);
+
+    const first = stickerItems[0]?.data;
+    if (!first) return null;
+    try {
+        return await sharp(first, { animated: true, page: 0, pages: 1 })
+            .webp({ quality: 90, lossless: false, effort: 4 })
+            .toBuffer();
+    } catch (error) {
+        console.error('[tgsticker] cover frame error:', error.message);
+        return null;
+    }
+}
+
 async function tgsToAnimatedWebp(buf) {
     const jsonPath = tmpFile('.json');
     const framesDir = tmpDir();
-    const gifPath = tmpFile('.gif');
     try {
         const jsonBuf = zlib.gunzipSync(buf);
         fs.writeFileSync(jsonPath, jsonBuf);
@@ -136,8 +215,8 @@ try:
     out = sys.argv[2]
     os.makedirs(out, exist_ok=True)
     for i in range(total):
-        raw = anim.lottie_animation_render(i, (512, 512))
-        Image.frombytes('RGBA', (512, 512), bytes(raw)).save(
+        raw = anim.lottie_animation_render(i, width=512, height=512)
+        Image.frombuffer('RGBA', (512, 512), bytes(raw), 'raw', 'BGRA').save(
             os.path.join(out, f'frame_{i:04d}.png')
         )
     print(total)
@@ -166,22 +245,12 @@ except Exception as e:
             cleanUp(pyPath);
         }
         if (frameCount === 0) return null;
-        await new Promise((resolve, reject) => {
-            spawn(FFMPEG, [
-                '-hide_banner', '-loglevel', 'error',
-                '-framerate', String(fps),
-                '-i', path.join(framesDir, 'frame_%04d.png'),
-                '-loop', '0',
-                gifPath,
-            ]).on('close', code => code === 0 ? resolve() : reject(new Error(`gif exit ${code}`)));
-        });
-        if (!fs.existsSync(gifPath)) return null;
-        return await ffmpegToAnimatedWebp(fs.readFileSync(gifPath), fps);
+        return await ffmpegFramesToAnimatedWebp(framesDir, fps);
     } catch (err) {
         console.error('[tgsticker] tgsToAnimatedWebp error:', err.message);
         return null;
     } finally {
-        cleanUp(jsonPath, framesDir, gifPath);
+        cleanUp(jsonPath, framesDir);
     }
 }
 
@@ -231,7 +300,7 @@ module.exports = {
                     const filePath = fileRes.data?.result?.file_path;
                     if (!filePath) { failed++; continue; }
                     const rawBuf = await dl(`${TG_FILE}/${filePath}`);
-                    if (!rawBuf || rawBuf.length < 512) { failed++; continue; }
+                    if (!rawBuf || rawBuf.length < 32) { failed++; continue; }
 
                     let webpBuf;
                     if (sticker.is_video || filePath.endsWith('.webm')) {
@@ -250,6 +319,7 @@ module.exports = {
                     }
                     stickerItems.push({
                         data: webpBuf,
+                        isAnimated: hasAnimationChunks(webpBuf),
                         emojis: sticker.emoji ? [sticker.emoji] : ['✨'],
                         accessibilityLabel: sticker.emoji || 'Sukuna MD sticker',
                     });
@@ -263,10 +333,15 @@ module.exports = {
                 return reply(`❌ No stickers could be converted from *${data.result.title || packName}*.`);
             }
 
+            const cover = await makePackCover(stickerItems);
+            if (!cover || cover.length < 512 || cover.length > 1024 * 1024) {
+                return reply('❌ Could not create a valid static cover for this sticker pack.');
+            }
+
             // Pasqua Baileys builds and uploads one native StickerPackMessage.
             await sock.sendMessage(from, {
                 stickers: stickerItems,
-                cover: stickerItems[0].data,
+                cover,
                 name: PACK_NAME,
                 publisher: PACK_PUBLISHER,
                 description: `Imported from Telegram pack: ${data.result.title || packName}`,
