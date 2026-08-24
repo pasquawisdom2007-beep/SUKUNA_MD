@@ -110,6 +110,7 @@ async function main() {
         console.log(chalk.red('[SESSION] SESSION_ID is set but pairNumber is missing/invalid in config.js. Cannot restore.'));
     }
 
+    let pairingFailed = false;
     if (!sessionIdUsed) {
         if (pairNumber && pairNumber.length >= 8) {
             const alreadyLinked = sessionManager.sessions && sessionManager.sessions.has(pairNumber);
@@ -124,7 +125,9 @@ async function main() {
                     console.log(chalk.green.bold(`[PAIR] ╚══════════════════════════════════════╝\n`));
                     console.log(chalk.cyan('[PAIR] Open WhatsApp → Linked Devices → Link with phone number → enter the code above.\n'));
                 } else if (!result.success) {
+                    pairingFailed = true;
                     console.log(chalk.red(`[PAIR] Failed: ${result.error}`));
+                    console.log(chalk.yellow('[PAIR] No pairing code was produced. Restart the server after checking the number and network connection.'));
                 } else {
                     console.log(chalk.green(`[PAIR] ${pairNumber} is already linked.`));
                 }
@@ -135,6 +138,11 @@ async function main() {
         } else {
             console.log(chalk.cyan('[INFO] No pairNumber in config.js and no TTY. Set config.pairNumber or PAIR_NUMBER env var.'));
         }
+    }
+
+    if (pairingFailed) {
+        console.log(chalk.yellow('\n[SYSTEM] SUKUNA MD is waiting for a successful pairing.\n'));
+        return;
     }
 
     console.log(chalk.green('\n[SYSTEM] SUKUNA MD is running. Press Ctrl+C to stop.\n'));
