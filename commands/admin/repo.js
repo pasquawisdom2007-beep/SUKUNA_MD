@@ -1,83 +1,104 @@
-/**
- * Repo Command — classy canvas card showing the bot network + WhatsApp channel
- * Usage: .repo
- */
-
 'use strict';
 
-const config = require('../../config');
-const { renderRepoCard } = require('../../utils/canvasRender');
+const fs = require('fs');
+const path = require('path');
+const https = require('https');
 
-const SERVERS = [
-    { emoji: '🤖', label: 'Pasquamini Bot', url: 'https://t.me/Pasquamini_bot' },
-    { emoji: '⚡', label: 'Nelsonmd Bot',   url: 'https://t.me/Nelsonmd_bot' },
-    { emoji: '🔥', label: 'Gojokw Bot',     url: 'https://t.me/Gojokw_bot' },
-];
+const REPO_OWNER = 'pasquawisdom2007-beep';
+const REPO_NAME = 'SUKUNA_MD';
+const REPO_URL = `https://github.com/${REPO_OWNER}/${REPO_NAME}`;
+const CREATOR = 'PASQUA';
+const IMAGE_PATH = path.join(__dirname, '../../assets/repo/pasqua-repo.jpg');
 
-const CHANNEL_URL  = 'https://whatsapp.com/channel/0029VbCJho147XeEEuR1LA3s';
-const CHANNEL_JID  = '120363424109748354@newsletter';
-const CHANNEL_NAME = 'Sukuna MD Pasqua tech';
-
-function newsletterCtx() {
-    return {
-        isForwarded: true,
-        forwardingScore: 999,
-        forwardedNewsletterMessageInfo: {
-            newsletterJid:   CHANNEL_JID,
-            newsletterName:  CHANNEL_NAME,
-            serverMessageId: 143,
-        },
-    };
+function githubRepoStats() {
+    return new Promise((resolve, reject) => {
+        const request = https.get(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}`, {
+            headers: {
+                'User-Agent': 'SUKUNA-MD-Repo-Command',
+                Accept: 'application/vnd.github+json',
+            },
+        }, response => {
+            const chunks = [];
+            response.on('data', chunk => chunks.push(chunk));
+            response.on('end', () => {
+                if (response.statusCode < 200 || response.statusCode >= 300) {
+                    reject(new Error(`GitHub API HTTP ${response.statusCode}`));
+                    return;
+                }
+                try {
+                    const data = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+                    resolve({
+                        stars: Number(data.stargazers_count) || 0,
+                        forks: Number(data.forks_count) || 0,
+                        watchers: Number(data.subscribers_count ?? data.watchers_count) || 0,
+                        description: String(data.description || 'WhatsApp multi-device bot').trim(),
+                    });
+                } catch (error) {
+                    reject(error);
+                }
+            });
+            response.on('error', reject);
+        });
+        request.setTimeout(12000, () => request.destroy(new Error('GitHub API timeout')));
+        request.on('error', reject);
+    });
 }
 
-function caption(botName) {
-    const lines = SERVERS.map(s => `${s.emoji} *${s.label}*\n› ${s.url}`).join('\n\n');
-    return (
-        `╭━━━〔 *⚔️  ${botName.toUpperCase()}  ⚔️* 〕━━━╮\n` +
-        `│  𝙼𝙰𝙻𝙴𝚅𝙾𝙻𝙴𝙽𝚃 𝙽𝙴𝚃𝚆𝙾𝚁𝙺 · 𝙳𝙸𝚁𝙴𝙲𝚃𝙾𝚁𝚈\n` +
-        `╰━━━━━━━━━━━━━━━━━━━━━━━╯\n\n` +
-        `${lines}\n\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `📣 *Official WhatsApp Channel*\n› ${CHANNEL_URL}\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-        `> 🔥 _Powered by ${botName}_`
-    );
+function number(value) {
+    return Number(value || 0).toLocaleString('en-US');
+}
+
+function caption(stats) {
+    return [
+        '╭━━━〔 *SUKUNA MD · OFFICIAL REPOSITORY* 〕━━━╮',
+        '│',
+        '│  ⚔️ *PASQUA TECH*',
+        '│  The official source code and latest bot updates',
+        '│',
+        '├─〔 *REPOSITORY* 〕',
+        `│  🔗 ${REPO_URL}`,
+        '│',
+        '├─〔 *GITHUB COMMUNITY* 〕',
+        `│  ⭐ Stars     │ ${number(stats.stars)}`,
+        `│  🍴 Forks     │ ${number(stats.forks)}`,
+        `│  👁️ Watchers  │ ${number(stats.watchers)}`,
+        '│',
+        '├─〔 *CREATOR* 〕',
+        `│  👑 ${CREATOR}`,
+        '│',
+        '╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯',
+        '',
+        '⭐ Star the repository and follow the project to support future updates.',
+        '_Live GitHub statistics · Main repository_',
+    ].join('\n');
+}
+
+async function sendRepo({ sock, msg, from, reply }) {
+    let stats = { stars: 0, forks: 0, watchers: 0 };
+    try {
+        stats = await githubRepoStats();
+    } catch (error) {
+        console.error('[repo] GitHub stats unavailable:', error.message);
+    }
+
+    const text = caption(stats);
+    try {
+        const image = fs.readFileSync(IMAGE_PATH);
+        return await sock.sendMessage(from, {
+            image,
+            caption: text,
+        }, { quoted: msg });
+    } catch (error) {
+        console.error('[repo] image response failed:', error.message);
+        return reply(text);
+    }
 }
 
 module.exports = {
-    name:        'repo',
-    aliases:     ['servers', 'bots', 'botservers', 'network'],
-    description: 'Show the official bot network + WhatsApp channel',
-    category:    'admin',
-
-    async execute({ sock, msg, from, reply }) {
-        const botName = config.botName || 'SUKUNA MD';
-
-        try {
-            const buf = await renderRepoCard({
-                botName,
-                tagline: 'King of Curses · Malevolent Network',
-                servers: SERVERS,
-                channelLabel: 'WhatsApp Channel',
-                channelUrl:   CHANNEL_URL,
-            });
-
-            await sock.sendMessage(from, {
-                image: buf,
-                caption: caption(botName),
-                contextInfo: newsletterCtx(),
-            }, { quoted: msg });
-        } catch (e) {
-            console.error('[repo]', e.message);
-            // Plain-text fallback
-            try {
-                await sock.sendMessage(from, {
-                    text: caption(botName),
-                    contextInfo: newsletterCtx(),
-                }, { quoted: msg });
-            } catch {
-                await reply(caption(botName));
-            }
-        }
-    },
+    name: 'repo',
+    aliases: ['repository', 'source', 'github'],
+    description: 'Show the official GitHub repository, live stats, creator, and PASQUA artwork',
+    category: 'admin',
+    execute: sendRepo,
+    __test: { caption, githubRepoStats, REPO_URL, CREATOR, IMAGE_PATH },
 };
