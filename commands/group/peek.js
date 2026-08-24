@@ -12,12 +12,58 @@
 
 'use strict';
 
+const { generateWAMessageFromContent, proto } = require('@pasqua-baileys/baileys');
+
+function ctaUrl(displayText, url) {
+    return {
+        name: 'cta_url',
+        buttonParamsJson: JSON.stringify({ display_text: displayText, url, merchant_url: url }),
+    };
+}
+
+function ctaCopy(displayText, id, value) {
+    return {
+        name: 'cta_copy',
+        buttonParamsJson: JSON.stringify({ display_text: displayText, id, copy_code: value }),
+    };
+}
+
+async function sendPreviewActions({ sock, msg, from, title, url, primaryLabel }) {
+    const buttons = [
+        ctaUrl(primaryLabel, url),
+        ctaCopy('Copy Link', `peek_copy_${Date.now()}`, url),
+    ];
+    try {
+        const interactive = {
+            body: { text: `${title}\n\nChoose an action below:` },
+            footer: { text: 'SUKUNA MD · PEEK' },
+            header: { title: `✦ ${title} ✦`, hasMediaAttachment: false },
+            nativeFlowMessage: { buttons, messageParamsJson: '' },
+        };
+        const wrapped = generateWAMessageFromContent(from, {
+            viewOnceMessage: {
+                message: {
+                    messageContextInfo: { deviceListMetadataVersion: 2, deviceListMetadata: {} },
+                    interactiveMessage: proto.Message.InteractiveMessage.fromObject(interactive),
+                },
+            },
+        }, {
+            userJid: sock.user?.id,
+            ...(msg?.message ? { quoted: msg } : {}),
+        });
+        await sock.relayMessage(from, wrapped.message, { messageId: wrapped.key.id });
+    } catch (error) {
+        console.error('[peek:buttons]', error?.message || error);
+        await sock.sendMessage(from, { text: `${primaryLabel}: ${url}\nCopy link: ${url}` }, { quoted: msg });
+    }
+}
+
 function formatCount(value) {
     const number = Number(value);
     return Number.isFinite(number) ? number.toLocaleString('en-US') : String(value || 'Unknown');
 }
 
-async function previewChannel({ sock, msg, from, text }) {
+async function previewChannel({ sock, msg, from, text, prefix = '.' }) {
     const match = text.match(/(?:https?:\/\/)?(?:www\.)?whatsapp\.com\/channel\/([A-Za-z0-9_-]+)/i);
     if (!match || !match[1] || match[1].length < 8) return null;
     if (typeof sock.newsletterMetadata !== 'function') {
@@ -70,6 +116,7 @@ async function previewChannel({ sock, msg, from, text }) {
     } else {
         await sock.sendMessage(from, { text: out }, { quoted: msg });
     }
+    await sendPreviewActions({ sock, msg, from, title: 'CHANNEL ACTIONS', url: channelUrl, primaryLabel: 'Follow Channel' });
     return true;
 }
 
@@ -105,7 +152,7 @@ module.exports = {
 
             // ── Public channel preview uses the same metadata + profile-photo flow ──
             if (/(?:https?:\/\/)?(?:www\.)?whatsapp\.com\/channel\//i.test(text)) {
-                await previewChannel({ sock, msg, from, text });
+                await previewChannel({ sock, msg, from, text, prefix });
                 return;
             }
 
@@ -191,6 +238,7 @@ module.exports = {
                     { quoted: msg }
                 );
             }
+            await sendPreviewActions({ sock, msg, from, title: 'GROUP ACTIONS', url: `https://chat.whatsapp.com/${code}`, primaryLabel: 'Join Group' });
 
         } catch (err) {
             console.error('[peek]', err?.message || err);
