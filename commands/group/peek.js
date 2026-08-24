@@ -18,7 +18,7 @@ module.exports = {
     description: 'Preview a WhatsApp group invite link without joining',
     category: 'group',
 
-    async execute({ sock, msg, from, args, reply }) {
+    async execute({ sock, msg, from, args, reply, prefix = '.' }) {
         try {
             // ── Get text from args or a replied-to message ────────────
             let text = args.join(' ').trim();
@@ -33,7 +33,7 @@ module.exports = {
                     `🔎 *PEEK — GROUP PREVIEW*\n` +
                     `┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄\n` +
                     `Usage:\n` +
-                    `.peek https://chat.whatsapp.com/XXXXXXXX\n` +
+                    `${prefix}peek https://chat.whatsapp.com/XXXXXXXX\n` +
                     `or reply to a message containing the link\n\n` +
                     `> Shows name, description, member count & creator —\n` +
                     `> without joining the group.`
@@ -98,13 +98,30 @@ module.exports = {
                 `📝 *Description :*\n${description}\n\n` +
                 `> Previewed only — not joined.`;
 
+            // Invite previews can expose the group id even when the bot has not joined.
+            // Try to retrieve the current profile photo; if WhatsApp denies the lookup,
+            // preserve the preview and fall back to text-only delivery.
+            const groupId = info?.id || info?.gid || info?.groupId || null;
+            let profileUrl = null;
+            if (groupId && typeof sock.profilePictureUrl === 'function') {
+                try { profileUrl = await sock.profilePictureUrl(groupId, 'image'); } catch (_) {}
+            }
+
             // reply() doesn't support mentions — send via sock directly so
             // the creator tag actually resolves instead of showing as plain text.
-            await sock.sendMessage(
-                from,
-                { text: out, mentions: creator ? [creator] : [] },
-                { quoted: msg }
-            );
+            if (profileUrl) {
+                await sock.sendMessage(
+                    from,
+                    { image: { url: profileUrl }, caption: out, mentions: creator ? [creator] : [] },
+                    { quoted: msg }
+                );
+            } else {
+                await sock.sendMessage(
+                    from,
+                    { text: out, mentions: creator ? [creator] : [] },
+                    { quoted: msg }
+                );
+            }
 
         } catch (err) {
             console.error('[peek]', err?.message || err);
