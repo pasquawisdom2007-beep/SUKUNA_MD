@@ -142,6 +142,7 @@ class Database {
         // so old saved data never silently misses a field.
         const DEFAULTS = {
             antilink: false,
+            antilinkAllow: [],
             antilinkAction: 'delete',
             antimention: false,
             antimentionMode: 'normal',
