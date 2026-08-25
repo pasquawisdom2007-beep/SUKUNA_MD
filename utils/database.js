@@ -143,6 +143,7 @@ class Database {
         const DEFAULTS = {
             antilink: false,
             antilinkAllow: [],
+            antichannel: false,
             antilinkAction: 'delete',
             antimention: false,
             antimentionMode: 'normal',
