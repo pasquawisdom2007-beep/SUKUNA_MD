@@ -1,12 +1,12 @@
 /**
  * .ttstalk <username> — get info on a TikTok account
  *
- * Uses tikwm's user/info endpoint (the same reliable provider used by the
- * .tiktok downloader in this codebase). Returns profile + stats and the
- * avatar image when available.
+ * Reads the public TikTok profile page first, where TikTok exposes structured
+ * profile data without an API key. Falls back to tikwm only if the public page
+ * is unavailable. Returns profile + stats and the avatar image when available.
  */
 'use strict';
-const axios = require('axios');
+const { cleanUsername, fetchTikTokProfile } = require('../../lib/tiktokProfile');
 
 function fmt(n) {
     if (n === null || n === undefined || n === '') return null;
@@ -19,26 +19,7 @@ function fmt(n) {
 }
 
 async function stalk(username) {
-    const { data } = await axios.get('https://www.tikwm.com/api/user/info', {
-        params: { unique_id: username },
-        timeout: 30000,
-        validateStatus: () => true,
-        headers: { 'User-Agent': 'Mozilla/5.0' },
-    });
-    if (!data || data.code !== 0 || !data.data) return null;
-    const u = data.data.user || {};
-    const s = data.data.stats || {};
-    return {
-        nickname:  u.nickname || u.uniqueId || username,
-        handle:    u.uniqueId || username,
-        bio:       u.signature || '',
-        verified:  !!u.verified,
-        avatar:    u.avatarLarger || u.avatarMedium || u.avatarThumb || '',
-        followers: s.followerCount,
-        following: s.followingCount,
-        likes:     s.heartCount ?? s.heart,
-        videos:    s.videoCount,
-    };
+    return fetchTikTokProfile(username);
 }
 
 module.exports = {
@@ -49,7 +30,7 @@ module.exports = {
     usage: '.ttstalk <username>',
 
     async execute({ sock, msg, from, reply, args }) {
-        const username = (args || []).join(' ').trim().replace(/^@/, '');
+        const username = cleanUsername((args || []).join(' '));
         if (!username) {
             return reply(
                 `📱 *TikTok Stalk*\n\n` +
