@@ -722,4 +722,222 @@ function availableList() {
     return AVAILABLE.map(l => l.charAt(0).toUpperCase() + l.slice(1)).join(', ');
 }
 
-module.exports = { getTranslator, isValid, normalise, availableList, AVAILABLE };
+// ── Global outbound reply localization ───────────────────────────────────────
+// Some commands already use dictionary keys, while older commands send
+// hard-coded English directly. This small bridge covers those direct sends
+// without making a translation service a hard dependency: failures always
+// fall back to the original text.
+const LANGUAGE_TARGETS = {
+    english: 'en',
+    french: 'fr',
+    spanish: 'es',
+    portuguese: 'pt',
+    japanese: 'ja',
+    chinese: 'zh-CN',
+    arabic: 'ar',
+    german: 'de',
+};
+const translationCache = new Map();
+const TRANSLATION_CACHE_LIMIT = 400;
+const TRANSLATION_TIMEOUT_MS = 3500;
+const NON_TRANSLATABLE_KEYS = new Set([
+    'url', 'thumbnail', 'jpegthumbnail', 'file', 'mimetype', 'fileName',
+    'filename', 'mentions', 'contextInfo', 'messageContextInfo', 'quoted',
+    'quotedMessage', 'media', 'sticker', 'audio', 'video', 'image', 'document',
+]);
+const TRANSLATABLE_KEYS = new Set([
+    'text', 'caption', 'title', 'description', 'footer', 'displayText',
+    'display_text', 'contentText', 'bodyText', 'headerText', 'buttonText',
+]);
+
+const UI_LABELS = {
+    english: {
+        statusHeader: 'SYSTEM · LIVE STATUS', online: 'Online · all cursed engines running',
+        uptime: 'BOT UPTIME', systemUptime: 'SYSTEM UPTIME', botMemory: 'BOT MEMORY',
+        platform: 'PLATFORM', totalRam: 'TOTAL RAM', freeRam: 'FREE RAM',
+        ping: 'PING', prefix: 'PREFIX', version: 'VERSION', runtime: 'RUNTIME',
+        operator: 'OPERATOR', memory: 'MEMORY', timestamp: 'TIMESTAMP',
+    },
+    french: {
+        statusHeader: 'SYSTÈME · STATUT EN DIRECT', online: 'En ligne · tous les moteurs actifs',
+        uptime: 'TEMPS BOT', systemUptime: 'TEMPS SYSTÈME', botMemory: 'MÉMOIRE BOT',
+        platform: 'PLATEFORME', totalRam: 'RAM TOTALE', freeRam: 'RAM LIBRE',
+        ping: 'PING', prefix: 'PRÉFIXE', version: 'VERSION', runtime: 'EXÉCUTION',
+        operator: 'OPÉRATEUR', memory: 'MÉMOIRE', timestamp: 'HORODATAGE',
+    },
+    spanish: {
+        statusHeader: 'SISTEMA · ESTADO EN VIVO', online: 'En línea · todos los motores activos',
+        uptime: 'TIEMPO DEL BOT', systemUptime: 'TIEMPO DEL SISTEMA', botMemory: 'MEMORIA DEL BOT',
+        platform: 'PLATAFORMA', totalRam: 'RAM TOTAL', freeRam: 'RAM LIBRE',
+        ping: 'PING', prefix: 'PREFIJO', version: 'VERSIÓN', runtime: 'EJECUCIÓN',
+        operator: 'OPERADOR', memory: 'MEMORIA', timestamp: 'MARCA DE TIEMPO',
+    },
+    portuguese: {
+        statusHeader: 'SISTEMA · STATUS AO VIVO', online: 'Online · todos os motores ativos',
+        uptime: 'TEMPO DO BOT', systemUptime: 'TEMPO DO SISTEMA', botMemory: 'MEMÓRIA DO BOT',
+        platform: 'PLATAFORMA', totalRam: 'RAM TOTAL', freeRam: 'RAM LIVRE',
+        ping: 'PING', prefix: 'PREFIXO', version: 'VERSÃO', runtime: 'EXECUÇÃO',
+        operator: 'OPERADOR', memory: 'MEMÓRIA', timestamp: 'MARCAÇÃO DE TEMPO',
+    },
+    japanese: {
+        statusHeader: 'システム · ライブステータス', online: 'オンライン · すべてのエンジン稼働中',
+        uptime: 'ボット稼働時間', systemUptime: 'システム稼働時間', botMemory: 'ボットメモリ',
+        platform: 'プラットフォーム', totalRam: '総RAM', freeRam: '空きRAM',
+        ping: 'PING', prefix: 'プレフィックス', version: 'バージョン', runtime: '実行環境',
+        operator: 'オペレーター', memory: 'メモリ', timestamp: 'タイムスタンプ',
+    },
+    chinese: {
+        statusHeader: '系统 · 实时状态', online: '在线 · 所有引擎运行中',
+        uptime: '机器人运行时间', systemUptime: '系统运行时间', botMemory: '机器人内存',
+        platform: '平台', totalRam: '总内存', freeRam: '可用内存',
+        ping: '延迟', prefix: '前缀', version: '版本', runtime: '运行环境',
+        operator: '操作员', memory: '内存', timestamp: '时间戳',
+    },
+    arabic: {
+        statusHeader: 'النظام · الحالة المباشرة', online: 'متصل · جميع المحركات تعمل',
+        uptime: 'مدة تشغيل البوت', systemUptime: 'مدة تشغيل النظام', botMemory: 'ذاكرة البوت',
+        platform: 'المنصة', totalRam: 'إجمالي الذاكرة', freeRam: 'الذاكرة الحرة',
+        ping: 'الاستجابة', prefix: 'البادئة', version: 'الإصدار', runtime: 'بيئة التشغيل',
+        operator: 'المشغّل', memory: 'الذاكرة', timestamp: 'الطابع الزمني',
+    },
+    german: {
+        statusHeader: 'SYSTEM · LIVE-STATUS', online: 'Online · alle Engines laufen',
+        uptime: 'BOT-LAUFZEIT', systemUptime: 'SYSTEM-LAUFZEIT', botMemory: 'BOT-SPEICHER',
+        platform: 'PLATTFORM', totalRam: 'GESAMT-RAM', freeRam: 'FREIER RAM',
+        ping: 'PING', prefix: 'PRÄFIX', version: 'VERSION', runtime: 'LAUFZEIT',
+        operator: 'BETREIBER', memory: 'SPEICHER', timestamp: 'ZEITSTEMPEL',
+    },
+};
+
+function getUiLabels(lang) {
+    return { ...(UI_LABELS[normalise(lang)] || UI_LABELS.english) };
+}
+
+function _cacheSet(key, value) {
+    if (translationCache.size >= TRANSLATION_CACHE_LIMIT) {
+        translationCache.delete(translationCache.keys().next().value);
+    }
+    translationCache.set(key, value);
+}
+
+function _protectTranslationTokens(text) {
+    const protectedParts = [];
+    const tokenRe = /https?:\/\/[^\s<>]+|www\.[^\s<>]+|`[^`]*`|\.([a-z][a-z0-9_-]*)|@[0-9][0-9:._-]*(?:@[a-z.]+)?/gi;
+    const protectedText = String(text).replace(tokenRe, token => {
+        const marker = `ZXQ_SUKUNA_TOKEN_${protectedParts.length}_QXZ`;
+        protectedParts.push([marker, token]);
+        return marker;
+    });
+    return { protectedText, protectedParts };
+}
+
+function _restoreTranslationTokens(text, protectedParts) {
+    let output = String(text);
+    for (const [marker, value] of protectedParts) output = output.replaceAll(marker, value);
+    return output;
+}
+
+async function _translateChunk(protectedText, target) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), TRANSLATION_TIMEOUT_MS);
+    try {
+        // MyMemory supports the free EN→locale route without a key. Keep the
+        // source fixed to English because bot command output is authored in
+        // English; unsupported/limited responses fall back to the source text.
+        const langPair = `en|${target}`;
+        const url = 'https://api.mymemory.translated.net/get' +
+            `?q=${encodeURIComponent(protectedText)}&langpair=${encodeURIComponent(langPair)}`;
+        const response = await fetch(url, {
+            signal: controller.signal,
+            headers: { 'User-Agent': 'SUKUNA-MD/3.0' },
+        });
+        if (!response.ok) throw new Error(`translation HTTP ${response.status}`);
+        const data = await response.json();
+        const translated = String(data?.responseData?.translatedText || '').trim();
+        if (data?.responseStatus !== 200 || !translated ||
+            /invalid source language|quota|rate limit|mymemory/i.test(translated)) {
+            return protectedText;
+        }
+        return translated;
+    } catch (_) {
+        return protectedText;
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+async function translateText(text, lang) {
+    const original = String(text ?? '');
+    const target = LANGUAGE_TARGETS[normalise(lang)] || 'en';
+    if (!original.trim() || target === 'en' || original.length > 16000) return original;
+    const cacheKey = `${target}\\n${original}`;
+    if (translationCache.has(cacheKey)) return translationCache.get(cacheKey);
+
+    const { protectedText, protectedParts } = _protectTranslationTokens(original);
+    const chunks = [];
+    let current = '';
+    for (const line of protectedText.split('\\n')) {
+        const candidate = current ? `${current}\\n${line}` : line;
+        if (current && candidate.length > 450) {
+            chunks.push(current);
+            current = line;
+        } else {
+            current = candidate;
+        }
+    }
+    if (current) chunks.push(current);
+
+    const translatedChunks = [];
+    for (const chunk of chunks) {
+        translatedChunks.push(await _translateChunk(chunk, target));
+    }
+    const translated = translatedChunks.join('\\n');
+    const result = translated ? _restoreTranslationTokens(translated, protectedParts) : original;
+    _cacheSet(cacheKey, result);
+    return result;
+}
+
+async function localiseOutboundContent(content, lang) {
+    if (!content || typeof content !== 'object') return content;
+    const locale = normalise(lang);
+    if (locale === 'english') return content;
+    const clone = Array.isArray(content) ? [...content] : { ...content };
+    const jobs = [];
+
+    for (const [key, value] of Object.entries(clone)) {
+        const lowerKey = String(key).toLowerCase();
+        if (NON_TRANSLATABLE_KEYS.has(lowerKey)) continue;
+        if (typeof value === 'string' && TRANSLATABLE_KEYS.has(key)) {
+            jobs.push(translateText(value, locale).then(translated => { clone[key] = translated; }));
+            continue;
+        }
+        if (key === 'buttonParamsJson' && typeof value === 'string') {
+            jobs.push((async () => {
+                try {
+                    const params = JSON.parse(value);
+                    if (typeof params.display_text === 'string') {
+                        params.display_text = await translateText(params.display_text, locale);
+                    }
+                    clone[key] = JSON.stringify(params);
+                } catch (_) {}
+            })());
+            continue;
+        }
+        if (value && typeof value === 'object' && !Buffer.isBuffer(value) && !(value instanceof Uint8Array)) {
+            jobs.push(localiseOutboundContent(value, locale).then(localised => { clone[key] = localised; }));
+        }
+    }
+    await Promise.all(jobs);
+    return clone;
+}
+
+module.exports = {
+    getTranslator,
+    isValid,
+    normalise,
+    availableList,
+    AVAILABLE,
+    translateText,
+    localiseOutboundContent,
+    getUiLabels,
+};

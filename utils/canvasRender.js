@@ -353,6 +353,7 @@ async function renderAliveCard({
     ping     = 0,
     nodeVer  = process.version,
     platform = process.platform,
+    labels   = {},
 }) {
     const W = 1000, H = 620;
     const ramPct = ramTotal > 0 ? Math.min(100, Math.round((ramUsed / ramTotal) * 100)) : 0;
@@ -425,14 +426,14 @@ async function renderAliveCard({
               stroke="#22d3ee" stroke-width="2" fill="none" stroke-opacity="0.85"/>`).join('')}
 
       <text x="48" y="78" font-family="'Courier New', monospace" font-size="13"
-            letter-spacing="8" fill="#67e8f9" fill-opacity="0.85">SYS://STATUS · LIVE</text>
+            letter-spacing="8"             fill="#67e8f9" fill-opacity="0.85">${esc(labels.statusHeader || 'SYS://STATUS · LIVE')}</text>
 
       <g transform="translate(${W - 220}, 56)">
         <rect width="172" height="32" rx="16" fill="#022c22" stroke="#10b981" stroke-opacity="0.7"/>
         <circle cx="20" cy="16" r="6" fill="#10b981"/>
         <circle cx="20" cy="16" r="10" fill="none" stroke="#10b981" stroke-opacity="0.45"/>
         <text x="38" y="21" font-family="'Courier New', monospace" font-size="13"
-              letter-spacing="3" fill="#a7f3d0">ONLINE · ALIVE</text>
+              letter-spacing="3" fill="#a7f3d0">${esc(labels.online || 'ONLINE · ALIVE')}</text>
       </g>
 
       <text x="48" y="158" font-family="Georgia, serif" font-size="64"
@@ -443,21 +444,21 @@ async function renderAliveCard({
       <line x1="48" y1="220" x2="${W-48}" y2="220"
             stroke="#22d3ee" stroke-opacity="0.35" stroke-width="1"/>
 
-      ${statCard( 48, 248, 'UPTIME',  uptime,        '#22d3ee')}
-      ${statCard(266, 248, 'PING',    `${ping} ms`,  '#a855f7')}
-      ${statCard(484, 248, 'PREFIX',  prefix,        '#facc15')}
-      ${statCard(702, 248, 'VERSION', `v${version}`, '#f472b6')}
+      ${statCard( 48, 248, labels.uptime || 'UPTIME',  uptime,        '#22d3ee')}
+      ${statCard(266, 248, labels.ping || 'PING',    `${ping} ms`,  '#a855f7')}
+      ${statCard(484, 248, labels.prefix || 'PREFIX',  prefix,        '#facc15')}
+      ${statCard(702, 248, labels.version || 'VERSION', `v${version}`, '#f472b6')}
 
       <g transform="translate(48, 374)">
         <text font-family="'Courier New', monospace" font-size="13"
-              letter-spacing="4" fill="#94a3b8">RUNTIME</text>
+              letter-spacing="4" fill="#94a3b8">${esc(labels.runtime || 'RUNTIME')}</text>
         <text y="28" font-family="Georgia, serif" font-size="20" fill="#e0f2fe">
           ${esc(`Node ${nodeVer} · ${platform}`)}
         </text>
       </g>
       <g transform="translate(${W/2 + 20}, 374)">
         <text font-family="'Courier New', monospace" font-size="13"
-              letter-spacing="4" fill="#94a3b8">OPERATOR</text>
+              letter-spacing="4" fill="#94a3b8">${esc(labels.operator || 'OPERATOR')}</text>
         <text y="28" font-family="Georgia, serif" font-size="20" fill="#e0f2fe">
           ${esc(owner)}
         </text>
@@ -465,13 +466,13 @@ async function renderAliveCard({
 
       <g transform="translate(48, 438)">
         <text font-family="'Courier New', monospace" font-size="12"
-              letter-spacing="4" fill="#94a3b8">MEMORY · ${ramUsed} / ${ramTotal} MB · ${ramPct}%</text>
+              letter-spacing="4" fill="#94a3b8">${esc(labels.memory || 'MEMORY')} · ${ramUsed} / ${ramTotal} MB · ${ramPct}%</text>
         ${meterBar(0, 14, W - 96, 18, ramPct, '#22d3ee')}
       </g>
 
       <g transform="translate(48, 510)">
         <text font-family="'Courier New', monospace" font-size="12"
-              letter-spacing="4" fill="#94a3b8">TIMESTAMP</text>
+              letter-spacing="4" fill="#94a3b8">${esc(labels.timestamp || 'TIMESTAMP')}</text>
         <text y="28" font-family="Georgia, serif" font-size="22" fill="#fef3c7">
           ${esc(date)}  ·  ${esc(time)}
         </text>
@@ -844,6 +845,7 @@ async function renderUptimeCard({
     freeMem   = '0',
     botMem    = '0',
     botName   = 'SUKUNA · MD',
+    labels    = {},
 } = {}) {
     const W = 980, H = 540;
     const accent = '#a855f7';
@@ -862,18 +864,18 @@ async function renderUptimeCard({
     <svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
       ${chrome(W, H, accent)}
       <text x="48" y="78" font-family="Georgia, serif" font-size="14"
-            letter-spacing="6" fill="#e5e7eb" fill-opacity="0.7">SYSTEM · LIVE STATUS</text>
+            letter-spacing="6" fill="#e5e7eb" fill-opacity="0.7">${esc(labels.statusHeader || 'SYSTEM · LIVE STATUS')}</text>
       <text x="48" y="130" font-family="Georgia, serif" font-size="42" font-weight="bold"
             fill="#fbbf24">${esc(botName)}</text>
       <text x="48" y="160" font-family="Georgia, serif" font-size="16"
-            fill="#e5e7eb" fill-opacity="0.85">⚡ Online · all cursed engines running</text>
+            fill="#e5e7eb" fill-opacity="0.85">⚡ ${esc(labels.online || 'Online · all cursed engines running')}</text>
 
-      ${tile('BOT UPTIME', botUptime, 48,  200)}
-      ${tile('SYSTEM UPTIME', sysUptime, 348, 200)}
-      ${tile('BOT MEMORY', `${botMem} MB`, 648, 200)}
-      ${tile('PLATFORM', `${platform}`, 48,  340, arch)}
-      ${tile('TOTAL RAM', `${totalMem} GB`, 348, 340)}
-      ${tile('FREE RAM',  `${freeMem} GB`,  648, 340)}
+      ${tile(labels.botUptime || 'BOT UPTIME', botUptime, 48,  200)}
+      ${tile(labels.systemUptime || 'SYSTEM UPTIME', sysUptime, 348, 200)}
+      ${tile(labels.botMemory || 'BOT MEMORY', `${botMem} MB`, 648, 200)}
+      ${tile(labels.platform || 'PLATFORM', `${platform}`, 48,  340, arch)}
+      ${tile(labels.totalRam || 'TOTAL RAM', `${totalMem} GB`, 348, 340)}
+      ${tile(labels.freeRam || 'FREE RAM',  `${freeMem} GB`,  648, 340)}
 
       ${footer(W, H)}
     </svg>`;

@@ -6,6 +6,7 @@
 const os = require('os');
 const config = require('../../config');
 const { renderUptimeCard } = require('../../utils/canvasRender');
+const { getUiLabels } = require('../../utils/langSystem');
 
 const fmt = (seconds) => {
     const d = Math.floor(seconds / 86400);
@@ -23,7 +24,9 @@ module.exports = {
     aliases: ['runtime', 'system'],
     description: 'Check bot and system uptime',
     category: 'utility',
-    async execute({ sock, msg, from, reply }) {
+    async execute({ sock, msg, from, reply, t, lang }) {
+        const tr = t || ((key) => key);
+        const labels = getUiLabels(lang || 'english');
         const botUptime = fmt(process.uptime());
         const sysUptime = fmt(os.uptime());
         const platform  = os.platform();
@@ -37,6 +40,7 @@ module.exports = {
                 botUptime, sysUptime, platform, arch,
                 totalMem, freeMem, botMem,
                 botName: (config.botName || 'SUKUNA · MD').toUpperCase(),
+                labels,
             });
             const caption =
                 `⏱️ *System Status*\n\n` +
@@ -46,9 +50,9 @@ module.exports = {
             await sock.sendMessage(from, { image: buf, caption }, { quoted: msg });
         } catch (e) {
             await reply(
-                `⏱️ *System Status*\n\n` +
-                `🤖 Bot Uptime: ${botUptime}\n` +
-                `💻 System Uptime: ${sysUptime}\n` +
+                `${tr('alive.status')}\n\n` +
+                `🤖 ${tr('alive.uptime')}: ${botUptime}\n` +
+                `💻 ${tr('alive.uptime')} · SYSTEM: ${sysUptime}\n` +
                 `Platform: ${platform} (${arch})\n` +
                 `RAM: ${freeMem}/${totalMem} GB · Bot: ${botMem} MB`
             );

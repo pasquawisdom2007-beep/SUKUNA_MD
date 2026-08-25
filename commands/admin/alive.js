@@ -11,6 +11,7 @@
 const os     = require('os');
 const config = require('../../config');
 const { renderAliveCard } = require('../../utils/canvasRender');
+const { getUiLabels } = require('../../utils/langSystem');
 
 module.exports = {
     name: 'alive',
@@ -18,8 +19,9 @@ module.exports = {
     description: 'Check if bot is alive — returns a cyber status canvas',
     category: 'admin',
 
-    async execute({ sock, msg, from, reply, t, phoneNumber }) {
+    async execute({ sock, msg, from, reply, t, phoneNumber, lang }) {
         const tr = t || ((k) => k);
+        const labels = getUiLabels(lang || 'english');
 
         // ── uptime ────────────────────────────────────────────────────
         const uptime = process.uptime();
@@ -75,6 +77,7 @@ module.exports = {
                 ping,
                 nodeVer:  process.version,
                 platform: process.platform,
+                labels,
             });
 
             await sock.sendMessage(from, {
