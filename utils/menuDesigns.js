@@ -763,7 +763,7 @@ function designCrysnovax(ctx) {
 // live and the three visible sections populated from the command registry.
 function designPasqua(ctx) {
     const { userTag, creator, total, uptime, version, platform,
-            byCategory, boldItalic, mode, status } = ctx;
+            sortedCategories, byCategory, CATEGORY_LABELS, boldItalic, mode, status } = ctx;
     const bi = boldItalic;
     const clean = value => String(value ?? '').trim();
     const pad2 = value => String(value).padStart(2, '0');
@@ -775,15 +775,17 @@ function designPasqua(ctx) {
     const owner = clean(creator || 'PASQUA').toUpperCase();
     const online = clean(status).replace(/[^a-z]/gi, '').toUpperCase() || 'ONLINE';
     const systemPlatform = clean(platform).toUpperCase() || 'LINUX X64';
-    const category = key => Array.isArray(byCategory?.[key]) ? byCategory[key] : [];
-    const ownerCommands = [...new Set([...category('owner'), ...category('admin')])].sort();
-    const groupCommands = [...new Set([...category('group')])].sort();
-    const excluded = new Set(['owner', 'admin', 'group']);
-    const toolCommands = Object.entries(byCategory || {})
-        .filter(([key]) => !excluded.has(key))
-        .flatMap(([, names]) => Array.isArray(names) ? names : [])
-        .filter(Boolean);
-    const tools = [...new Set(toolCommands)].sort();
+    // Use the same canonical category order as the nor design. Each category
+    // remains independent so owner commands are never mixed with admin,
+    // moderation, group, or utility commands.
+    const categories = (Array.isArray(sortedCategories) && sortedCategories.length
+        ? sortedCategories
+        : Object.keys(byCategory || {}))
+        .filter(cat => Array.isArray(byCategory?.[cat]) && byCategory[cat].length);
+
+    const categoryNames = cat => [...new Set(byCategory[cat])]
+        .filter(Boolean)
+        .sort((a, b) => String(a).localeCompare(String(b)));
 
     let c = '';
     c += `╼━━━ ${bi('𝑺𝑼𝑲𝑼𝑵𝑨 𝑴𝑫')} ━━━╾\n`;
@@ -810,9 +812,10 @@ function designPasqua(ctx) {
         }
         for (const name of names) c += `   ○ ${name}\n`;
     };
-    section('𝐎𝐖𝐍𝐄𝐑', ownerCommands);
-    section('𝐆𝐑𝐎𝐔𝐏', groupCommands);
-    section('𝐓𝐎𝐎𝐋𝐒', tools);
+    for (const cat of categories) {
+        const label = clean(CATEGORY_LABELS?.[cat] || cat).toUpperCase();
+        section(bi(label), categoryNames(cat));
+    }
     c += '\n────────────────────────────\n';
     c += `          ${bi('𖤐 PASQUA-TECH 𖤐')}\n`;
     c += '────────────────────────────';
