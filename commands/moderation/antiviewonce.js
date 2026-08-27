@@ -14,15 +14,18 @@ module.exports = {
     aliases: ['antivv', 'autovv', 'avv'],
     description: 'Recover new view-once media from groups into the paired bot account\'s private chat',
     category: 'moderation',
-    usage: '.antiviewonce',
+    usage: '.antiviewonce [on|off]',
 
-    async execute({ from, isGroup, isAdmin, isOwner, reply }) {
+    async execute({ from, isGroup, isAdmin, isOwner, reply, args = [] }) {
         if (!isGroup)             return reply('👥 This command can only be used in groups!');
         if (!isAdmin && !isOwner) return reply('🛡️ *Admin Only!* You must be a group admin.');
 
         const grp     = database.getGroup(from);
         const current = !!grp.antiviewonce;
-        const next    = !current;
+        const requested = String(args?.[0] || '').trim().toLowerCase();
+        const next = requested === 'on' ? true
+            : requested === 'off' ? false
+            : !current;
         database.setGroup(from, 'antiviewonce', next);
 
         await reply(

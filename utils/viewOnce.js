@@ -64,6 +64,14 @@ function extractViewOnce(node, depth = 0, seen = new Set()) {
     if (!isObject(node) || depth > 12 || seen.has(node)) return null;
     seen.add(node);
 
+    // Some WhatsApp clients omit the wrapper and leave the view-once marker
+    // directly on the media node. Treat only an explicit marker as view-once;
+    // ordinary images/videos must never be auto-forwarded.
+    const direct = directMedia(node);
+    if (direct && direct.mediaMsg?.viewOnce === true) {
+        return { ...direct, isViewOnce: true, wrapper: 'direct-media-flag' };
+    }
+
     for (const key of WRAPPER_KEYS) {
         const inner = nestedMessage(node, key);
         if (!inner) continue;
