@@ -12,7 +12,7 @@ const database = require('../../utils/database');
 module.exports = {
     name: 'antiviewonce',
     aliases: ['antivv', 'autovv', 'avv'],
-    description: 'Auto-reveal view-once photos/videos sent in the group',
+    description: 'Recover new view-once media from groups into the paired bot account\'s private chat',
     category: 'moderation',
     usage: '.antiviewonce',
 
@@ -28,7 +28,7 @@ module.exports = {
         await reply(
             `👁️ *𝗔𝗡𝗧𝗜-𝗩𝗜𝗘𝗪𝗢𝗡𝗖𝗘* ⛧\n\n` +
             (next
-                ? `✅ *ON* — _Every view-once photo, video and voice note sent here will be auto-revealed._`
+                ? `✅ *ON* — _New view-once media will be recovered and sent to the paired bot account\'s private chat._`
                 : `🔴 *OFF* — _View-once messages will pass through normally._`) +
             `\n\n> _Sukuna MD · Nothing stays hidden_`
         );
