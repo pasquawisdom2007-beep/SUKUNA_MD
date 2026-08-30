@@ -73,8 +73,8 @@ async function main() {
     const pairNumber = pairNumberRaw.replace(/[^0-9]/g, '');
 
     // ── SESSION_ID short-circuit ────────────────────────────────────
-    // If config.sessionId (or SESSION_ID env) is set, decode base64 →
-    // write creds.json → connect directly. Skips the pair-code flow.
+    // Supports either a legacy Base64 session or a one-time Pasqua~shortId
+    // resolved through the private PAIR_SITE bridge.
     const sessionIdRaw = (process.env.SESSION_ID || config.sessionId || '').toString().trim();
     let sessionIdUsed = false;
 
@@ -84,16 +84,27 @@ async function main() {
             const path = require('path');
             const sessionDir = path.resolve(process.cwd(), 'sessions', pairNumber);
             const credsFile  = path.join(sessionDir, 'creds.json');
+            let sessionBase64 = sessionIdRaw;
+
+            if (/^Pasqua~/i.test(sessionIdRaw)) {
+                const pairSiteUrl = (process.env.PAIR_SITE_URL || '').toString().trim().replace(/\/$/, '');
+                if (!pairSiteUrl) throw new Error('PAIR_SITE_URL is required for Pasqua~ short IDs');
+                const shortId = sessionIdRaw.replace(/^Pasqua~/i, '');
+                const response = await fetch(`${pairSiteUrl}/pair/session/${encodeURIComponent(shortId)}`);
+                if (!response.ok) throw new Error(`PAIR_SITE returned HTTP ${response.status}`);
+                const payload = await response.json();
+                sessionBase64 = payload.session;
+                if (!sessionBase64) throw new Error('PAIR_SITE response did not contain a session');
+            }
 
             if (fs.existsSync(credsFile)) {
                 console.log(chalk.green(`[SESSION] Live creds exist for ${pairNumber}; keeping them, ignoring SESSION_ID.`));
                 sessionIdUsed = true;
             } else {
-                const decoded = Buffer.from(sessionIdRaw, 'base64').toString('utf8');
-                // sanity-check it parses as JSON
+                const decoded = Buffer.from(sessionBase64, 'base64').toString('utf8');
                 JSON.parse(decoded);
                 fs.mkdirSync(sessionDir, { recursive: true });
-                fs.writeFileSync(credsFile, decoded, 'utf8');
+                fs.writeFileSync(credsFile, decoded, { encoding: 'utf8', mode: 0o600 });
                 console.log(chalk.green(`[SESSION] Restored session for ${pairNumber} from SESSION_ID. Skipping pair code.`));
                 sessionIdUsed = true;
             }
