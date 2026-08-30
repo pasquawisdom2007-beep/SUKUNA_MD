@@ -62,21 +62,7 @@ module.exports = {
             `📈 Earned : *${totalEarned.toLocaleString()}*\n\n` +
             `_${CURRENCY}_`;
 
-        // Try the canvas card; if anything fails, send plain text.
-        if (renderWalletCard) {
-            try {
-                const buf = await renderWalletCard({ name, wallet, bank, totalEarned, location });
-                await sock.sendMessage(from, {
-                    image: buf,
-                    caption: text,
-                    mentions: [sender],
-                }, { quoted: msg });
-                return;
-            } catch (e) {
-                console.error('[balance:render]', e.message);
-            }
-        }
-
-        await sock.sendMessage(from, { text, mentions: [sender] }, { quoted: msg });
+        // Economy replies are rendered by the dispatcher as GenAI Rich HTML.
+        return reply(text);
     },
 };
