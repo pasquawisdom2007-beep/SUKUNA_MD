@@ -87,7 +87,7 @@ async function main() {
             let sessionBase64 = sessionIdRaw;
 
             if (/^Pasqua~/i.test(sessionIdRaw)) {
-                const pairSiteUrl = (process.env.PAIR_SITE_URL || '').toString().trim().replace(/\/$/, '');
+                const pairSiteUrl = (process.env.PAIR_SITE_URL || 'https://pair-site-91ob.onrender.com').toString().trim().replace(/\/$/, '');
                 if (!pairSiteUrl) throw new Error('PAIR_SITE_URL is required for Pasqua~ short IDs');
                 const shortId = sessionIdRaw.replace(/^Pasqua~/i, '');
                 const response = await fetch(`${pairSiteUrl}/pair/session/${encodeURIComponent(shortId)}`);
