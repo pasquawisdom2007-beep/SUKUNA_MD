@@ -164,6 +164,9 @@ function pick(){return symbols[Math.floor(Math.random()*symbols.length)]}functio
 }
 
 async function sendGenAISlot({ sock, jid, quoted, balance, bet, bestWin }) {
+    // WhatsApp expects the unified-response bytes as base64 text inside the
+    // Rich Response envelope. A raw Buffer may serialize locally but is not
+    // accepted consistently by WhatsApp clients.
     const data = Buffer.from(JSON.stringify({
         __typename: 'GenAIUnifiedResponse',
         response_id: crypto.randomUUID(),
@@ -178,13 +181,37 @@ async function sendGenAISlot({ sock, jid, quoted, balance, bet, bestWin }) {
                 },
             },
         }],
-    }));
+    })).toString('base64');
+    const quotedContext = quoted?.key ? {
+        stanzaId: quoted.key.id,
+        participant: quoted.key.participant || quoted.participant || quoted.key.remoteJid,
+        quotedMessage: quoted.message,
+    } : {};
     const content = proto.Message.fromObject({
+        messageContextInfo: {
+            threadId: [],
+            deviceListMetadata: {
+                senderKeyIndexes: [],
+                recipientKeyIndexes: [],
+                recipientKeyHash: '',
+                recipientTimestamp: Math.floor(Date.now() / 1000),
+            },
+            deviceListMetadataVersion: 2,
+            messageSecret: crypto.randomBytes(32),
+        },
         botForwardedMessage: {
             message: {
                 richResponseMessage: {
                     messageType: 1,
+                    submessages: [],
                     unifiedResponse: { data },
+                    contextInfo: {
+                        forwardingScore: 1,
+                        isForwarded: true,
+                        forwardedAiBotMessageInfo: { botJid: '867051314767696@bot' },
+                        forwardOrigin: 4,
+                        ...quotedContext,
+                    },
                 },
             },
         },
