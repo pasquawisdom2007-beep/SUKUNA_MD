@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('crypto');
 const { economy, CURRENCY, SYMBOL } = require('../../utils/economyManager');
 const { generateWAMessageFromContent, proto } = require('@pasqua-baileys/baileys');
 
@@ -153,6 +154,46 @@ async function sendSlotMessage({ sock, jid, quoted, text, buttons = [] }) {
     }
 }
 
+function genAISlotHtml({ balance, bet, bestWin }) {
+    const safe = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+    return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;overflow:hidden;background:transparent;font-family:Arial,sans-serif}body{padding:5px;background:radial-gradient(circle at 50% 10%,#1d6a50,#07291f 70%)}.machine{padding:9px 10px 12px;border:3px solid #071f18;border-radius:22px;background:linear-gradient(110deg,#061e17,#1b644b 12%,#0b382a 52%,#28775a 94%,#071f18);box-shadow:inset 0 0 0 2px #b9954d,inset 0 0 0 5px #163f31,0 7px 16px #000b;color:#e3dfbb}.lights{height:7px;margin:0 12px 5px;border:2px solid #123d2f;border-radius:8px;background:repeating-radial-gradient(circle at 6px 50%,#dfffdc 0 2px,#82c878 3px 5px,#164936 6px 12px);animation:blink .55s steps(2) infinite}.title{padding:7px 4px 5px;border:3px solid #b99a54;border-radius:18px 18px 9px 9px;text-align:center;font:bold 21px Impact,Arial Black,sans-serif;letter-spacing:1px;color:#e9e3bc;background:radial-gradient(ellipse at 50% 0,#2b8a6c,#082a24);text-shadow:0 2px #193f31}.jackpot{width:75%;margin:3px auto 5px;padding:3px;border:2px solid #a98c4d;border-radius:10px;text-align:center;font:bold 10px monospace;color:#ded7ad;background:linear-gradient(#245d48,#0b3025)}.stats{display:flex;margin:0 2px 6px;padding:4px;border:2px solid #537d64;border-radius:9px;background:#061812}.stat{flex:1;text-align:center;border-right:1px solid #416452;color:#91b59f;font:bold 9px monospace}.stat:last-child{border:0}.stat b{display:block;margin-top:1px;color:#fff0bb;font-size:13px}.frame{padding:6px;border:4px solid #315c47;border-radius:14px;background:linear-gradient(90deg,#09271e,#b49a59 5%,#174936 10%,#174936 90%,#b49a59 95%,#09271e)}.reels{display:grid;grid-template-columns:repeat(5,1fr);height:150px;overflow:hidden;border:3px solid #071c15;border-radius:9px;background:#071a14;box-shadow:inset 0 9px 15px #0009,inset 0 -9px 15px #0009}.reel{display:grid;grid-template-rows:repeat(3,1fr);background:linear-gradient(90deg,#a58149,#fffce4 17%,#fffdf0 50%,#f7e9bd 82%,#8e6a38);border-right:2px solid #6e421e}.reel:last-child{border:0}.cell{display:grid;place-items:center;border-bottom:1px solid #9f7e4f66;font-size:clamp(24px,8vw,38px);line-height:1}.cell.bar{font:bold 13px Arial Black;color:#fff4c4;background:#8d1018}.message{height:29px;margin:6px 2px 5px;display:grid;place-items:center;border:2px solid #537d64;border-radius:8px;color:#e3dfbb;background:#061812;font:bold 12px monospace;text-shadow:0 0 6px #62a77d}.console{display:grid;grid-template-columns:1fr 1.7fr;gap:7px;padding:7px 8px 9px;border:3px solid #416a53;border-radius:9px 9px 17px 17px;background:linear-gradient(#9c8c59,#315d48 37%,#0a2e22 39%,#123e2f)}button{height:44px;border:3px solid #092a20;border-radius:13px;color:#fff;font-weight:900}#bet{background:linear-gradient(#4f9a77,#216348 53%,#103d2d)}#spin{background:radial-gradient(circle at 50% 32%,#a8d96f,#4b8d46 47%,#1e542f 76%);font-size:16px;box-shadow:0 0 12px #79b85c88}button:active{transform:scale(.96)}.moving .cell{filter:blur(1.5px);transform:translateY(5px)}.winner .message{animation:win .7s ease-in-out 2}@keyframes blink{50%{filter:brightness(2)}}@keyframes win{50%{color:#fff8bd;filter:brightness(1.5)}}
+</style></head><body><div class="machine" id="machine"><div class="lights"></div><div class="title">FRUIT BONANZA</div><div class="jackpot">JACKPOT · 10,000 CREDITS</div><div class="stats"><div class="stat">CREDITS<b id="credits">${safe(balance)}</b></div><div class="stat">BET<b id="betValue">${safe(bet)}</b></div><div class="stat">BEST WIN<b id="bestWin">${safe(bestWin)}</b></div></div><div class="frame"><div class="reels" id="reels"></div></div><div class="message" id="message">Good luck</div><div class="console"><button id="bet">BET +</button><button id="spin">SPIN</button></div></div><script>(function(){
+var symbols=['🍒','🍋','💎','7️⃣','🔔','BAR'],reels=document.getElementById('reels'),machine=document.getElementById('machine'),message=document.getElementById('message'),credits=document.getElementById('credits'),betValue=document.getElementById('betValue'),bestWin=document.getElementById('bestWin'),bet=Number(betValue.textContent)||10,best=Number(bestWin.textContent)||0,busy=false;
+function pick(){return symbols[Math.floor(Math.random()*symbols.length)]}function draw(values){reels.innerHTML='';for(var c=0;c<5;c++){var col=document.createElement('div');col.className='reel';for(var r=0;r<3;r++){var cell=document.createElement('div');cell.className='cell'+(values[c][r]==='BAR'?' bar':'');cell.textContent=values[c][r];col.appendChild(cell)}reels.appendChild(col)}}function make(){return Array.from({length:5},function(){return Array.from({length:3},pick)})}function spin(){if(busy)return;var money=Number(credits.textContent)||0;if(money<bet){message.textContent='Not enough credits';return}busy=true;machine.classList.add('moving');message.textContent='Reels spinning...';credits.textContent=money-bet;var final=make(),started=Date.now(),timer=setInterval(function(){draw(make());if(Date.now()-started>820){clearInterval(timer);draw(final);machine.classList.remove('moving');var win=0;for(var r=0;r<3;r++){var s=final[0][r],n=1;while(n<5&&final[n][r]===s)n++;if(n>=3)win=Math.max(win,bet*(n===5?10:n===4?5:2))}credits.textContent=money-bet+win;if(win>best){best=win;bestWin.textContent=best}message.textContent=win?'WIN +'+win:'Good luck';if(win)machine.classList.add('winner');setTimeout(function(){machine.classList.remove('winner')},1500);busy=false}},90)}document.getElementById('bet').onclick=function(){if(!busy){bet=Math.min(10000,bet+10);betValue.textContent=bet;message.textContent='BET SET TO '+bet}};document.getElementById('spin').onclick=spin;draw(make())})();</script></body></html>`;
+}
+
+async function sendGenAISlot({ sock, jid, quoted, balance, bet, bestWin }) {
+    const data = Buffer.from(JSON.stringify({
+        __typename: 'GenAIUnifiedResponse',
+        response_id: crypto.randomUUID(),
+        sections: [{
+            __typename: 'GenAIUnifiedResponseSection',
+            view_model: {
+                __typename: 'GenAISingleLayoutViewModel',
+                primitive: {
+                    __typename: 'FOAHtmlPrimitiveDemoDONOTUSE',
+                    trusted_sources: [],
+                    payload: genAISlotHtml({ balance, bet, bestWin }),
+                },
+            },
+        }],
+    }));
+    const content = proto.Message.fromObject({
+        botForwardedMessage: {
+            message: {
+                richResponseMessage: {
+                    messageType: 1,
+                    unifiedResponse: { data },
+                },
+            },
+        },
+    });
+    const wrapped = generateWAMessageFromContent(jid, content, { userJid: sock.user?.id, quoted });
+    await sock.relayMessage(jid, wrapped.message, { messageId: wrapped.key.id });
+    return wrapped;
+}
+
 function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -287,19 +328,31 @@ module.exports = {
             return play({ sock, m, from, sender, reply, state, stateKey });
         }
         const balance = economy.getBalance(sender).wallet;
-        await sendSlotMessage({
-            sock,
-            jid: from,
-            quoted: m,
-            text: card({
-                name: m.pushName || 'Player',
+        try {
+            await sendGenAISlot({
+                sock,
+                jid: from,
+                quoted: m,
                 balance,
                 bet: state.bet,
                 bestWin: state.bestWin,
-                status: 'Good luck',
-            }),
-            buttons: buttonsFor(stateKey),
-        });
+            });
+        } catch (error) {
+            console.error('[SLOT GenAI fallback]', error.message);
+            await sendSlotMessage({
+                sock,
+                jid: from,
+                quoted: m,
+                text: card({
+                    name: m.pushName || 'Player',
+                    balance,
+                    bet: state.bet,
+                    bestWin: state.bestWin,
+                    status: 'Good luck',
+                }),
+                buttons: buttonsFor(stateKey),
+            });
+        }
     },
     async handleButton(buttonId, { sock, msg, from, reply }) {
         const match = String(buttonId || '').match(/^slot:(bet|spin):(.+)$/);
