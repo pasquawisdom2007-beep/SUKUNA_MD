@@ -138,6 +138,21 @@ async function sendCard({ sock, jid, quoted, text, buttons = [] }) {
     return wrapped;
 }
 
+async function sendSlotMessage({ sock, jid, quoted, text, buttons = [] }) {
+    try {
+        return await sendCard({ sock, jid, quoted, text, buttons });
+    } catch (error) {
+        // Custom interactive protobufs are not accepted by every Baileys
+        // build/client. Plain text keeps `.slot` usable instead of silently
+        // failing; users can always run `.slot spin` directly.
+        console.error('[SLOT interactive fallback]', error.message);
+        const fallback = buttons.length
+            ? `${text}\n\nUse .slot spin to spin · Use .slot <amount> to set the bet.`
+            : text;
+        return sock.sendMessage(jid, { text: fallback }, { quoted });
+    }
+}
+
 function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -166,7 +181,7 @@ async function play({ sock, m, from, sender, reply, state, stateKey }) {
 
     const result = spinReels();
     const playerName = m.pushName || 'Player';
-    const spinning = await sendCard({
+    const spinning = await sendSlotMessage({
         sock,
         jid: from,
         quoted: m,
@@ -218,12 +233,12 @@ async function play({ sock, m, from, sender, reply, state, stateKey }) {
 
     const edited = await updateCard(sock, from, spinning.key, finalText);
     if (!edited) {
-        await sendCard({ sock, jid: from, quoted: m, text: finalText, buttons: buttonsFor(stateKey) });
+        await sendSlotMessage({ sock, jid: from, quoted: m, text: finalText, buttons: buttonsFor(stateKey) });
     } else {
         // The edit API can only replace text; send a compact control card so
         // the next interaction always has live buttons on clients that hide
         // buttons after an edit.
-        await sendCard({
+        await sendSlotMessage({
             sock,
             jid: from,
             quoted: m,
@@ -272,7 +287,7 @@ module.exports = {
             return play({ sock, m, from, sender, reply, state, stateKey });
         }
         const balance = economy.getBalance(sender).wallet;
-        await sendCard({
+        await sendSlotMessage({
             sock,
             jid: from,
             quoted: m,
