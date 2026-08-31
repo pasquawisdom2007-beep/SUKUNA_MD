@@ -1,6 +1,62 @@
 'use strict';
 
+const crypto = require('crypto');
+const { generateWAMessageFromContent, proto } = require('@pasqua-baileys/baileys');
 const { sendRichHtml, escapeHtml } = require('../../utils/genaiRich');
+
+const CALCULATOR_SESSIONS = new Map();
+const CALCULATOR_BUTTONS = [
+    ['AC', 'AC'], ['DEL', 'DEL'], ['(', '('], [')', ')'],
+    ['7', '7'], ['8', '8'], ['9', '9'], ['÷', '/'],
+    ['4', '4'], ['5', '5'], ['6', '6'], ['×', '*'],
+    ['1', '1'], ['2', '2'], ['3', '3'], ['−', '-'],
+    ['0', '0'], ['.', '.'], ['%', '%'], ['+', '+'],
+    ['=', '='],
+];
+
+function calculatorQuickReply(displayText, id) {
+    return {
+        name: 'quick_reply',
+        buttonParamsJson: JSON.stringify({ display_text: displayText, id }),
+    };
+}
+
+async function sendCalculatorCard({ sock, jid, quoted, session }) {
+    const answer = session.result == null ? '—' : formatResult(session.result);
+    const text = [
+        '⌁ CYBER CALC ⌁',
+        'GENAI PRECISION ENGINE',
+        '',
+        `EXPRESSION: ${session.expression || '—'}`,
+        `ANSWER: ${answer}`,
+        session.error ? `⚠ ${session.error}` : 'Tap numbers and operators, then tap =',
+    ].join('\\n');
+    const buttons = CALCULATOR_BUTTONS.map(([label, key]) => calculatorQuickReply(label, `calc:${session.id}:${encodeURIComponent(key)}`));
+    const message = {
+        body: { text },
+        footer: { text: 'SUKUNA MD · Calculator' },
+        header: { title: 'CYBER CALC', hasMediaAttachment: false },
+        nativeFlowMessage: { buttons, messageParamsJson: '' },
+    };
+    const wrapped = generateWAMessageFromContent(jid, {
+        viewOnceMessage: {
+            message: {
+                messageContextInfo: { deviceListMetadataVersion: 2, deviceListMetadata: {} },
+                interactiveMessage: proto.Message.InteractiveMessage.fromObject(message),
+            },
+        },
+    }, { userJid: sock.user?.id, quoted });
+    await sock.relayMessage(jid, wrapped.message, { messageId: wrapped.key.id });
+    return wrapped;
+}
+
+function createCalculatorSession() {
+    const id = crypto.randomUUID();
+    const session = { id, expression: '', result: null, error: '' };
+    CALCULATOR_SESSIONS.set(id, session);
+    setTimeout(() => CALCULATOR_SESSIONS.delete(id), 30 * 60 * 1000).unref?.();
+    return session;
+}
 
 const FUNCTIONS = {
     sin: Math.sin,
@@ -141,6 +197,37 @@ function formatResult(value) {
     return Number.isInteger(value) ? value.toLocaleString('en-US') : value.toLocaleString('en-US', { maximumSignificantDigits: 12 });
 }
 
+async function handleCalculatorButton(buttonId, { sock, msg, from }) {
+    const match = String(buttonId || '').match(/^calc:([^:]+):(.+)$/);
+    if (!match) return false;
+    const session = CALCULATOR_SESSIONS.get(match[1]);
+    if (!session) {
+        await sock.sendMessage(from, { text: '❌ This calculator session expired. Run .calc again.' }, { quoted: msg });
+        return true;
+    }
+    const key = decodeURIComponent(match[2]);
+    session.error = '';
+    if (key === 'AC') {
+        session.expression = '';
+        session.result = null;
+    } else if (key === 'DEL') {
+        session.expression = session.expression.slice(0, -1);
+        session.result = null;
+    } else if (key === '=') {
+        try {
+            session.result = evaluateExpression(session.expression);
+        } catch (error) {
+            session.result = null;
+            session.error = error.message === 'Division by zero' ? 'Division by zero is not allowed.' : 'Finish the expression before pressing =.';
+        }
+    } else {
+        session.expression += key;
+        session.result = null;
+    }
+    await sendCalculatorCard({ sock, jid: from, quoted: msg, session });
+    return true;
+}
+
 function calculatorHtml(expression, result, error) {
     const safeExpression = escapeHtml(expression || '');
     const safeResult = escapeHtml(result || '—');
@@ -160,8 +247,9 @@ module.exports = {
     async execute({ sock, msg, from, reply, args }) {
         const expression = args.join(' ').trim();
         if (!expression) {
-            return sendRichHtml({ sock, jid: from, quoted: msg, html: calculatorHtml('', '—', 'Usage: .calc 12 * (8 + 2) or .calc sqrt(144) + 5') })
-                .catch(() => reply('🔢 Calculator\n\nUsage: .calc <expression>\nExample: .calc 12 * (8 + 2)'));
+            const session = createCalculatorSession();
+            return sendCalculatorCard({ sock, jid: from, quoted: msg, session })
+                .catch(() => reply('🔢 Calculator\n\nTap numbers and operators, then tap =.\nExample: .calc 12 * (8 + 2)'));
         }
         try {
             const result = formatResult(evaluateExpression(expression));
@@ -179,3 +267,5 @@ module.exports = {
 
 module.exports.calculatorHtml = calculatorHtml;
 module.exports.tokenize = tokenize;
+module.exports.handleCalculatorButton = handleCalculatorButton;
+module.exports.createCalculatorSession = createCalculatorSession;
