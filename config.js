@@ -4,7 +4,7 @@
  */
 
 module.exports = {
-    botName: 'SUKUNA MD',
+    botName: process.env.BOT_NAME || 'SUKUNA MD',
     version: '3.0.0',
     prefix: '.',
 
@@ -36,7 +36,7 @@ module.exports = {
     sessionId: process.env.SESSION_ID || '',
 
     owner: {
-        name:     'PASQUA',
+        name:     process.env.OWNER_NAME || 'PASQUA',
         number:   process.env.OWNER_NUMBER || '2349127857212',
         github:   'https://github.com/pasquawisdom2007-beep/Sukuna-MD-V3',
         channel:  'https://whatsapp.com/channel/0029VbCJho147XeEEuR1LA3s',
