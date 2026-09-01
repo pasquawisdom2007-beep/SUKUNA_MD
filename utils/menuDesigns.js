@@ -762,7 +762,7 @@ function designCrysnovax(ctx) {
 // Exact PASQUA layout requested by the owner, with the system block kept
 // live and the three visible sections populated from the command registry.
 function designPasqua(ctx) {
-    const { userTag, creator, total, uptime, version, platform,
+    const { botName, userTag, creator, total, uptime, version, platform,
             sortedCategories, byCategory, CATEGORY_LABELS, boldItalic, mode, status } = ctx;
     const bi = boldItalic;
     const clean = value => String(value ?? '').trim();
@@ -788,7 +788,7 @@ function designPasqua(ctx) {
         .sort((a, b) => String(a).localeCompare(String(b)));
 
     let c = '';
-    c += `╼━━━ ${bi('𝑺𝑼𝑲𝑼𝑵𝑨 𝑴𝑫')} ━━━╾\n`;
+    c += `╼━━━ ${bi(botName || 'SUKUNA MD')} ━━━╾\n`;
     c += `                ${bi(`𝑽${version || '3.0.0'}`)}\n`;
     c += '          ───────────────────\n\n';
     c += `┌─「 ${bi('𝐒𝐘𝐒𝐓𝐄𝐌')} 」\n`;
@@ -1254,7 +1254,11 @@ const BUILDERS = {
 function buildCaption(designKey, ctx) {
     const key = String(designKey || 'pasqua').toLowerCase();
     const fn = BUILDERS[key] || BUILDERS.pasqua;
-    return fn(ctx);
+    const caption = fn(ctx);
+    const botName = String(ctx?.botName || 'SUKUNA MD').trim() || 'SUKUNA MD';
+    return caption
+        .replace(/SUKUNA(?:\s+MD)?/gi, () => botName)
+        .replace(/\bKord\b/g, () => botName);
 }
 
 module.exports = { DESIGNS, isValidDesign, buildCaption };

@@ -6,7 +6,7 @@
 module.exports = {
     botName: process.env.BOT_NAME || 'SUKUNA MD',
     version: '3.0.0',
-    prefix: '.',
+    prefix: process.env.PREFIX || '.',
 
     // ============================================
     // ASSETS

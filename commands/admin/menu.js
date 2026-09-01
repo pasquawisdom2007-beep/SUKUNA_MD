@@ -75,7 +75,7 @@ function buildFallbackCaption(ctx) {
 
     // Peak header
     c += `◤${RULE}◥\n`;
-    c += `      ✦ *SUKUNA MD* ✦\n`;
+    c += `      ✦ *${ctx.botName || 'SUKUNA MD'}* ✦\n`;
     c += `◣${RULE}◢\n`;
 
     // Info rail
@@ -107,7 +107,7 @@ function buildFallbackCaption(ctx) {
     c += `◤${RULE}◥\n`;
     c += `   ${cmdCount} commands loaded\n`;
     c += `◣${RULE}◢\n`;
-    c += `\n> *Sukuna MD* · King of Curses · by ${ownerName}`;
+    c += `\n> *${ctx.botName || 'SUKUNA MD'}* · King of Curses · by ${ownerName}`;
 
     return c;
 }
@@ -165,6 +165,7 @@ module.exports = {
         // Build identity / runtime info
         const senderJid    = sender || msg?.key?.participant || msg?.key?.remoteJid || '';
         const senderNumber = String(phoneNumber || senderJid).replace(/[^0-9]/g, '') || 'user';
+        const botName      = config.botName || 'SUKUNA MD';
         const ownerName    = (config.owner && config.owner.name) || 'PASQUA';
         const prefix       = config.prefix || '.';
         const mode         = (global.botMode || config.mode || 'private').toLowerCase();
@@ -206,6 +207,7 @@ module.exports = {
         const plainText = (str) => String(str);
 
         const designCtx = {
+            botName,
             userTag:  `@${senderNumber}`,
             creator:  ownerName,
             mode,
@@ -243,7 +245,7 @@ module.exports = {
         } catch (e) {
             console.error('[menu] buildCaption failed, using fallback:', e.message);
             caption = buildFallbackCaption({
-                senderNumber, ownerName, prefix, mode, uptime,
+                senderNumber, botName, ownerName, prefix, mode, uptime,
                 ramUsed, ramTotal, cmdCount, version, date, time,
                 sortedCategories, byCategory, t,
             });
