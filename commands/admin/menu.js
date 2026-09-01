@@ -55,11 +55,12 @@ const CATEGORY_LABELS = {
     unicode:    'UNICODE',
     '18plus':   '18PLUS',
     textmaker:  'TEXTMAKER',
+    'anime-nsfw': 'ANIME NSFW (18+)',
 };
 
 const CATEGORY_ORDER = [
     'owner', 'admin', 'moderation', 'economy', 'fun', 'media',
-    'ai', 'utility', 'group', 'general', 'unicode', '18plus', 'textmaker',
+    'ai', 'utility', 'group', 'general', 'unicode', '18plus', 'textmaker', 'anime-nsfw',
 ];
 
 // ── Fallback caption (Peak Rail — matches the default `nor` design) ──
