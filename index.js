@@ -19,6 +19,7 @@ const chalk          = require('chalk');
 const commandLoader  = require('./utils/commandLoader');
 const config         = require('./config');
 const sessionManager = require('./lib/sessionManager');
+const { restoreSessionBase64 } = require('./utils/sessionBundle');
 
 console.log(chalk.red(`
 ╔════════════════════════════════════════════════════════════════╗
@@ -73,8 +74,8 @@ async function main() {
     const pairNumber = pairNumberRaw.replace(/[^0-9]/g, '');
 
     // ── SESSION_ID short-circuit ────────────────────────────────────
-    // Supports either a legacy Base64 session or a one-time Pasqua~shortId
-    // resolved through the private PAIR_SITE bridge.
+    // Supports a full Base64 auth bundle, legacy creds.json Base64, or a
+    // one-time Pasqua~shortId resolved through the private PAIR_SITE bridge.
     const sessionIdRaw = (process.env.SESSION_ID || config.sessionId || '').toString().trim();
     let sessionIdUsed = false;
 
@@ -97,15 +98,13 @@ async function main() {
                 if (!sessionBase64) throw new Error('PAIR_SITE response did not contain a session');
             }
 
-            if (fs.existsSync(credsFile)) {
-                console.log(chalk.green(`[SESSION] Live creds exist for ${pairNumber}; keeping them, ignoring SESSION_ID.`));
+            const hasAuthFiles = fs.existsSync(sessionDir) && fs.readdirSync(sessionDir).some(name => name !== 'creds.json' && !name.endsWith('.tmp'));
+            if (fs.existsSync(credsFile) && hasAuthFiles) {
+                console.log(chalk.green(`[SESSION] Live multi-file auth state exists for ${pairNumber}; keeping it and ignoring SESSION_ID.`));
                 sessionIdUsed = true;
             } else {
-                const decoded = Buffer.from(sessionBase64, 'base64').toString('utf8');
-                JSON.parse(decoded);
-                fs.mkdirSync(sessionDir, { recursive: true });
-                fs.writeFileSync(credsFile, decoded, { encoding: 'utf8', mode: 0o600 });
-                console.log(chalk.green(`[SESSION] Restored session for ${pairNumber} from SESSION_ID. Skipping pair code.`));
+                const restored = restoreSessionBase64(sessionBase64, sessionDir);
+                console.log(chalk.green(`[SESSION] Restored ${restored.format} (${restored.fileCount} file(s)) for ${pairNumber} from SESSION_ID. Skipping pair code.`));
                 sessionIdUsed = true;
             }
 
