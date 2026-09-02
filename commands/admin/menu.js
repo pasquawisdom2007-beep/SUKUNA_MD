@@ -308,6 +308,7 @@ module.exports = {
                     quoted: msg,
                     caption,
                     prefix,
+                    commands,
                     botName,
                     userTag: `@${senderNumber}`,
                     version,

@@ -5,28 +5,46 @@ const { generateWAMessageFromContent, proto } = require('@pasqua-baileys/baileys
 
 const MENU_IMAGE_URL = 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663936678738/YSmNKRleqLdoBHTu.png';
 const CHANNEL_URL = 'https://whatsapp.com/channel/0029VbCJho147XeEEuR1LA3s';
+const CATEGORY_ORDER = ['owner', 'admin', 'moderation', 'economy', 'fun', 'media', 'ai', 'utility', 'group', 'general', 'unicode', 'textmaker', 'games', 'anime-nsfw', '18plus'];
 
-const MENU_COLUMNS = [
-    { title: 'Menu1', buttons: ['menu2', 'menu3', 'rich3'], commands: ['menu', 'cmdlist', 'ttt'] },
-    { title: 'Menu2', buttons: ['test', 'me', 'rich2'], commands: ['ping', 'profile', 'snake'] },
-];
+function commandCards(commands) {
+    const byCategory = new Map();
+    const source = commands instanceof Map ? commands.values() : Array.isArray(commands) ? commands : [];
 
-function actionRow(title, labels, commands, prefix) {
+    for (const command of source) {
+        if (!command?.name || typeof command.execute !== 'function') continue;
+        const category = String(command.category || 'general').toLowerCase();
+        if (!byCategory.has(category)) byCategory.set(category, []);
+        byCategory.get(category).push(String(command.name));
+    }
+
+    const categories = [
+        ...CATEGORY_ORDER.filter(category => byCategory.has(category)),
+        ...Array.from(byCategory.keys()).filter(category => !CATEGORY_ORDER.includes(category)).sort(),
+    ];
+
+    return categories.map(category => ({
+        title: category.replace(/(^|-)(\w)/g, (_, divider, letter) => `${divider ? ' ' : ''}${letter.toUpperCase()}`),
+        commands: [...new Set(byCategory.get(category))].sort(),
+    }));
+}
+
+function actionRow(card, prefix) {
     return {
         __typename: 'GenAI3PExtWidgetPrimitive',
         header: {
             __typename: 'GenAI3PExtWidgetStandardHeader',
-            title,
+            title: card.title,
         },
         body: {
             __typename: 'GenAI3PExtCalendarEventList',
-            ctas: labels.map((label, index) => ({
-                label,
+            ctas: card.commands.map(command => ({
+                label: command,
                 state: 'PENDING',
                 kind: 'OTHER',
-                tool_call_id: `${prefix}${commands[index]}`,
+                tool_call_id: `chroma:${command}`,
                 toast: {
-                    label: `Opening ${prefix}${commands[index]}`,
+                    label: `Opening ${prefix}${command}`,
                     __typename: 'GenAI3PExtWidgetToast',
                 },
                 __typename: 'GenAI3PExtWidgetCTA',
@@ -36,7 +54,8 @@ function actionRow(title, labels, commands, prefix) {
     };
 }
 
-function buildRichMenuData({ prefix = '.', imageUrl = MENU_IMAGE_URL, channelUrl = CHANNEL_URL } = {}) {
+function buildRichMenuData({ prefix = '.', commands, imageUrl = MENU_IMAGE_URL, channelUrl = CHANNEL_URL } = {}) {
+    const cards = commandCards(commands);
     const sections = [
         {
             __typename: 'GenAIUnifiedResponseSection',
@@ -60,7 +79,7 @@ function buildRichMenuData({ prefix = '.', imageUrl = MENU_IMAGE_URL, channelUrl
             __typename: 'GenAIUnifiedResponseSection',
             view_model: {
                 __typename: 'GenAIActionRowLayoutViewModel',
-                primitives: MENU_COLUMNS.map(column => actionRow(column.title, column.buttons, column.commands, prefix)),
+                primitives: cards.map(card => actionRow(card, prefix)),
             },
         },
         {
@@ -116,19 +135,15 @@ function buildChromaContent(options = {}) {
                     messageType: 1,
                     submessages: [],
                     unifiedResponse: { data },
-                    contextInfo: {
-                        isForwarded: true,
-                        forwardingScore: 1,
-                        forwardOrigin: 4,
-                    },
+                    contextInfo: { isForwarded: true, forwardingScore: 1, forwardOrigin: 4 },
                 },
             },
         },
     });
 }
 
-async function sendChromaMenu({ sock, jid, prefix = '.', quoted }) {
-    const content = buildChromaContent({ prefix });
+async function sendChromaMenu({ sock, jid, prefix = '.', commands, quoted }) {
+    const content = buildChromaContent({ prefix, commands });
     const wrapped = generateWAMessageFromContent(jid, content, {
         userJid: sock.user?.id,
         quoted: quoted?.message ? quoted : undefined,
@@ -137,4 +152,4 @@ async function sendChromaMenu({ sock, jid, prefix = '.', quoted }) {
     return wrapped;
 }
 
-module.exports = { sendChromaMenu, buildChromaContent, buildRichMenuData, MENU_COLUMNS, MENU_IMAGE_URL, CHANNEL_URL };
+module.exports = { sendChromaMenu, buildChromaContent, buildRichMenuData, commandCards, MENU_IMAGE_URL, CHANNEL_URL };
