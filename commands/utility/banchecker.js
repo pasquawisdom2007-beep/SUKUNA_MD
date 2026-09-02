@@ -36,6 +36,7 @@ const {
     USyncUser,
     USyncDeviceProtocol,
 } = require('@pasqua-baileys/baileys');
+const { sendRichHtml, escapeHtml } = require('../../utils/genaiRich');
 
 const DEFAULT_NV_KEY = '1e4c1e7867b7d586bf28de7e2414fb93';
 
@@ -157,6 +158,29 @@ async function probeCarrier(num) {
     catch (_) {
         return { ok: false };
     }
+}
+
+function plain(value) {
+    return String(value || '').replace(/[ *_`]/g, '').replace(/\n{3,}/g, '\n\n');
+}
+
+function renderBanGenAI({ target, country, result, extras, registered, devices, page }) {
+    const status = plain(result.status);
+    const isBanned = /\bBANNED\b|OFF-WHATSAPP/i.test(status);
+    const isActive = /active|unbanned/i.test(status);
+    const tone = isBanned ? 'blood' : isActive ? 'alive' : 'warning';
+    const icon = isBanned ? '☠' : isActive ? '✓' : '⚠';
+    const deviceText = devices === null ? 'UNAVAILABLE' : `${devices.length} DEVICE${devices.length === 1 ? '' : 'S'}`;
+    const registryText = registered === true ? 'FOUND' : registered === false ? 'NOT FOUND' : 'TIMEOUT';
+    const pageText = page?.ok ? (page.generic ? 'PROFILE HIDDEN' : 'PROFILE VISIBLE') : 'TIMEOUT';
+    const detail = escapeHtml(plain(result.detail));
+    const extraText = escapeHtml(plain(extras || 'No carrier data returned.'));
+    const safeTarget = escapeHtml(`+${target}`);
+    const safeCountry = escapeHtml(country);
+    const profile = result.profile ? `<div class="profile">PROFILE: ${escapeHtml(result.profile)}</div>` : '';
+    return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+*{box-sizing:border-box}html,body{margin:0;background:transparent;font-family:Arial,sans-serif}body{padding:6px;background:radial-gradient(circle at 50% 0%,#4b0710 0,#16040a 38%,#030205 100%);color:#f6e8ee}.card{position:relative;overflow:hidden;padding:14px;border:1px solid #ff3158;border-radius:18px;background:linear-gradient(145deg,#210812,#10040a 55%,#050207);box-shadow:inset 0 0 0 1px #6e1025,0 0 20px #e4003b66,0 10px 24px #000c}.card:before{content:"";position:absolute;inset:-35%;background:repeating-linear-gradient(115deg,transparent 0 22px,#ff174455 23px 24px,transparent 25px 49px);opacity:.18;transform:rotate(-8deg);animation:scan 9s linear infinite}.card:after{content:"";position:absolute;top:-12px;right:24px;width:9px;height:29px;border-radius:0 0 8px 8px;background:#ff1744;box-shadow:18px 9px 0 -2px #b7002f,36px -4px 0 -3px #ff3158;animation:drip 2.7s ease-in-out infinite}.inner{position:relative;z-index:1}.kicker{text-align:center;color:#ff5574;font:10px monospace;letter-spacing:3px}.title{text-align:center;margin:4px 0;color:#fff;font:bold 23px Arial Black,Arial,sans-serif;letter-spacing:1px;text-shadow:0 0 8px #ff1744,0 0 22px #b00035;animation:flicker 3.8s infinite}.subtitle{text-align:center;color:#d99aaa;font:10px monospace;letter-spacing:1px}.rule{height:2px;margin:10px 0;background:linear-gradient(90deg,transparent,#ff1744,#ffc0ca,#ff1744,transparent);box-shadow:0 0 8px #ff1744}.verdict{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid #ff3158;border-radius:12px;background:#0b0307}.verdict.blood{border-color:#ff1744;box-shadow:0 0 14px #ff174466}.verdict.alive{border-color:#36e58a;box-shadow:0 0 14px #00d97844}.verdict.warning{border-color:#ffbf55;box-shadow:0 0 14px #ff9d3844}.sig{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:#260711;color:#ff3158;font-size:22px;animation:pulse 1.8s infinite}.alive .sig{background:#052417;color:#36e58a}.warning .sig{background:#2c1d05;color:#ffbf55}.vlabel{color:#b88896;font:9px monospace;letter-spacing:1px}.vstatus{margin-top:3px;color:#fff;font:bold 14px monospace}.target{margin:10px 0;color:#ffe7ee;text-align:center;font:bold 16px monospace;letter-spacing:1px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:9px 0}.metric{padding:7px;border:1px solid #5d1b2b;border-radius:8px;background:#0b0307}.mlabel{color:#9c6473;font:8px monospace}.mvalue{margin-top:3px;color:#ffb1c1;font:bold 10px monospace}.detail{padding:9px;border-left:3px solid #ff1744;background:#19060c;color:#f2d8df;white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.4 monospace}.extras{margin-top:7px;color:#bb8e9c;white-space:pre-wrap;font:9px/1.35 monospace}.actions{display:flex;gap:7px;margin-top:10px}.actions button{flex:1;height:34px;border:1px solid #a71b3c;border-radius:8px;color:#ffdce4;background:linear-gradient(#5d1024,#260711);font:bold 9px monospace}.actions button:active{transform:scale(.96)}.footer{margin-top:9px;text-align:center;color:#874555;font:8px monospace;letter-spacing:1px}@keyframes scan{to{transform:rotate(-8deg) translateY(90px)}}@keyframes drip{50%{height:42px;opacity:.65}100%{height:29px;opacity:1}}@keyframes flicker{0%,18%,20%,65%,67%,100%{opacity:1}19%,66%{opacity:.65}}@keyframes pulse{50%{transform:scale(1.08);box-shadow:0 0 14px currentColor}}@media(max-width:320px){.title{font-size:19px}}
+</style></head><body><div class="card"><div class="inner"><div class="kicker">SUKUNA MD // SECURE SCAN</div><div class="title">☠ BAN CHECKER ☠</div><div class="subtitle">WHATSAPP ACCOUNT FORENSICS</div><div class="rule"></div><div class="verdict ${tone}"><div class="sig">${icon}</div><div><div class="vlabel">FINAL VERDICT</div><div class="vstatus">${escapeHtml(status)}</div></div></div><div class="target">${safeTarget}</div>${profile}<div class="grid"><div class="metric"><div class="mlabel">REGISTRY</div><div class="mvalue">${registryText}</div></div><div class="metric"><div class="mlabel">KEY DEVICES</div><div class="mvalue">${deviceText}</div></div><div class="metric"><div class="mlabel">PUBLIC PROFILE</div><div class="mvalue">${pageText}</div></div><div class="metric"><div class="mlabel">REGION</div><div class="mvalue">${safeCountry}</div></div></div><div class="detail">${detail}</div><div class="extras">${extraText}</div><div class="actions"><button id="pulse">PULSE SCAN</button><button id="copy">COPY NUMBER</button><button id="note">EVIDENCE</button></div><div class="footer">GENAI RICH RESPONSE · 2-FACTOR SERVER CHECK</div></div></div><script>(function(){var card=document.querySelector('.card'),pulse=document.getElementById('pulse'),copy=document.getElementById('copy'),note=document.getElementById('note');pulse.onclick=function(){card.style.animation='pulse .8s 2';setTimeout(function(){card.style.animation=''},1700)};copy.onclick=function(){if(navigator.clipboard)navigator.clipboard.writeText('${safeTarget}');copy.textContent='COPIED ✓';setTimeout(function(){copy.textContent='COPY NUMBER'},1400)};note.onclick=function(){note.textContent='REGISTRY + PAGE + KEYS';setTimeout(function(){note.textContent='EVIDENCE'},1800)}})();</script></body></html>`;
 }
 
 // ── Command ──────────────────────────────────────────────────────────
@@ -362,12 +386,11 @@ module.exports = {
             extras += `_NumVerify limit reached — carrier info skipped._\n`;
         }
 
-        // ── Send result ──────────────────────────────────────────────
-        try { await sock.sendMessage(from, { delete: waitMsg.key }); } catch (_) { /* ignore */ }
-
+                // ── Send result ──────────────────────────────────────────────
+        try { if (waitMsg?.key) await sock.sendMessage(from, { delete: waitMsg.key }); } catch (_) { /* ignore */ }
         const country = getCountry(target);
         const profileLine = result.profile ? `*Profile name:* ${result.profile}\n` : '';
-        return reply(
+        const finalText =
             `╔══ 🛡️ *BAN CHECKER* ══╗\n` +
             `║                        ║\n` +
             `║  ${result.emoji} *${result.status}*  ║\n` +
@@ -380,7 +403,18 @@ module.exports = {
             `${result.detail}\n\n` +
             `_2-factor check: registry + public page_\n` +
             `_Note: exact ban reason/date is only visible_` +
-            `_ inside the banned account itself._`
-        );
+            `_ inside the banned account itself._`;
+        try {
+            return await sendRichHtml({
+                sock,
+                jid: from,
+                quoted: msg,
+                html: renderBanGenAI({ target, country, result, extras, registered, devices, page }),
+            });
+        }
+        catch (error) {
+            console.error('[banchecker] GenAI render failed:', error.message);
+            return reply(finalText);
+        }
     }
 };
