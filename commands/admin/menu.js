@@ -17,6 +17,7 @@ const commandLoader  = require('../../utils/commandLoader');
 const database       = require('../../utils/database');
 const { buildCaption } = require('../../utils/menuDesigns');
 const { boldItalic } = require('../../utils/styleBox');
+const { sendChromaMenu } = require('../../utils/chromaMenu');
 const fontSystem     = require('../../utils/fontSystem');
 const langSystem     = require('../../utils/langSystem');
 
@@ -295,6 +296,25 @@ module.exports = {
             // The flag is auto-cleared inside newsletterBrand.wrapSocket after each send.
             // Must be set before EACH send because the delete call above also consumes it.
             sock.__skipBrand = true;
+
+            // Chroma is a GenAI-rich HTML menu with three button columns.
+            // It intentionally bypasses the legacy image/video menu path so
+            // the selected design behaves like the interactive TTT and Snake
+            // commands.
+            if (designKey === 'chroma') {
+                return await sendChromaMenu({
+                    sock,
+                    jid: from,
+                    quoted: msg,
+                    caption,
+                    prefix,
+                    botName,
+                    userTag: `@${senderNumber}`,
+                    version,
+                    uptime,
+                    status,
+                });
+            }
 
             // Priority: menu image > menu GIF (gifPlayback loop) > menu video > text
             if (fs.existsSync(IMAGE_PATH)) {
