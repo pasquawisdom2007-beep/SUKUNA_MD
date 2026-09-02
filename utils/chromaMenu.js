@@ -39,10 +39,10 @@ function actionRow(card, prefix) {
         body: {
             __typename: 'GenAI3PExtCalendarEventList',
             ctas: card.commands.map(command => ({
-                label: command,
+                label: `${prefix}${command}`,
                 state: 'PENDING',
                 kind: 'OTHER',
-                tool_call_id: `chroma:${command}`,
+                tool_call_id: `chroma:${prefix}${command}`,
                 toast: {
                     label: `Opening ${prefix}${command}`,
                     __typename: 'GenAI3PExtWidgetToast',
