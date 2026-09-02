@@ -27,9 +27,10 @@ module.exports = {
     // ============================================
     // SESSION ID (skip pair code, auto-connect)
     // --------------------------------------------
-    // Paste the SESSION_ID you got from the pair site (base64 of creds.json).
-    // • If set    → bot decodes it, writes sessions/<pairNumber>/creds.json,
-    //               and connects directly WITHOUT printing a pairing code.
+    // Paste the complete SESSION_ID auth bundle from the pair site.
+    // The bundle contains creds.json plus Signal/app-state key files.
+    // • If set    → bot restores the complete multi-file auth state under
+    //               sessions/<pairNumber> and connects directly WITHOUT pairing.
     // • If empty  → bot falls back to the normal 8-char pairing-code flow.
     // Use ONE flow at a time — don't try to set both.
     // ============================================
