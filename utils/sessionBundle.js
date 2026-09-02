@@ -7,9 +7,26 @@ const zlib = require('zlib');
 const BUNDLE_TYPE = 'sukuna-baileys-auth-bundle';
 
 function decodeBase64Session(value) {
-    const raw = String(value || '').replace(/^data:.*?;base64,/, '').replace(/\s+/g, '');
+    let raw = String(value || '')
+        .replace(/^data:.*?;base64,/, '')
+        .replace(/```(?:text|base64|json)?/gi, '')
+        .replace(/```/g, '')
+        .replace(/(?:SESSION\s*ID|SESSION_ID|AUTH\s*BUNDLE)\s*[:=]\s*/i, '')
+        .replace(/^Pasqua\s*[:~]+\s*/i, '')
+        .replace(/\s+/g, '')
+        .replace(/-/g, '+')
+        .replace(/_/g, '/');
     if (!raw) throw new Error('SESSION_ID is empty');
-    const decoded = Buffer.from(raw, 'base64').toString('utf8');
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(raw)) throw new Error('SESSION_ID contains invalid Base64 characters');
+    raw += '='.repeat((4 - (raw.length % 4)) % 4);
+    const bytes = Buffer.from(raw, 'base64');
+    if (!bytes.length) throw new Error('SESSION_ID decoded to empty data');
+    let decoded;
+    if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
+        try { decoded = zlib.gunzipSync(bytes).toString('utf8'); } catch (_) { throw new Error('SESSION_ID is not valid gzip data'); }
+    } else {
+        decoded = bytes.toString('utf8');
+    }
     if (!decoded) throw new Error('SESSION_ID decoded to empty data');
     let parsed;
     try { parsed = JSON.parse(decoded); } catch (_) { throw new Error('SESSION_ID is not valid Base64 JSON'); }
