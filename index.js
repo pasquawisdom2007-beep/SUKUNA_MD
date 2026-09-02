@@ -88,14 +88,20 @@ async function main() {
             let sessionBase64 = sessionIdRaw;
 
             if (/^Pasqua~/i.test(sessionIdRaw)) {
-                const pairSiteUrl = (process.env.PAIR_SITE_URL || 'https://pair-site-91ob.onrender.com').toString().trim().replace(/\/$/, '');
-                if (!pairSiteUrl) throw new Error('PAIR_SITE_URL is required for Pasqua~ short IDs');
-                const shortId = sessionIdRaw.replace(/^Pasqua~/i, '');
-                const response = await fetch(`${pairSiteUrl}/pair/session/${encodeURIComponent(shortId)}`);
-                if (!response.ok) throw new Error(`PAIR_SITE returned HTTP ${response.status}`);
-                const payload = await response.json();
-                sessionBase64 = payload.session;
-                if (!sessionBase64) throw new Error('PAIR_SITE response did not contain a session');
+                const markedPayload = sessionIdRaw.replace(/^Pasqua~/i, '').trim();
+                // A marked full payload is self-contained. Keep legacy 8-char
+                // Pasqua~ short IDs working through the old remote bridge.
+                if (/^[a-f0-9]{8}$/i.test(markedPayload)) {
+                    const pairSiteUrl = (process.env.PAIR_SITE_URL || 'https://pair-site-91ob.onrender.com').toString().trim().replace(/\/$/, '');
+                    if (!pairSiteUrl) throw new Error('PAIR_SITE_URL is required for Pasqua~ short IDs');
+                    const response = await fetch(`${pairSiteUrl}/pair/session/${encodeURIComponent(markedPayload)}`);
+                    if (!response.ok) throw new Error(`PAIR_SITE returned HTTP ${response.status}`);
+                    const payload = await response.json();
+                    sessionBase64 = payload.session;
+                    if (!sessionBase64) throw new Error('PAIR_SITE response did not contain a session');
+                } else {
+                    sessionBase64 = markedPayload;
+                }
             }
 
             const hasAuthFiles = fs.existsSync(sessionDir) && fs.readdirSync(sessionDir).some(name => name !== 'creds.json' && !name.endsWith('.tmp'));
