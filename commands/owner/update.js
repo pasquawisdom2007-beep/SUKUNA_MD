@@ -69,6 +69,13 @@ async function run(cmd, opts = {}) {
     });
 }
 
+async function hasCommand(command) {
+    try {
+        await run(`command -v ${command}`, { timeout: 5000 });
+        return true;
+    } catch { return false; }
+}
+
 async function hasGit() {
     try {
         if (!fs.existsSync(path.join(REPO_ROOT, '.git'))) return false;
@@ -127,7 +134,7 @@ function needsRestart(changed) {
 }
 
 function needsInstall(changed) {
-    return changed.some(f => f === 'package.json' || f === 'package-lock.json' || f === 'bun.lock');
+    return changed.some(f => f === 'package.json' || f === 'package-lock.json' || f === 'bun.lock' || f === 'pnpm-lock.yaml');
 }
 
 function trim(text, max = 1500) {
@@ -480,7 +487,10 @@ module.exports = {
                 await reply('📦 *Installing updated dependencies…* (this can take a minute)');
                 const t0 = Date.now();
                 try {
-                    await run('npm install --omit=dev --no-audit --no-fund', { timeout: 4 * 60 * 1000 });
+                    const installCommand = await hasCommand('pnpm')
+                        ? 'pnpm install --frozen-lockfile --prod --prefer-offline --reporter=append-only'
+                        : 'npm install --omit=dev --no-audit --no-fund';
+                    await run(installCommand, { timeout: 4 * 60 * 1000 });
                     installInfo = `ran (${((Date.now() - t0) / 1000).toFixed(1)}s)`;
                 } catch (err) {
                     installInfo = 'FAILED — ' + trim(err.stderr || err.message, 400);

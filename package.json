@@ -3,6 +3,7 @@
   "version": "3.0.0",
   "description": "SUKUNA MD by PASQUA — WhatsApp bot paired through a self-hosted web panel (Pterodactyl / VPS).",
   "main": "index.js",
+  "packageManager": "pnpm@11.24.0",
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js"
