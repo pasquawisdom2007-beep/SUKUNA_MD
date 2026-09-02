@@ -75,7 +75,7 @@ async function main() {
 
     // ── SESSION_ID short-circuit ────────────────────────────────────
     // Supports a full Base64 auth bundle, legacy creds.json Base64, or a
-    // one-time Pasqua~shortId resolved through the private PAIR_SITE bridge.
+    // one-time Pasqua~shortId resolved through the Redis-backed PAIR_SITE bridge.
     const sessionIdRaw = (process.env.SESSION_ID || config.sessionId || '').toString().trim();
     let sessionIdUsed = false;
 
@@ -87,11 +87,11 @@ async function main() {
             const credsFile  = path.join(sessionDir, 'creds.json');
             let sessionBase64 = sessionIdRaw;
 
-            if (/^Pasqua~/i.test(sessionIdRaw)) {
-                const markedPayload = sessionIdRaw.replace(/^Pasqua~/i, '').trim();
-                // A marked full payload is self-contained. Keep legacy 8-char
-                // Pasqua~ short IDs working through the old remote bridge.
-                if (/^[a-f0-9]{8}$/i.test(markedPayload)) {
+            if (/^Pasqua~?/i.test(sessionIdRaw)) {
+                const markedPayload = sessionIdRaw.replace(/^Pasqua~?/i, '').trim();
+                // A marked full payload is self-contained. Six-character
+                // Pasqua~ short IDs are resolved through the Redis-backed pair site.
+                if (/^[0-9A-Za-z]{6}$/i.test(markedPayload)) {
                     const pairSiteUrl = (process.env.PAIR_SITE_URL || 'https://pair-site-91ob.onrender.com').toString().trim().replace(/\/$/, '');
                     if (!pairSiteUrl) throw new Error('PAIR_SITE_URL is required for Pasqua~ short IDs');
                     const response = await fetch(`${pairSiteUrl}/pair/session/${encodeURIComponent(markedPayload)}`);
