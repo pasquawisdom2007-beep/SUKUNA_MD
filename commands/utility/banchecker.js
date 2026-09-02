@@ -141,6 +141,13 @@ async function probeSendPage(num) {
 }
 
 // ── Optional carrier check: NumVerify (default key + env override) ───
+function withTimeout(promise, ms, fallback) {
+    return Promise.race([
+        Promise.resolve(promise),
+        new Promise(resolve => setTimeout(() => resolve(fallback), ms)),
+    ]);
+}
+
 async function probeCarrier(num) {
     const nvKey = process.env.NUMVERIFY_API_KEY || DEFAULT_NV_KEY;
     try {
@@ -223,18 +230,13 @@ module.exports = {
             );
         }
 
-        // ── Waiting card ─────────────────────────────────────────────
-        const waitMsg = await reply(
-            `🛡️ *Checking:* +${target}\n` +
-            `╰─ 🔄 _Querying WhatsApp servers (2-factor)…_`
-        );
-
+            // Probes run silently; the user receives only the completed result card.
         let result = null;
 
         // ── Factor A: live registry ──────────────────────────────────
         let registered = null;
         try {
-            const onWA = await sock.onWhatsApp(target + '@s.whatsapp.net');
+            const onWA = await withTimeout(sock.onWhatsApp(target + '@s.whatsapp.net'), 8000, []);
             registered = Array.isArray(onWA) && onWA.length > 0 && onWA[0].exists === true;
         }
         catch (_) { /* registry probe failed; continue with factor B */ }
@@ -272,10 +274,10 @@ module.exports = {
         catch (_) { /* probe failed; devices stays null */ }
 
         // ── Factor B: send-page marker ───────────────────────────────
-        const page = await probeSendPage(target);
+        const page = await withTimeout(probeSendPage(target), 12000, { ok: false, generic: null, title: null, hasOwnPic: false });
 
         // ── Optional Factor C: carrier registry ──────────────────────
-        const carrier = await probeCarrier(target);
+        const carrier = await withTimeout(probeCarrier(target), 7000, { ok: false });
 
         // ── Verdict (all probe combinations covered honestly) ─────────
         // Factor D (device/key-index) is the strongest signal, and the
@@ -387,7 +389,6 @@ module.exports = {
         }
 
                 // ── Send result ──────────────────────────────────────────────
-        try { if (waitMsg?.key) await sock.sendMessage(from, { delete: waitMsg.key }); } catch (_) { /* ignore */ }
         const country = getCountry(target);
         const profileLine = result.profile ? `*Profile name:* ${result.profile}\n` : '';
         const finalText =
