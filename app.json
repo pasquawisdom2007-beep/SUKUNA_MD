@@ -1,0 +1,26 @@
+{
+  "name": "sukuna-md",
+  "description": "SUKUNA MD WhatsApp bot by PASQUA",
+  "repository": "https://github.com/pasquawisdom2007-beep/SUKUNA_MD",
+  "keywords": ["whatsapp", "baileys", "bot"],
+  "success_url": "/health",
+  "env": {
+    "PAIR_NUMBER": {
+      "description": "WhatsApp number to pair, including country code without +",
+      "required": false
+    },
+    "OWNER_NUMBER": {
+      "description": "Bot owner number, including country code without +",
+      "required": false
+    },
+    "SESSION_ID": {
+      "description": "Complete Base64 auth bundle or one-time Pasqua session ID",
+      "required": false
+    },
+    "PAIR_SITE_URL": {
+      "description": "Pair-site URL used to redeem Pasqua session IDs",
+      "value": "https://pair-site-91ob.onrender.com",
+      "required": false
+    }
+  }
+}

