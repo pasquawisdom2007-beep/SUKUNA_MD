@@ -21,6 +21,14 @@
 
 <p align="center"><sub>Text animation first. Sukuna visual immediately after.</sub></p>
 
+<p align="center">
+  <a href="https://pair-site-wmte.onrender.com" target="_blank">
+    <img src="https://img.shields.io/badge/PAIR%20YOUR%20DEVICE-OPEN%20PAIR%20SITE-e11d48?style=for-the-badge&logo=whatsapp&logoColor=white" alt="Open SUKUNA MD Pair Site">
+  </a>
+</p>
+
+<p align="center"><strong>Pair your WhatsApp device:</strong> <a href="https://pair-site-wmte.onrender.com">pair-site-wmte.onrender.com</a></p>
+
 ---
 
 ## About
