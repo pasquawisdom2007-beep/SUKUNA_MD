@@ -23,8 +23,39 @@ const sessionManager = require('./lib/sessionManager');
 const { restoreSessionBase64 } = require('./utils/sessionBundle');
 
 const healthPort = Number(process.env.PORT || 3000);
+const webPairRequests = new Set();
 const healthServer = http.createServer((req, res) => {
-    if (req.url === '/health' || req.url === '/ping' || req.url === '/') {
+    const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    if (requestUrl.pathname === '/pair' && (req.method === 'GET' || req.method === 'POST')) {
+        const number = String(requestUrl.searchParams.get('number') || '').replace(/\D/g, '');
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        if (number.length < 8) {
+            res.writeHead(400);
+            return res.end(JSON.stringify({
+                error: 'Provide a WhatsApp number with country code.',
+                example: '/pair?number=2348012345678'
+            }));
+        }
+        if (webPairRequests.has(number)) {
+            res.writeHead(409);
+            return res.end(JSON.stringify({ error: 'A pairing request is already running for this number.' }));
+        }
+        webPairRequests.add(number);
+        sessionManager.createSession(number)
+            .then(result => {
+                res.writeHead(result?.success === false ? 503 : 200);
+                res.end(JSON.stringify(result?.code
+                    ? { success: true, number, pairingCode: result.code, message: 'Enter this code in WhatsApp → Linked devices.' }
+                    : result));
+            })
+            .catch(error => {
+                res.writeHead(503);
+                res.end(JSON.stringify({ success: false, error: error.message }));
+            })
+            .finally(() => webPairRequests.delete(number));
+        return;
+    }
+    if (requestUrl.pathname === '/health' || requestUrl.pathname === '/ping' || requestUrl.pathname === '/') {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         return res.end(JSON.stringify({ status: 'online', service: 'SUKUNA MD' }));
     }
