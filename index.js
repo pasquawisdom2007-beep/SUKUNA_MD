@@ -134,14 +134,14 @@ async function main() {
 
             if (/^Pasqua~/i.test(sessionIdRaw)) {
                 const markedPayload = sessionIdRaw.replace(/^Pasqua~/i, '').trim();
-                // A marked full payload is self-contained. 16-character IDs use the
-                // pair-site bridge; longer values are treated as full bundles.
-                if (/^[A-Za-z0-9_-]{16}$/.test(markedPayload)) {
+                // A marked full payload is self-contained. Redis short IDs are
+                // resolved server-side through the one-time consume endpoint.
+                if (/^[A-Za-z0-9_-]{6,64}$/.test(markedPayload)) {
                     const pairSiteUrl = (process.env.PAIR_SITE_URL || 'https://pair-site-wmte.onrender.com').toString().trim().replace(/\/$/, '');
                     if (!pairSiteUrl) throw new Error('PAIR_SITE_URL is required for Pasqua~ short IDs');
                     const controller = new AbortController();
                     const timeout = setTimeout(() => controller.abort(), 15000);
-                    const response = await fetch(`${pairSiteUrl}/pair/session/${encodeURIComponent(markedPayload)}`, { signal: controller.signal });
+                    const response = await fetch(`${pairSiteUrl}/pair/session/${encodeURIComponent(markedPayload)}/consume`, { signal: controller.signal });
                     clearTimeout(timeout);
                     if (!response.ok) throw new Error(`PAIR_SITE returned HTTP ${response.status}`);
                     const payload = await response.json();
