@@ -16,8 +16,8 @@ const { sendRichHtml, escapeHtml } = require('../../utils/genaiRich');
 const BARON_API_BASE = 'https://baron0.com';
 // Edit this value before deploying if you do not use environment variables.
 // Never commit a real key to a public repository.
-const BARON_API_KEY = process.env.BANCHECK_API_KEY || 'PASTE_YOUR_BARON_API_KEY_HERE';
-const PLACEHOLDER_KEY = 'PASTE_YOUR_BARON_API_KEY_HERE';
+const BARON_API_KEY = process.env.BANCHECK_API_KEY || 'bk_v1_Tdur_x37hvmu1XMosacDhU35iJ0SmuP5m06iAFpzkAK7Da3f4BmO5pO-8Pt-d2XaoKpa6m_DCdJTvg0YrAMPaCtxreHmbdHakfuauxSlXC-RIDF2k-jgixwz7VWO51zIoTWCs2_Zz7-CHMKGaRSm6px9uRRgel-tQaBDydLwhyA0Io90HKK8obIAh_7ZbtTt9H1XUVJxUfrcadEkOmGyyWqUB1o836FUv7TqNnQb6sJNdPWbypdGU4MO8_ZktlPZyxFvfeUe0Hy5r0hFdHlls2p6szG-8Nk6UBk43TBclA2iYHAoS0aaI-kDpRi0QqD9t84n-nCTG3Bc9u5f-X9Yx-yDQV2J6-lZCPB9JAVHiMRF2ZEGTv1bf_bFBS3tB8c8XutIa-7vce2HTKmF_HVKjj8yncHJnGiUSdMTHw5vnw2Q2g0ry0ZWrRajF4r-qgjgGCKfs6wF3zg4hERB3HrgF_9ILWH5eY9tba0oPT8fmdu9G8V2s4RNe1ys7Ney0ZfrQWHVSbLVO_oGgBHEEGgf9TfRC0RWN-inSAUdTOLHW1G-GdWypLUA';
+const PLACEHOLDER_KEY = 'bk_v1_Tdur_x37hvmu1XMosacDhU35iJ0SmuP5m06iAFpzkAK7Da3f4BmO5pO-8Pt-d2XaoKpa6m_DCdJTvg0YrAMPaCtxreHmbdHakfuauxSlXC-RIDF2k-jgixwz7VWO51zIoTWCs2_Zz7-CHMKGaRSm6px9uRRgel-tQaBDydLwhyA0Io90HKK8obIAh_7ZbtTt9H1XUVJxUfrcadEkOmGyyWqUB1o836FUv7TqNnQb6sJNdPWbypdGU4MO8_ZktlPZyxFvfeUe0Hy5r0hFdHlls2p6szG-8Nk6UBk43TBclA2iYHAoS0aaI-kDpRi0QqD9t84n-nCTG3Bc9u5f-X9Yx-yDQV2J6-lZCPB9JAVHiMRF2ZEGTv1bf_bFBS3tB8c8XutIa-7vce2HTKmF_HVKjj8yncHJnGiUSdMTHw5vnw2Q2g0ry0ZWrRajF4r-qgjgGCKfs6wF3zg4hERB3HrgF_9ILWH5eY9tba0oPT8fmdu9G8V2s4RNe1ys7Ney0ZfrQWHVSbLVO_oGgBHEEGgf9TfRC0RWN-inSAUdTOLHW1G-GdWypLUA';
 
 async function checkWithBaron(number) {
     if (!BARON_API_KEY) return null;
