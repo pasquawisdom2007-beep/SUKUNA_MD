@@ -127,6 +127,21 @@ async function ensureRemote() {
     }
 }
 
+async function removeUntrackedGeneratedLocks() {
+    // npm can create package-lock.json on a panel even when this repository
+    // does not track one. Remove it only when Git confirms it is untracked.
+    for (const file of ['package-lock.json', 'bun.lock']) {
+        const absolute = path.join(REPO_ROOT, file);
+        if (!fs.existsSync(absolute)) continue;
+        try {
+            await run(`git ls-files --error-unmatch -- "${file}"`, { timeout: 5000 });
+        } catch {
+            fs.rmSync(absolute, { force: true });
+            console.log(`[UPDATE] Removed untracked generated ${file} before pull.`);
+        }
+    }
+}
+
 function needsRestart(changed) {
     return changed.some(f =>
         RESTART_REQUIRED_PATHS.some(p => p.endsWith('/') ? f.startsWith(p) : f === p)
@@ -457,6 +472,7 @@ module.exports = {
                     await run(`git reset --hard origin/${REPO_BRANCH}`);
                 } else {
                     try {
+                        await removeUntrackedGeneratedLocks();
                         await run(`git pull --ff-only origin ${REPO_BRANCH}`);
                     } catch (err) {
                         UPDATE_IN_PROGRESS = false;
