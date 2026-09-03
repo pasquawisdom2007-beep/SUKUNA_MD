@@ -77,6 +77,8 @@ module.exports = {
 // Track message sending to set single tick
 module.exports.setupGhostMode = (sock) => {
     if (!ghostEnabled) return;
+    if (sock.__sukunaGhostModeWrapped) return;
+    sock.__sukunaGhostModeWrapped = true;
     
     // Override message sending to prevent double ticks
     const originalSendMessage = sock.sendMessage.bind(sock);

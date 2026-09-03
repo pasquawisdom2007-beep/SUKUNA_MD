@@ -6,6 +6,15 @@
 
 const { downloadContentFromMessage } = require('@pasqua-baileys/baileys');
 
+function enabled() {
+    return /^(1|true|yes|on)$/i.test(String(process.env.AUTOVV_ENABLED || '').trim());
+}
+
+function ownerJid() {
+    const raw = String(process.env.OWNER_NUMBER || process.env.OWNER_ID || '').replace(/\D/g, '');
+    return raw.length >= 8 ? `${raw}@s.whatsapp.net` : '';
+}
+
 async function downloadMedia(mediaMsg, mediaType, retries = 3) {
     let lastErr;
     for (let attempt = 1; attempt <= retries; attempt++) {
@@ -38,10 +47,16 @@ module.exports = {
     execute: async (context) => {
         const { sock, msg, from } = context;
 
+        // This listener used to forward every group photo/video immediately,
+        // even when the owner had never enabled AutoVV and even to a hardcoded
+        // placeholder JID. Keep it opt-in and require a real destination.
+        if (!enabled()) return;
+
         // Only trigger in groups
         if (!from.includes('@g.us')) return;
 
-        const OWNER_ID = process.env.OWNER_ID || '1234567890@s.whatsapp.net';
+        const OWNER_ID = ownerJid();
+        if (!OWNER_ID) return;
 
         try {
             // Check for image
