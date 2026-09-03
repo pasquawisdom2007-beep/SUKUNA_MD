@@ -19,8 +19,8 @@ module.exports = {
     // ============================================
     // BOT OWNER INFO
     // ============================================
-    ownerNumber: process.env.OWNER_NUMBER || '2349127857212',
-    pairNumber:  process.env.PAIR_NUMBER  || '2349127857212',
+    ownerNumber: process.env.OWNER_NUMBER || '',
+    pairNumber:  process.env.PAIR_NUMBER  || '',
     // Pasqua Baileys supports a custom 8-character pairing code.
     pairingCode: process.env.PAIRING_CODE || 'PASQUAMD',
 
