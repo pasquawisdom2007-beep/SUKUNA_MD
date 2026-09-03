@@ -39,6 +39,39 @@ const {
 const { sendRichHtml, escapeHtml } = require('../../utils/genaiRich');
 
 const DEFAULT_NV_KEY = '1e4c1e7867b7d586bf28de7e2414fb93';
+const BARON_API_BASE = 'https://baron0.com';
+const BARON_API_KEY = process.env.BANCHECK_API_KEY || process.env.BAN_CHECK_API_KEY || '';
+
+async function checkWithBaron(number) {
+    if (!BARON_API_KEY) return null;
+    const res = await fetch(`${BARON_API_BASE}/api/v2/check`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${BARON_API_KEY}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+        },
+        body: JSON.stringify({ number: `+${number}` }),
+        signal: AbortSignal.timeout(20000),
+    });
+
+    let body;
+    try {
+        body = await res.json();
+    } catch (_) {
+        throw new Error(`Baron API returned HTTP ${res.status} with a non-JSON response`);
+    }
+
+    if (!res.ok) {
+        const detail = body?.detail || body?.error || `HTTP ${res.status}`;
+        const requestId = body?.requestId ? ` (requestId: ${body.requestId})` : '';
+        throw new Error(`${body?.title || 'Baron API error'}: ${detail}${requestId}`);
+    }
+    if (typeof body?.banned !== 'boolean') {
+        throw new Error('Baron API returned an invalid ban result');
+    }
+    return body;
+}
 
 // ── Number parsing ───────────────────────────────────────────────────
 function normalizeNumber(input) {
@@ -177,8 +210,8 @@ function renderBanGenAI({ target, country, result, extras, registered, devices, 
     const isActive = /active|unbanned/i.test(status);
     const tone = isBanned ? 'blood' : isActive ? 'alive' : 'warning';
     const icon = isBanned ? '☠' : isActive ? '✓' : '⚠';
-    const registry = registered === true ? 'FOUND' : registered === false ? 'NOT FOUND' : 'TIMEOUT';
-    const deviceCount = devices === null ? 'N/A' : String(devices.length);
+    const registry = result.source === 'BARON' ? 'VERIFIED' : registered === true ? 'FOUND' : registered === false ? 'NOT FOUND' : 'TIMEOUT';
+    const deviceCount = result.source === 'BARON' ? 'BARON API' : devices === null ? 'N/A' : String(devices.length);
     const profileState = page?.ok ? (page.generic ? 'HIDDEN' : 'VISIBLE') : 'TIMEOUT';
     const safe = value => escapeHtml(plain(value));
     const safeNumber = escapeHtml('+' + target);
@@ -186,7 +219,7 @@ function renderBanGenAI({ target, country, result, extras, registered, devices, 
     const profile = result.profile ? `<div class="profile">PROFILE: ${safe(result.profile)}</div>` : '';
     return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>
 *{box-sizing:border-box}html,body{margin:0;background:transparent;font-family:Arial,sans-serif}body{padding:6px;background:#08040a;color:#f7e8ef}.card{padding:13px;border:2px solid #ff3158;border-radius:20px;background:#16070e;color:#f7e8ef;box-shadow:inset 0 0 0 3px #3e0d1c,0 8px 20px #000b}.title{text-align:center;color:#fff;font:bold 22px Arial Black,Arial,sans-serif;letter-spacing:1px;text-shadow:0 0 10px #ff1744}.sub{text-align:center;margin:2px 0 8px;color:#d58b9d;font:10px monospace}.scan{height:4px;margin:0 12px 8px;background:#ff1744;box-shadow:0 0 10px #ff1744;animation:scan 1.8s linear infinite}.verdict{display:flex;align-items:center;gap:9px;padding:9px;border:1px solid #ff3158;border-radius:10px;background:#090307}.verdict.alive{border-color:#36e58a}.verdict.warning{border-color:#ffbf55}.sig{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:#3b0714;color:#ff3158;font-size:20px}.alive .sig{background:#062b1b;color:#36e58a}.warning .sig{background:#2e2108;color:#ffbf55}.label{color:#a7687a;font:8px monospace;letter-spacing:1px}.value{margin-top:2px;color:#fff;font:bold 13px monospace}.number{text-align:center;margin:9px 0;color:#ffdce5;font:bold 16px monospace}.profile{text-align:center;margin:-4px 0 8px;color:#ff9cb1;font:9px monospace}.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}.metric{padding:7px;border:1px solid #5d1b2b;border-radius:8px;background:#0b0307}.metric .value{font-size:10px;color:#ffb1c1}.detail{margin-top:8px;padding:8px;border-left:3px solid #ff1744;background:#210710;color:#f2d8df;white-space:pre-wrap;overflow-wrap:anywhere;font:10px/1.4 monospace}.extras{margin-top:7px;color:#b98b99;white-space:pre-wrap;font:9px/1.35 monospace}.buttons{display:flex;gap:6px;margin-top:9px}.buttons button{flex:1;height:36px;border:1px solid #a71b3c;border-radius:8px;background:#3a0c1b;color:#ffdce5;font:bold 9px monospace}.buttons button:active{transform:scale(.95)}.footer{text-align:center;margin-top:8px;color:#884455;font:8px monospace;letter-spacing:1px}@keyframes scan{50%{opacity:.35}100%{opacity:1}}
-</style></head><body><div class="card"><div class="title">☠ BAN CHECKER ☠</div><div class="sub">SUKUNA MD // WHATSAPP ACCOUNT FORENSICS</div><div class="scan"></div><div class="verdict ${tone}"><div class="sig">${icon}</div><div><div class="label">FINAL VERDICT</div><div class="value">${safe(status)}</div></div></div><div class="number">${safeNumber}</div>${profile}<div class="grid"><div class="metric"><div class="label">REGISTRY</div><div class="value">${registry}</div></div><div class="metric"><div class="label">KEY DEVICES</div><div class="value">${deviceCount}</div></div><div class="metric"><div class="label">PUBLIC PROFILE</div><div class="value">${profileState}</div></div><div class="metric"><div class="label">REGION</div><div class="value">${safeCountry}</div></div></div><div class="detail">${safe(result.detail)}</div><div class="extras">${safe(extras || 'No carrier data returned.')}</div><div class="buttons"><button id="pulse">PULSE SCAN</button><button id="copy">COPY NUMBER</button><button id="evidence">EVIDENCE</button></div><div class="footer">GENAI RICH RESPONSE · REGISTRY + PROFILE + KEY CHECK</div></div><script>(function(){var card=document.querySelector('.card'),pulse=document.getElementById('pulse'),copy=document.getElementById('copy'),evidence=document.getElementById('evidence');pulse.onclick=function(){card.style.opacity='.45';setTimeout(function(){card.style.opacity='1'},180)};copy.onclick=function(){copy.textContent='COPIED ✓';setTimeout(function(){copy.textContent='COPY NUMBER'},1200)};evidence.onclick=function(){evidence.textContent='CHECKS COMPLETE';setTimeout(function(){evidence.textContent='EVIDENCE'},1400)}})();</script></body></html>`;
+</style></head><body><div class="card"><div class="title">☠ BAN CHECKER ☠</div><div class="sub">SUKUNA MD // WHATSAPP ACCOUNT FORENSICS</div><div class="scan"></div><div class="verdict ${tone}"><div class="sig">${icon}</div><div><div class="label">FINAL VERDICT</div><div class="value">${safe(status)}</div></div></div><div class="number">${safeNumber}</div>${profile}<div class="grid"><div class="metric"><div class="label">REGISTRY</div><div class="value">${registry}</div></div><div class="metric"><div class="label">KEY DEVICES</div><div class="value">${deviceCount}</div></div><div class="metric"><div class="label">PUBLIC PROFILE</div><div class="value">${profileState}</div></div><div class="metric"><div class="label">REGION</div><div class="value">${safeCountry}</div></div></div><div class="detail">${safe(result.detail)}</div><div class="extras">${safe(extras || 'No carrier data returned.')}</div><div class="buttons"><button id="pulse">PULSE SCAN</button><button id="copy">COPY NUMBER</button><button id="evidence">EVIDENCE</button></div><div class="footer">GENAI RICH RESPONSE · ${result.source === 'BARON' ? 'BARON API VERIFICATION' : 'REGISTRY + PROFILE + KEY CHECK'}</div></div><script>(function(){var card=document.querySelector('.card'),pulse=document.getElementById('pulse'),copy=document.getElementById('copy'),evidence=document.getElementById('evidence');pulse.onclick=function(){card.style.opacity='.45';setTimeout(function(){card.style.opacity='1'},180)};copy.onclick=function(){copy.textContent='COPIED ✓';setTimeout(function(){copy.textContent='COPY NUMBER'},1200)};evidence.onclick=function(){evidence.textContent='CHECKS COMPLETE';setTimeout(function(){evidence.textContent='EVIDENCE'},1400)}})();</script></body></html>`;
 }
 
 // ── Command ──────────────────────────────────────────────────────────
@@ -229,7 +262,41 @@ module.exports = {
             );
         }
 
-            // Probes run silently; the user receives only the completed result card.
+        // ── Baron API is authoritative when BANCHECK_API_KEY is set. ───
+        if (BARON_API_KEY) {
+            try {
+                const baron = await checkWithBaron(target);
+                const isBanned = baron.banned === true;
+                const result = {
+                    emoji: isBanned ? '🔴' : '🟢',
+                    status: isBanned ? 'BANNED' : 'UNBANNED — ACTIVE',
+                    detail: isBanned
+                        ? `Baron verified that +${target} is *BANNED*${baron.reason ? `\\n_Reason: ${baron.reason}_` : '.'}`
+                        : `Baron verified that +${target} is *not banned* and can use WhatsApp normally.`,
+                    profile: null,
+                    source: 'BARON',
+                };
+                return await sendRichHtml({
+                    sock,
+                    jid: from,
+                    quoted: msg,
+                    html: renderBanGenAI({
+                        target,
+                        country: getCountry(target),
+                        result,
+                        extras: 'Source: Baron Ban Checker API\\n',
+                        registered: null,
+                        devices: null,
+                        page: null,
+                    }),
+                });
+            } catch (error) {
+                console.error('[banchecker] Baron API failed:', error.message);
+                return reply(`❌ Ban checker API failed: ${error.message}\\n\\nCheck that BANCHECK_API_KEY is valid and try again.`);
+            }
+        }
+
+        // Legacy local probes remain available when no Baron key is configured.
         let result = null;
 
         // ── Factor A: live registry ──────────────────────────────────
