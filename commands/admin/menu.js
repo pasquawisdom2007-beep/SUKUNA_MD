@@ -120,9 +120,27 @@ module.exports = {
     description: 'Show the SUKUNA MD command menu',
     category: 'admin',
 
-    async execute({ sock, msg, from, sender, reply, phoneNumber, t: _t }) {
+    async execute({ sock, msg, from, sender, reply, phoneNumber, args = [], t: _t }) {
         // Use the language translator passed from sessionManager, fallback to English
         const t = _t || langSystem.getTranslator('english');
+        // `.list <category>` is a focused command list; bare `.list` keeps the
+        // original full menu because `list` is an alias of `menu`.
+        const requestedCategory = String(args[0] || '').trim().toLowerCase();
+        if (requestedCategory) {
+            const categoryAliases = { owners: 'owner', admins: 'admin', mods: 'moderation', mod: 'moderation',
+                groups: 'group', utilities: 'utility', ai: 'ai', games: 'games', nfsw: 'anime-nsfw' };
+            const category = categoryAliases[requestedCategory] || requestedCategory;
+            const commands = commandLoader.getAll()
+                .filter(command => String(command.category || '').toLowerCase() === category)
+                .sort((a, b) => a.name.localeCompare(b.name));
+            if (!commands.length) {
+                const available = [...new Set(commandLoader.getAll().map(command => command.category))].sort();
+                return reply(`❌ Category *${requestedCategory}* was not found or has no commands.\n\nAvailable: ${available.join(', ')}`);
+            }
+            const label = CATEGORY_LABELS[category] || category.toUpperCase();
+            const lines = commands.map(command => `▸ ${command.name}`);
+            return reply(`╭━━━ ${label} COMMANDS ━━━╮\n│ ${lines.join('\n│ ')}\n╰━━━ ${commands.length} commands ━━━╯`);
+        }
         // ── Loading shrine animation (sent first, then deleted just
         //    before the real menu is delivered). ──
         let loadingKey = null;
