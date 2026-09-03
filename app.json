@@ -19,7 +19,7 @@
     },
     "PAIR_SITE_URL": {
       "description": "Pair-site URL used to redeem Pasqua session IDs",
-      "value": "https://pair-site-91ob.onrender.com",
+      "value": "https://pair-site-wmte.onrender.com",
       "required": false
     }
   }

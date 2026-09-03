@@ -7,7 +7,7 @@ module.exports = {
     category: 'admin',
 
     async execute({ sock, msg, from, reply }) {
-        const PAIR_URL  = 'https://pair-site-91ob.onrender.com/';
+        const PAIR_URL  = 'https://pair-site-wmte.onrender.com/';
         const PREVIEW   = `https://api.microlink.io/?url=${encodeURIComponent(PAIR_URL)}&screenshot=true&meta=false&embed=screenshot.url`;
 
         const card =

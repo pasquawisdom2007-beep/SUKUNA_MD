@@ -106,7 +106,7 @@ async function main() {
                 // A marked full payload is self-contained. 16-character IDs use the
                 // pair-site bridge; longer values are treated as full bundles.
                 if (/^[A-Za-z0-9_-]{16}$/.test(markedPayload)) {
-                    const pairSiteUrl = (process.env.PAIR_SITE_URL || 'https://pair-site-91ob.onrender.com').toString().trim().replace(/\/$/, '');
+                    const pairSiteUrl = (process.env.PAIR_SITE_URL || 'https://pair-site-wmte.onrender.com').toString().trim().replace(/\/$/, '');
                     if (!pairSiteUrl) throw new Error('PAIR_SITE_URL is required for Pasqua~ short IDs');
                     const controller = new AbortController();
                     const timeout = setTimeout(() => controller.abort(), 15000);

@@ -218,7 +218,7 @@ SUKUNA MD starts with `npm start`, which runs `node index.js`. The repository in
 
 ### Render
 
-Create a **Web Service** from this repository. Use `npm install` as the build command and `npm start` as the start command. Add `PAIR_NUMBER`, `OWNER_NUMBER`, and either `SESSION_ID` or the normal pairing settings in Render Environment. `PAIR_SITE_URL` defaults to `https://pair-site-91ob.onrender.com`, so it is optional unless you use a different pair site. Render’s environment settings should be used for private values rather than committing them to the repository.
+Create a **Web Service** from this repository. Use `npm install` as the build command and `npm start` as the start command. Add `PAIR_NUMBER`, `OWNER_NUMBER`, and either `SESSION_ID` or the normal pairing settings in Render Environment. `PAIR_SITE_URL` defaults to `https://pair-site-wmte.onrender.com`, so it is optional unless you use a different pair site. Render’s environment settings should be used for private values rather than committing them to the repository.
 
 ### Heroku
 

@@ -9,7 +9,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: PAIR_SITE_URL
-        value: https://pair-site-91ob.onrender.com
+        value: https://pair-site-wmte.onrender.com
       - key: PAIR_NUMBER
         sync: false
       - key: SESSION_ID
