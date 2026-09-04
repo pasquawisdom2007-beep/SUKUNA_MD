@@ -1,7 +1,7 @@
 'use strict';
 
 const { downloadMediaMessage } = require('@pasqua-baileys/baileys');
-const { upscaleWithReplicate } = require('../../utils/upscale');
+const { upscaleImage } = require('../../utils/upscale');
 
 function imageTarget(msg) {
     const context = msg?.message?.extendedTextMessage?.contextInfo;
@@ -14,7 +14,7 @@ function imageTarget(msg) {
 module.exports = {
     name: 'upscale',
     aliases: ['enhance', 'hd', '4k'],
-    description: 'Upscale a replied image with Real-ESRGAN',
+    description: 'Upscale a replied image locally without an API key',
     category: 'media',
 
     async execute({ sock, msg, from, reply, args }) {
@@ -22,22 +22,17 @@ module.exports = {
         if (!target) {
             return reply('🖼️ Reply to an image with `.upscale` to enhance it.\n\nOptional: `.upscale 2` or `.upscale 4`');
         }
-        if (!process.env.REPLICATE_API_TOKEN && !process.env.REPLICATE_TOKEN) {
-            return reply('⚙️ Upscaling is not configured. Add `REPLICATE_API_TOKEN` to the bot environment.');
-        }
 
         const scale = Number(args?.[0]) || 4;
         if (![2, 4].includes(scale)) return reply('❌ Choose a scale of `2` or `4`.');
-        const faceEnhance = ['face', 'faces', 'portrait'].includes(String(args?.[1] || '').toLowerCase());
 
         try {
-            await reply(`⏳ Upscaling image ${scale}×${faceEnhance ? ' with face enhancement' : ''}...`);
+            await reply(`⏳ Upscaling image ${scale}× locally...`);
             const buffer = await downloadMediaMessage(target, 'buffer', {});
-            const mimeType = target.node?.mimetype || 'image/jpeg';
-            const output = await upscaleWithReplicate(buffer, mimeType, scale, faceEnhance);
+            const output = await upscaleImage(buffer, scale);
             await sock.sendMessage(from, {
                 image: output,
-                caption: `✅ *Image upscaled ${scale}×*${faceEnhance ? ' with face enhancement' : ''}\nPowered by Real-ESRGAN`,
+                caption: `✅ *Image upscaled ${scale}×*\nEnhanced locally with Sharp — no API key required.`,
             }, { quoted: msg });
         } catch (error) {
             console.error('[upscale]', error);

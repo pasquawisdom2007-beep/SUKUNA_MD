@@ -1,59 +1,28 @@
 'use strict';
 
-const MODEL_ENDPOINT = 'https://api.replicate.com/v1/models/nightmareai/real-esrgan/predictions';
+const sharp = require('sharp');
 
-function token() {
-    return process.env.REPLICATE_API_TOKEN || process.env.REPLICATE_TOKEN || '';
-}
-
-async function replicateRequest(url, options = {}) {
-    const headers = {
-        Authorization: `Bearer ${token()}`,
-        Accept: 'application/json',
-        ...(options.method !== 'GET' ? { 'Content-Type': 'application/json' } : {}),
-        ...(options.headers || {}),
-    };
-    const response = await fetch(url, { ...options, headers });
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) {
-        const detail = body?.detail || body?.error || body?.title || `HTTP ${response.status}`;
-        throw new Error(String(detail));
-    }
-    return body;
-}
-
-async function upscaleWithReplicate(buffer, mimeType = 'image/jpeg', scale = 4, faceEnhance = false) {
-    if (!token()) throw new Error('REPLICATE_API_TOKEN is not configured');
+async function upscaleImage(buffer, scale = 4) {
     if (!Buffer.isBuffer(buffer) || !buffer.length) throw new Error('empty image buffer');
+    const factor = Math.min(4, Math.max(2, Number(scale) || 4));
+    const metadata = await sharp(buffer).metadata();
+    if (!metadata.width || !metadata.height) throw new Error('could not read image dimensions');
 
-    const prediction = await replicateRequest(MODEL_ENDPOINT, {
-        method: 'POST',
-        body: JSON.stringify({
-            input: {
-                image: `data:${mimeType};base64,${buffer.toString('base64')}`,
-                scale: Math.min(4, Math.max(2, Number(scale) || 4)),
-                face_enhance: Boolean(faceEnhance),
-            },
-        }),
-    });
+    const maxDimension = 4096;
+    const targetWidth = Math.min(Math.round(metadata.width * factor), maxDimension);
+    const targetHeight = Math.min(Math.round(metadata.height * factor), maxDimension);
 
-    const deadline = Date.now() + 120000;
-    let current = prediction;
-    while (current?.status === 'starting' || current?.status === 'processing') {
-        if (Date.now() > deadline) throw new Error('upscaler timed out');
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        current = await replicateRequest(current.urls?.get, { method: 'GET' });
-    }
-
-    if (current?.status !== 'succeeded') {
-        throw new Error(current?.error || `upscaler finished with status ${current?.status || 'unknown'}`);
-    }
-
-    const outputUrl = Array.isArray(current.output) ? current.output[0] : current.output;
-    if (!outputUrl) throw new Error('upscaler returned no image');
-    const imageResponse = await fetch(outputUrl);
-    if (!imageResponse.ok) throw new Error(`could not download upscaled image: HTTP ${imageResponse.status}`);
-    return Buffer.from(await imageResponse.arrayBuffer());
+    return sharp(buffer)
+        .resize({
+            width: targetWidth,
+            height: targetHeight,
+            fit: 'inside',
+            withoutEnlargement: false,
+            kernel: sharp.kernel.lanczos3,
+        })
+        .sharpen({ sigma: 1.05, m1: 1.1, m2: 2.2 })
+        .jpeg({ quality: 95, chromaSubsampling: '4:4:4', mozjpeg: true })
+        .toBuffer();
 }
 
-module.exports = { upscaleWithReplicate };
+module.exports = { upscaleImage };
