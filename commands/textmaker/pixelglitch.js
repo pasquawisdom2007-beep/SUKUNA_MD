@@ -4,4 +4,5 @@ module.exports = makeTextmakerCommand({
     ephotoUrl: 'https://en.ephoto360.com/matrix-text-effect-154.html',
     label: 'Pixel Glitch',
     emoji: '🟩',
+    style: 'matrix',
 });
