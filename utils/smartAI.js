@@ -6,8 +6,8 @@
  *   2. Any provider whose API key is present in the environment
  *        GROQ_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY,
  *        OPENROUTER_API_KEY, AI_GATEWAY_API_KEY
- *   3. Pollinations (KEYLESS) — always available last-resort so the bot
- *      NEVER goes fully silent even with zero API keys configured.
+ *   3. Prexzy (KEYLESS) — default provider when no user API key is configured.
+ *   4. Pollinations (KEYLESS) — final backup so the bot never goes silent.
  *
  * The block between BEGIN AI CONFIG and END AI CONFIG is rewritten by
  * the `.chatbotapi` command. Do not remove the marker comments.
@@ -104,7 +104,31 @@ function geminiProvider(key) {
     };
 }
 
-// Pollinations — KEYLESS text model. Always available fallback.
+// Prexzy — KEYLESS default text API. It returns { status, response }.
+function prexzyProvider() {
+    return {
+        name: 'prexzy',
+        key: 'keyless',
+        models: ['prexzy-chat'],
+        async call(_model, messages) {
+            const latest = [...messages].reverse().find(message => message.role === 'user');
+            const query = String(latest?.content || '').trim();
+            if (!query) return null;
+            const { data, status } = await axios.get('https://prexzyapis.com/ai/ch', {
+                params: { q: query },
+                timeout: TIMEOUT_MS,
+                headers: { Accept: 'application/json' },
+                validateStatus: () => true,
+            });
+            if (status < 200 || status >= 300) throw new Error(`HTTP ${status}`);
+            if (data?.status !== true) throw new Error(data?.message || 'Prexzy returned an unsuccessful response');
+            const text = data?.response;
+            return text && String(text).trim() ? String(text).trim() : null;
+        },
+    };
+}
+
+// Pollinations — KEYLESS final fallback.
 function pollinationsProvider() {
     return {
         name: 'pollinations',
@@ -184,7 +208,11 @@ function buildChain() {
         models: ['groq/llama-3.1-8b-instant', 'openai/gpt-4o-mini'],
     }));
 
-    // 3) High-Performance Neuro Brain (OpenRouter)
+    // 3) Prexzy is the default when no user API key has been configured.
+    //    It is also a safe fallback if a configured provider is temporarily down.
+    add(prexzyProvider());
+
+    // 4) High-Performance Neuro Brain (OpenRouter)
     add(openAICompatible({
         name: 'openrouter-neuro',
         url: 'https://openrouter.ai/api/v1/chat/completions',
@@ -192,7 +220,7 @@ function buildChain() {
         models: ['meta-llama/llama-3.3-70b-instruct', 'google/gemini-2.0-flash-exp:free'],
     }));
 
-    // 4) Keyless last-resort so AI never fully dies.
+    // 5) Final keyless backup so AI never fully dies.
     add(pollinationsProvider());
 
     return chain;
