@@ -6,10 +6,41 @@
  * When a direct question is given, it replies immediately regardless of toggle.
  */
 
+const https = require('https');
 const PREXZY_CHAT_URL = 'https://prexzyapis.com/ai/ch';
 const PREXZY_TIMEOUT_MS = 15000;
 const conversationMemory = new Map();
 const MAX_MEMORY_TURNS = 12;
+
+function requestPrexzy(query) {
+    return new Promise((resolve, reject) => {
+        const url = new URL(PREXZY_CHAT_URL);
+        url.searchParams.set('q', query);
+        const request = https.get(url, {
+            headers: {
+                Accept: 'application/json',
+                'User-Agent': 'SUKUNA-MD/3.0',
+            },
+        }, response => {
+            let body = '';
+            response.setEncoding('utf8');
+            response.on('data', chunk => { body += chunk; });
+            response.on('end', () => {
+                let data = {};
+                try { data = JSON.parse(body); } catch (_) {}
+                if (response.statusCode < 200 || response.statusCode >= 300 || data.status === false) {
+                    reject(new Error(data.message || data.error || `HTTP ${response.statusCode}`));
+                    return;
+                }
+                resolve(data);
+            });
+        });
+        request.setTimeout(PREXZY_TIMEOUT_MS, () => {
+            request.destroy(new Error('Prexzy request timed out'));
+        });
+        request.on('error', reject);
+    });
+}
 
 const SUKUNA_IDENTITY =
     'You are Sukuna, the King of Curses from Jujutsu Kaisen. ' +
@@ -40,25 +71,16 @@ async function getPasquaAIReply(prompt, memKey = 'pasqua:global') {
     const history = conversationMemory.get(memKey) || [];
     const transcript = history
         .map(turn => `${turn.role === 'assistant' ? 'Sukuna' : 'User'}: ${turn.text}`)
-        .join('\\n');
+        .join('\n');
     const query = [
         SUKUNA_IDENTITY,
-        transcript ? `Conversation so far:\\n${transcript}` : '',
+        transcript ? `Conversation so far:\n${transcript}` : '',
         `User: ${userText}`,
         'Sukuna:',
-    ].filter(Boolean).join('\\n\\n');
+    ].filter(Boolean).join('\n\n');
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), PREXZY_TIMEOUT_MS);
     try {
-        const response = await fetch(`${PREXZY_CHAT_URL}?q=${encodeURIComponent(query)}`, {
-            headers: { Accept: 'application/json' },
-            signal: controller.signal,
-        });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok || data?.status === false) {
-            throw new Error(data?.message || data?.error || `HTTP ${response.status}`);
-        }
+        const data = await requestPrexzy(query);
         const answer = String(data?.response || '').trim();
         if (!answer) throw new Error('Prexzy returned an empty response');
 
@@ -69,10 +91,9 @@ async function getPasquaAIReply(prompt, memKey = 'pasqua:global') {
         conversationMemory.set(memKey, nextHistory);
         return answer;
     } catch (e) {
-        console.error('[PasquaAI Prexzy Error]', e.name === 'AbortError' ? 'request timed out' : e.message);
+        const detail = e.response?.data?.detail || e.response?.data?.message || e.message;
+        console.error('[PasquaAI Prexzy Error]', detail);
         return null;
-    } finally {
-        clearTimeout(timeout);
     }
 }
 
