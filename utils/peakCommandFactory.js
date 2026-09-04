@@ -144,6 +144,102 @@ async function externalResult(name, input) {
         if (name === 'linkunshorten' || name === 'redirecttrace') return `↪️ ${response.status}: ${finalUrl}`;
         return `✅ ${url}\nHTTP ${response.status}\nFinal URL: ${finalUrl}`;
     }
+    if (name === 'isspass') {
+        let data;
+        try {
+            data = await getJson('https://api.open-notify.org/iss-now.json');
+            return `🛰️ ISS location: ${data.iss_position?.latitude}, ${data.iss_position?.longitude} (${data.timestamp ? new Date(data.timestamp * 1000).toISOString() : 'now'}).`;
+        } catch (_) {
+            data = await getJson('https://api.wheretheiss.at/v1/satellites/25544');
+            return `🛰️ ISS location: ${data.latitude}, ${data.longitude} (altitude ${data.altitude ?? 'n/a'} km).`;
+        }
+    }
+    if (name === 'spaceweather') {
+        const data = await getJson('https://services.swpc.noaa.gov/products/summary/solar-wind-speed.json');
+        const latest = Array.isArray(data) ? data[data.length - 1] : data;
+        return `☀️ Solar wind: ${latest?.speed || 'n/a'} km/s at ${latest?.time_tag || 'latest reading'}.`;
+    }
+    if (name === 'stargazing') {
+        const location = await geocode(query || 'Lagos');
+        const data = await getJson('https://api.open-meteo.com/v1/forecast', {
+            params: { latitude: location.latitude, longitude: location.longitude, hourly: 'cloud_cover,visibility', timezone: 'auto', forecast_hours: 12 },
+        });
+        const cloud = data.hourly?.cloud_cover?.[0];
+        return `🔭 ${location.name}: cloud cover ${cloud ?? 'n/a'}% and visibility ${data.hourly?.visibility?.[0] ?? 'n/a'} m in the next forecast window.`;
+    }
+    if (name === 'flightstatus') {
+        const icao = query.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (!icao) return '✈️ Usage: `.flightstatus ICAO24`';
+        const data = await getJson('https://opensky-network.org/api/states/all', { params: { icao24: icao } });
+        const state = data.states?.[0];
+        return state ? `✈️ ${state[1] || icao}: ${state[2] || 'unknown'} → ${state[5] ?? '?'}, ${state[6] ?? '?'} at ${state[9] ?? '?'} m/s.` : '✈️ No live aircraft state found.';
+    }
+    if (name === 'restaurant') {
+        const location = await geocode(query || 'Lagos');
+        const overpass = `[out:json];(nwr[amenity=restaurant](around:5000,${location.latitude},${location.longitude}););out center 8;`;
+        const data = await axios.post('https://overpass-api.de/api/interpreter', overpass, { timeout: 20000, headers: { 'Content-Type': 'text/plain', Accept: 'application/json' } });
+        return `🍽️ Restaurants near ${location.name}:\n${(data.data?.elements || []).slice(0, 8).map(item => `• ${item.tags?.name || 'Unnamed restaurant'} — ${item.tags?.cuisine || 'cuisine unknown'}`).join('\n') || 'No nearby restaurants found.'}`;
+    }
+    if (name === 'rssfollow' || name === 'forumwatch') {
+        const url = /^https?:\/\//i.test(query) ? query : `https://${query}`;
+        const xml = String((await axios.get(url, { timeout: 15000, headers: { Accept: 'application/rss+xml, application/atom+xml, text/xml' } })).data);
+        const items = [...xml.matchAll(/<(?:item|entry)[^>]*>[\s\S]*?<title[^>]*>([\s\S]*?)<\/title>[\s\S]*?(?:<link[^>]*>([\s\S]*?)<\/link>|<link[^>]+href=["']([^"']+)["'])[\s\S]*?<\/(?:item|entry)>/gi)];
+        return `📰 Feed preview:\n${items.slice(0, 5).map(item => `• ${item[1].replace(/<[^>]+>/g, '').trim()}\n${(item[2] || item[3] || '').trim()}`).join('\n') || 'No feed entries found.'}`;
+    }
+    if (name === 'trendwatch') {
+        const xml = String((await axios.get('https://trends.google.com/trending/rss?geo=US', { timeout: 15000 })).data);
+        const titles = [...xml.matchAll(/<title>([^<]+)<\/title>/gi)].slice(1, 11).map(match => `• ${match[1]}`);
+        return `📈 Trending now:\n${titles.join('\n') || 'No trends returned.'}`;
+    }
+    if (name === 'keywordalert') {
+        const [url, ...words] = query.split(/\s+/);
+        if (!url || !words.length) return '🔔 Usage: `.keywordalert https://example.com keyword`';
+        const html = String((await axios.get(url, { timeout: 15000, headers: { 'User-Agent': 'SUKUNA-MD/1.0' } })).data).toLowerCase();
+        const found = words.map(word => [word, html.includes(word.toLowerCase())]);
+        return `🔔 ${found.map(([word, ok]) => `${ok ? '✅' : '❌'} ${word}`).join('\n')}`;
+    }
+    if (name === 'socialpulse' || name === 'viralcheck' || name === 'hashtagwatch') {
+        const data = await getJson('https://www.reddit.com/search.json', { params: { q: query || 'trending', limit: 10, sort: 'top', t: 'day' } });
+        const posts = data.data?.children || [];
+        return `📡 Public pulse for ${query || 'trending'}:\n${posts.slice(0, 5).map(item => `• ${item.data?.title} (${item.data?.score || 0} votes)`).join('\n') || 'No public posts found.'}`;
+    }
+    if (name === 'stockalert') {
+        const symbol = (query || 'AAPL').toUpperCase().replace(/[^A-Z0-9.=-]/g, '');
+        const data = await getJson(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}`, { params: { range: '1d', interval: '1d' } });
+        const meta = data.chart?.result?.[0]?.meta;
+        return `📈 ${symbol}: ${meta?.regularMarketPrice ?? 'n/a'} ${meta?.currency || ''} (previous ${meta?.previousClose ?? 'n/a'}).`;
+    }
+    if (name === 'providerhealth') {
+        const started = Date.now();
+        await getJson('https://api.github.com/zen');
+        return `🩺 Public provider check: GitHub responded in ${Date.now() - started} ms.`;
+    }
+    if (name === 'githubwatch' || name === 'repoaudit' || name === 'commitdigest') {
+        const repo = query.replace(/^https?:\/\/github.com\//i, '').replace(/\.git$/, '').replace(/^\//, '');
+        const data = await getJson(`https://api.github.com/repos/${repo}`);
+        if (name === 'repoaudit') return `🐙 ${data.full_name}: ${data.language || 'unknown language'}, ⭐ ${data.stargazers_count}, forks ${data.forks_count}, issues ${data.open_issues_count}, updated ${data.updated_at}.`;
+        const commits = await getJson(`https://api.github.com/repos/${repo}/commits`, { params: { per_page: 5 } });
+        return `🧾 Recent commits for ${data.full_name}:\n${commits.map(item => `• ${item.commit?.message?.split('\\n')[0]} — ${item.sha?.slice(0, 7)}`).join('\n')}`;
+    }
+    if (name === 'prreview') {
+        const match = query.match(/^([^/]+\/[^/]+)\s+#?(\d+)/);
+        if (!match) return '🔍 Usage: `.prreview owner/repo 123`';
+        const data = await getJson(`https://api.github.com/repos/${match[1]}/pulls/${match[2]}`);
+        return `🔎 PR #${data.number}: ${data.title}\nState: ${data.state}, changed files: ${data.changed_files}, additions: ${data.additions}, deletions: ${data.deletions}\n${data.html_url}`;
+    }
+    if (name === 'releasewatch') {
+        const repo = query.replace(/^https?:\/\/github.com\//i, '').replace(/\.git$/, '').replace(/^\//, '');
+        const data = await getJson(`https://api.github.com/repos/${repo}/releases/latest`);
+        return `🚀 ${data.name || data.tag_name}: ${data.published_at || 'unpublished'}\n${data.html_url}`;
+    }
+    if (name === 'languageid') {
+        const response = await axios.post('https://translate.astian.org/detect', { q: query }, { timeout: 15000, headers: { Accept: 'application/json' } });
+        return `🌍 Detected language: ${response.data?.[0]?.language || 'unknown'} (${Math.round((response.data?.[0]?.confidence || 0) * 100)}% confidence).`;
+    }
+    if (name === 'pronounce') {
+        const word = encodeURIComponent(query || 'hello');
+        return `🔊 Pronunciation link:\nhttps://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q=${word}&tl=en`;
+    }
     if (name === 'translateall') {
         const [source, target, ...words] = query.split(/\s+/);
         const response = await axios.post('https://translate.astian.org/translate', { q: words.join(' '), source: source || 'auto', target: target || 'en', format: 'text' }, { timeout: 15000, headers: { Accept: 'application/json' } });
