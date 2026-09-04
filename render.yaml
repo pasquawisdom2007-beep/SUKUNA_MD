@@ -3,7 +3,7 @@ services:
     name: sukuna-md
     runtime: node
     plan: free
-    buildCommand: npm install
+    buildCommand: npm install --omit=dev --no-audit --no-fund
     startCommand: npm start
     envVars:
       - key: NODE_ENV

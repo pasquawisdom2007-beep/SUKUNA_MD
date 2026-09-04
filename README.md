@@ -127,7 +127,18 @@ node index.js
 npm start
 ```
 
-Keep the console open until the bot displays its startup information and pairing-code prompt. Do not repeatedly click **Start** while installation is still in progress.
+Keep the console open until the bot displays its startup information and pairing-code prompt. Do not repeatedly click **Start** while installation is still in progress. If the panel changes to **Type a command** immediately after `[SUKUNA] First run: installing dependencies...`, the dependency step has returned to the panel shell; it is not the WhatsApp bot process. Run `npm start` once in that command field. On later restarts, configure the panel startup command as `npm start` so the bot launches automatically after installation.
+
+### First-run troubleshooting
+
+| Panel state | Correct action |
+|---|---|
+| `First run: installing dependencies...` with active output | Wait for `npm install` to finish; do not restart repeatedly. |
+| `Type a command` appears after installation | Enter `npm start` and press Enter. |
+| `npm install` fails or stays silent for several minutes | Stop the process, run `npm install --omit=dev --no-audit --no-fund`, then run `npm start`. |
+| Bot starts but pairing does not appear | Set `PAIR_NUMBER` and `OWNER_NUMBER` in the panel environment, or use an interactive console for the pairing prompt. |
+
+The repository now declares the same production-only install command in `render.yaml`, while the root `Procfile` and `npm start` script provide the launch command for panels that support Procfile detection.
 
 ### 6. Link WhatsApp
 
@@ -242,7 +253,7 @@ SUKUNA MD starts with `npm start`, which runs `node index.js`. The repository in
 
 ### Render
 
-Create a **Web Service** from this repository. Use `npm install` as the build command and `npm start` as the start command. Add `PAIR_NUMBER`, `OWNER_NUMBER`, and either `SESSION_ID` or the normal pairing settings in Render Environment. `PAIR_SITE_URL` defaults to `https://pair-site-wmte.onrender.com`, so it is optional unless you use a different pair site. Render’s environment settings should be used for private values rather than committing them to the repository.
+Create a **Web Service** from this repository. Use `npm install --omit=dev --no-audit --no-fund` as the build command and `npm start` as the start command. Add `PAIR_NUMBER`, `OWNER_NUMBER`, and either `SESSION_ID` or the normal pairing settings in Render Environment. `PAIR_SITE_URL` defaults to `https://pair-site-wmte.onrender.com`, so it is optional unless you use a different pair site. Render’s environment settings should be used for private values rather than committing them to the repository.
 
 ### Heroku
 
