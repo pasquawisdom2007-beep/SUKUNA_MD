@@ -4,5 +4,4 @@ module.exports = makeTextmakerCommand({
     ephotoUrl: 'https://en.ephoto360.com/neon-devil-wings-text-effect-online-683.html',
     label: 'Neon Glitch',
     emoji: '😈',
-    style: 'devil',
 });

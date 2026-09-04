@@ -4,5 +4,4 @@ module.exports = makeTextmakerCommand({
     ephotoUrl: 'https://en.ephoto360.com/write-names-and-messages-on-the-sand-online-582.html',
     label: 'Sand Summer',
     emoji: '🏖️',
-    style: 'sand',
 });

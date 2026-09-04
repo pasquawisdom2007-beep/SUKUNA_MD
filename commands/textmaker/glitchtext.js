@@ -4,6 +4,4 @@ module.exports = makeTextmakerCommand({
     ephotoUrl: 'https://en.ephoto360.com/create-digital-glitch-text-effects-online-767.html',
     label: 'Glitch Text',
     emoji: '⚡',
-    style: 'glitch',
-    aliases: ['glitch'],
 });

@@ -4,5 +4,4 @@ module.exports = makeTextmakerCommand({
     ephotoUrl: 'https://en.ephoto360.com/1917-style-text-effect-523.html',
     label: '1917 Style',
     emoji: '🎬',
-    style: 'cinema',
 });

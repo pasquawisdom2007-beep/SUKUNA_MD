@@ -4,5 +4,4 @@ module.exports = makeTextmakerCommand({
     ephotoUrl: 'https://en.ephoto360.com/create-colorful-neon-light-text-effects-online-797.html',
     label: 'Making Neon',
     emoji: '🟣',
-    style: 'neon',
 });

@@ -4,5 +4,4 @@ module.exports = makeTextmakerCommand({
     ephotoUrl: 'https://en.ephoto360.com/create-3d-colorful-paint-text-effect-online-801.html',
     label: 'Free Create',
     emoji: '🎨',
-    style: 'paint',
 });
