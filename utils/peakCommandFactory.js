@@ -240,6 +240,58 @@ async function externalResult(name, input) {
         const word = encodeURIComponent(query || 'hello');
         return `🔊 Pronunciation link:\nhttps://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q=${word}&tl=en`;
     }
+    if (name === 'moviewhere' || name === 'showtimes') {
+        const data = await getJson('https://api.tvmaze.com/search/shows', { params: { q: query || 'breaking bad' } });
+        return `🎬 Shows:\n${(data || []).slice(0, 5).map(item => `• ${item.show?.name} — ${item.show?.premiered || 'date unknown'}\n${item.show?.url || ''}`).join('\n') || 'No shows found.'}`;
+    }
+    if (name === 'eventsnear') {
+        const location = await geocode(query || 'Lagos');
+        const overpass = `[out:json];(nwr[amenity~"theatre|arts_centre|community_centre|events_venue"](around:8000,${location.latitude},${location.longitude}););out center 15;`;
+        const data = await axios.post('https://overpass-api.de/api/interpreter', overpass, { timeout: 20000, headers: { 'Content-Type': 'text/plain', Accept: 'application/json' } });
+        return `📍 Places near ${location.name}:\n${(data.data?.elements || []).slice(0, 10).map(item => `• ${item.tags?.name || 'Unnamed venue'} — ${item.tags?.amenity || 'venue'}`).join('\n') || 'No public venues found.'}`;
+    }
+    if (name === 'memeimage') {
+        const data = await getJson(`https://meme-api.com/gimme/${encodeURIComponent(query || 'memes')}`);
+        return `😂 ${data.title || 'Meme'}\n${data.url || ''}`;
+    }
+    if (name === 'avatarforge') {
+        const seed = encodeURIComponent(query || `hinatu-${Date.now()}`);
+        return `🧑‍🎨 Avatar ready:\nhttps://api.dicebear.com/9.x/adventurer/png?seed=${seed}&size=512`;
+    }
+    if (name === 'wallpaper') {
+        const seed = encodeURIComponent(query || 'sukuna');
+        return `🖼️ Wallpaper concept:\nhttps://image.pollinations.ai/prompt/${seed}%20phone%20wallpaper?width=1080&height=1920&nologo=true`;
+    }
+    if (name === 'posterforge' || name === 'thumbnail' || name === 'comicstrip') {
+        const prompt = encodeURIComponent(query || 'futuristic SUKUNA MD technology poster');
+        return `🎨 Generated visual:\nhttps://image.pollinations.ai/prompt/${prompt}?width=1280&height=720&nologo=true`;
+    }
+    if (name === 'stickersearch') {
+        const tag = (query || 'smile').toLowerCase().replace(/[^a-z0-9_-]/g, '');
+        const data = await getJson('https://api.otakugifs.xyz/gif', { params: { reaction: tag } });
+        return `🎟️ Sticker/GIF result:\n${data.url || 'No sticker found.'}`;
+    }
+    if (name === 'sourcecheck') {
+        const data = await getJson('https://en.wikipedia.org/w/api.php', { params: { action: 'query', list: 'search', srsearch: query, format: 'json', origin: '*' } });
+        return `📚 Sources:\n${(data.query?.search || []).slice(0, 5).map(item => `• ${item.title}\nhttps://en.wikipedia.org/wiki/${encodeURIComponent(item.title.replace(/ /g, '_'))}`).join('\n') || 'No sources found.'}`;
+    }
+    if (name === 'pricewatch' || name === 'dealalert') {
+        const url = /^https?:\/\//i.test(query) ? query : null;
+        if (!url) return `💸 Usage: .${name} https://product-page-url`;
+        const response = await axios.get(url, { timeout: 15000, headers: { 'User-Agent': 'Mozilla/5.0 (SUKUNA-MD price checker)' } });
+        const html = String(response.data);
+        const prices = [...html.matchAll(/(?:₦|\$|€|£)\s?[0-9][0-9,.]*/g)].slice(0, 5).map(match => match[0]);
+        const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+        return `💰 ${titleMatch?.[1]?.replace(/\s+/g, ' ').trim() || 'Product'}\nPrices found: ${prices.join(', ') || 'not detected'}\n${url}`;
+    }
+    if (name === 'linkdigest') {
+        const url = /^https?:\/\//i.test(query) ? query : `https://${query}`;
+        const response = await axios.get(url, { timeout: 15000, headers: { 'User-Agent': 'SUKUNA-MD/1.0' } });
+        const text = String(response.data).replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 4000);
+        const { ask } = require('./smartAI');
+        const summary = await ask({ key: `linkdigest:${url}`, user: text, compact: true, system: 'Summarize this webpage in 3 short, factual sentences. Do not invent details.' });
+        return `🔗 ${summary || 'Page fetched successfully.'}\n${url}`;
+    }
     if (name === 'translateall') {
         const [source, target, ...words] = query.split(/\s+/);
         const response = await axios.post('https://translate.astian.org/translate', { q: words.join(' '), source: source || 'auto', target: target || 'en', format: 'text' }, { timeout: 15000, headers: { Accept: 'application/json' } });
