@@ -7,7 +7,11 @@
 const REPLICATE_API_KEY = 'r8_LAS6hB5lETpp2pmUYHpDBVkhRTVOKQ119wWnv';
 
 const { downloadMediaMessage } = require('@pasqua-baileys/baileys');
-const { localUpscale, upscaleWithReplicate, hasReplicateToken } = require('../../utils/upscale');
+const upscaler = require('../../utils/upscale');
+// Compatibility with panel copies made before the helper was renamed.
+const localUpscale = upscaler.localUpscale || upscaler.upscaleImage;
+const upscaleWithReplicate = upscaler.upscaleWithReplicate;
+const hasReplicateToken = upscaler.hasReplicateToken || (() => Boolean(process.env.REPLICATE_API_TOKEN || process.env.REPLICATE_TOKEN));
 
 function imageTarget(msg) {
     const context = msg?.message?.extendedTextMessage?.contextInfo;
@@ -50,11 +54,12 @@ module.exports = {
                     mode = 'AI face + texture enhancement';
                 } catch (aiError) {
                     console.error('[upscale AI]', aiError.message);
-                    await reply('⚠️ AI upscaler was unavailable, so I am using the local fallback...');
+                    await reply(`⚠️ AI upscaler unavailable (${aiError.message || 'provider error'}). Using the local fallback...`);
                 }
             }
 
             if (!output) {
+                if (typeof localUpscale !== 'function') throw new Error('upscale helper is outdated; update both commands/media/upscale.js and utils/upscale.js');
                 await reply(`⏳ Upscaling image ${scale}× locally...`);
                 output = await localUpscale(buffer, scale);
                 mode = 'local Sharp enhancement';
