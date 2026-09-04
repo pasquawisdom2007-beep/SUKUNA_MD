@@ -77,6 +77,10 @@ async function externalResult(name, input) {
         const data = await getJson('https://openlibrary.org/search.json', { params: { q: query, limit: 5 } });
         return `📖 Books:\n${(data.docs || []).slice(0, 5).map(book => `• ${book.title} — ${(book.author_name || []).slice(0, 2).join(', ')}`).join('\n') || 'No books found.'}`;
     }
+    if (name === 'scholarfind') {
+        const data = await getJson('https://api.openalex.org/works', { params: { search: query, per_page: 5 } });
+        return `🎓 Research works:\n${(data.results || []).map(item => `• ${item.title} (${item.publication_year || 'n/a'})\n${item.doi || item.primary_location?.landing_page_url || ''}`).join('\n') || 'No works found.'}`;
+    }
     if (name === 'musicsearch' || name === 'podcastsearch') {
         const data = await getJson('https://itunes.apple.com/search', { params: { term: query, media: name === 'musicsearch' ? 'music' : 'podcast', limit: 5 } });
         return `🎵 Results:\n${(data.results || []).slice(0, 5).map(item => `• ${item.trackName || item.collectionName} — ${item.artistName || ''}\n${item.trackViewUrl || item.collectionViewUrl || ''}`).join('\n') || 'No results found.'}`;
@@ -87,9 +91,13 @@ async function externalResult(name, input) {
         const data = await getJson(`https://date.nager.at/api/v3/PublicHolidays/${year}/${country}`);
         return `🎉 ${country} holidays:\n${data.slice(0, 10).map(item => `• ${item.date} — ${item.localName}`).join('\n') || 'No holidays found.'}`;
     }
-    if (name === 'animecalendar' || name === 'mangaupdates') {
-        const data = await getJson('https://api.jikan.moe/v4/anime', { params: { q: query, limit: 5 } });
-        return `🍥 Anime results:\n${(data.data || []).map(item => `• ${item.title} — ${item.url}`).join('\n') || 'No results found.'}`;
+    if (name === 'animecalendar') {
+        const data = await getJson('https://api.jikan.moe/v4/seasons/now', { params: { limit: 10 } });
+        return `🍥 Anime airing now:\n${(data.data || []).slice(0, 10).map(item => `• ${item.title} — ${item.url}`).join('\n') || 'No anime found.'}`;
+    }
+    if (name === 'mangaupdates') {
+        const data = await getJson('https://api.jikan.moe/v4/manga', { params: { q: query, limit: 5 } });
+        return `📚 Manga results:\n${(data.data || []).map(item => `• ${item.title} — ${item.url}`).join('\n') || 'No manga found.'}`;
     }
     if (name === 'redditpulse') {
         const data = await getJson('https://www.reddit.com/search.json', { params: { q: query, limit: 5, sort: 'relevance' } });
@@ -106,6 +114,10 @@ async function externalResult(name, input) {
     if (name === 'barcodeinfo' || name === 'isbnscan') {
         const data = await getJson(name === 'barcodeinfo' ? `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(query)}.json` : `https://openlibrary.org/isbn/${encodeURIComponent(query)}.json`);
         return name === 'barcodeinfo' ? `🛒 ${data.product?.product_name || 'Product not found'}\nBrand: ${data.product?.brands || 'n/a'}` : `📚 ${data.title || 'Book not found'}\n${(data.authors || []).map(author => author.name).join(', ')}`;
+    }
+    if (name === 'foodscan') {
+        const data = await getJson('https://world.openfoodfacts.org/cgi/search.pl', { params: { search_terms: query, search_simple: 1, action: 'process', json: 1, page_size: 5 } });
+        return `🍽️ Food matches:\n${(data.products || []).map(item => `• ${item.product_name || 'Unnamed'} — ${item.brands || 'brand unknown'}\n${item.url || ''}`).join('\n') || 'No food products found.'}`;
     }
     if (name === 'cryptoalert') {
         const coin = (query || 'bitcoin').toLowerCase();
@@ -240,9 +252,13 @@ async function externalResult(name, input) {
         const word = encodeURIComponent(query || 'hello');
         return `🔊 Pronunciation link:\nhttps://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q=${word}&tl=en`;
     }
-    if (name === 'moviewhere' || name === 'showtimes') {
+    if (name === 'moviewhere') {
         const data = await getJson('https://api.tvmaze.com/search/shows', { params: { q: query || 'breaking bad' } });
         return `🎬 Shows:\n${(data || []).slice(0, 5).map(item => `• ${item.show?.name} — ${item.show?.premiered || 'date unknown'}\n${item.show?.url || ''}`).join('\n') || 'No shows found.'}`;
+    }
+    if (name === 'showtimes') {
+        const data = await getJson('https://api.tvmaze.com/schedule', { params: { country: (query || 'US').toUpperCase().slice(0, 2), date: new Date().toISOString().slice(0, 10) } });
+        return `📺 Today’s schedule:\n${(data || []).slice(0, 8).map(item => `• ${item.show?.name} — ${item.airtime || 'time unknown'} (${item.network?.name || item.webChannel?.name || 'network'})`).join('\n') || 'No schedule found.'}`;
     }
     if (name === 'eventsnear') {
         const location = await geocode(query || 'Lagos');
@@ -284,10 +300,11 @@ async function externalResult(name, input) {
         const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
         return `💰 ${titleMatch?.[1]?.replace(/\s+/g, ' ').trim() || 'Product'}\nPrices found: ${prices.join(', ') || 'not detected'}\n${url}`;
     }
-    if (name === 'linkdigest') {
+    if (name === 'linkdigest' || name === 'scrape') {
         const url = /^https?:\/\//i.test(query) ? query : `https://${query}`;
         const response = await axios.get(url, { timeout: 15000, headers: { 'User-Agent': 'SUKUNA-MD/1.0' } });
         const text = String(response.data).replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 4000);
+        if (name === 'scrape') return `🕷️ Page text:\n${text.slice(0, 1200)}${text.length > 1200 ? '…' : ''}`;
         const { ask } = require('./smartAI');
         const summary = await ask({ key: `linkdigest:${url}`, user: text, compact: true, system: 'Summarize this webpage in 3 short, factual sentences. Do not invent details.' });
         return `🔗 ${summary || 'Page fetched successfully.'}\n${url}`;
