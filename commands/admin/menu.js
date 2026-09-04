@@ -141,29 +141,11 @@ module.exports = {
             const lines = commands.map(command => `▸ ${command.name}`);
             return reply(`╭━━━ ${label} COMMANDS ━━━╮\n│ ${lines.join('\n│ ')}\n╰━━━ ${commands.length} commands ━━━╯`);
         }
-        // ── Loading shrine animation (sent first, then deleted just
-        //    before the real menu is delivered). ──
-        let loadingKey = null;
+        // Keep the menu response lightweight: acknowledge the command with one
+        // reaction, then send the menu without a loading animation or edits.
         try {
-            const frames = [
-                '⛧ 𝙇𝙤𝙖𝙙𝙞𝙣𝙜 𝙈𝙖𝙡𝙚𝙫𝙤𝙡𝙚𝙣𝙩 𝙎𝙝𝙧𝙞𝙣𝙚 ⛧\n\n  ▰▱▱▱▱',
-                '⛧ 𝙇𝙤𝙖𝙙𝙞𝙣𝙜 𝙈𝙖𝙡𝙚𝙫𝙤𝙡𝙚𝙣𝙩 𝙎𝙝𝙧𝙞𝙣𝙚 ⛧\n\n  ▰▰▱▱▱',
-                '⛧ 𝙇𝙤𝙖𝙙𝙞𝙣𝙜 𝙈𝙖𝙡𝙚𝙫𝙤𝙡𝙚𝙣𝙩 𝙎𝙝𝙧𝙞𝙣𝙚 ⛧\n\n  ▰▰▰▱▱',
-                '⛧ 𝙇𝙤𝙖𝙙𝙞𝙣𝙜 𝙈𝙖𝙡𝙚𝙫𝙤𝙡𝙚𝙣𝙩 𝙎𝙝𝙧𝙞𝙣𝙚 ⛧\n\n  ▰▰▰▰▱',
-                '⛧ 𝙇𝙤𝙖𝙙𝙞𝙣𝙜 𝙈𝙖𝙡𝙚𝙫𝙤𝙡𝙚𝙣𝙩 𝙎𝙝𝙧𝙞𝙣𝙚 ⛧\n\n  ▰▰▰▰▰',
-            ];
-            const sent = await sock.sendMessage(from, { text: frames[0] }, { quoted: msg });
-            loadingKey = sent?.key || null;
-            // Animate the progress bar in-place by editing the same message.
-            for (let i = 1; i < frames.length; i++) {
-                await new Promise(r => setTimeout(r, 350));
-                try {
-                    await sock.sendMessage(from, { text: frames[i], edit: loadingKey });
-                } catch (_) { /* edit not supported — ignore */ }
-            }
-        } catch (e) {
-            console.error('[menu] loading animation failed:', e.message);
-        }
+            await sock.sendMessage(from, { react: { text: '🪀', key: msg.key } });
+        } catch (_) { /* reaction failures must not block the menu */ }
 
         const commands = commandLoader.commands || new Map();
 
@@ -304,12 +286,6 @@ module.exports = {
         const mentions = senderJid ? [senderJid] : [];
 
         try {
-            // Delete the loading shrine right before sending the menu.
-            if (loadingKey) {
-                try { await sock.sendMessage(from, { delete: loadingKey }); }
-                catch (_) { /* ignore */ }
-            }
-
             // Flag sock to skip the newsletter branding on the next sendMessage call.
             // The flag is auto-cleared inside newsletterBrand.wrapSocket after each send.
             // Must be set before EACH send because the delete call above also consumes it.
