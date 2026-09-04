@@ -8,14 +8,16 @@
 
 const https = require('https');
 const PREXZY_CHAT_URL = 'https://prexzyapis.com/ai/ch';
+const CURIOUS_CHAT_URL = 'https://curiousapis.name.ng/ai_gpt5';
 const PREXZY_TIMEOUT_MS = 15000;
+const CURIOUS_TIMEOUT_MS = 15000;
 const conversationMemory = new Map();
 const MAX_MEMORY_TURNS = 12;
 
-function requestPrexzy(query) {
+function requestJson(baseUrl, parameter, query, timeoutMs, provider) {
     return new Promise((resolve, reject) => {
-        const url = new URL(PREXZY_CHAT_URL);
-        url.searchParams.set('q', query);
+        const url = new URL(baseUrl);
+        url.searchParams.set(parameter, query);
         const request = https.get(url, {
             headers: {
                 Accept: 'application/json',
@@ -35,11 +37,19 @@ function requestPrexzy(query) {
                 resolve(data);
             });
         });
-        request.setTimeout(PREXZY_TIMEOUT_MS, () => {
-            request.destroy(new Error('Prexzy request timed out'));
+        request.setTimeout(timeoutMs, () => {
+            request.destroy(new Error(`${provider} request timed out`));
         });
         request.on('error', reject);
     });
+}
+
+function requestPrexzy(query) {
+    return requestJson(PREXZY_CHAT_URL, 'q', query, PREXZY_TIMEOUT_MS, 'Prexzy');
+}
+
+function requestCurious(query) {
+    return requestJson(CURIOUS_CHAT_URL, 'prompt', query, CURIOUS_TIMEOUT_MS, 'Curious');
 }
 
 const SUKUNA_IDENTITY =
@@ -64,40 +74,6 @@ const SUKUNA_IDENTITY =
  * Call the Prexzy chat API with Sukuna's identity and lightweight per-chat memory.
  * The endpoint accepts one query parameter (`q`) and returns `{ status, response }`.
  */
-async function curiousPasquaFallback(prompt) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-    try {
-        // Curious APIs accepts prompt data through a GET query string. Keep the
-        // request compact enough for common proxy URL limits while retaining the
-        // core Pasqua identity and the user’s latest message.
-        const compactIdentity = SUKUNA_IDENTITY.slice(0, 650);
-        const userMessage = String(prompt).slice(0, 650);
-        const fallbackPrompt = `${compactIdentity}\n\nUser message: ${userMessage}\n\nReply directly to the user.`;
-        const url = `https://curiousapis.name.ng/ai_gpt5?prompt=${encodeURIComponent(fallbackPrompt)}`;
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: { Accept: 'application/json', 'User-Agent': 'SUKUNA-MD-PasquaAI/3.0' },
-            signal: timeoutSignal(controller),
-        });
-        if (!response.ok) throw new Error(`Curious API HTTP ${response.status}`);
-        const data = await response.json();
-        if (data?.success !== true || typeof data.data !== 'string' || !data.data.trim()) {
-            throw new Error('Curious API returned an invalid response');
-        }
-        return data.data.trim();
-    } catch (e) {
-        console.error('[PasquaAI Curious fallback]', e.message);
-        return null;
-    } finally {
-        clearTimeout(timeout);
-    }
-}
-
-function timeoutSignal(controller) {
-    return controller.signal;
-}
-
 async function getPasquaAIReply(prompt, memKey = 'pasqua:global') {
     const userText = String(prompt || '').trim();
     if (!userText) return null;
@@ -113,31 +89,30 @@ async function getPasquaAIReply(prompt, memKey = 'pasqua:global') {
         'Sukuna:',
     ].filter(Boolean).join('\n\n');
 
+    let answer = '';
     try {
         const data = await requestPrexzy(query);
-        const answer = String(data?.response || '').trim();
+        answer = String(data?.response || '').trim();
         if (!answer) throw new Error('Prexzy returned an empty response');
-
-        const nextHistory = [...history,
-            { role: 'user', text: userText },
-            { role: 'assistant', text: answer },
-        ].slice(-(MAX_MEMORY_TURNS * 2));
-        conversationMemory.set(memKey, nextHistory);
-        return answer;
-    } catch (e) {
-        const detail = e.response?.data?.detail || e.response?.data?.message || e.message;
-        console.error('[PasquaAI Prexzy Error]', detail);
-        const fallback = await curiousPasquaFallback(query);
-        if (fallback) {
-            const nextHistory = [...history,
-                { role: 'user', text: userText },
-                { role: 'assistant', text: fallback },
-            ].slice(-(MAX_MEMORY_TURNS * 2));
-            conversationMemory.set(memKey, nextHistory);
-            return fallback;
+    } catch (prexzyError) {
+        console.error('[PasquaAI Prexzy Error]', prexzyError.message);
+        try {
+            const data = await requestCurious(query);
+            if (data?.success !== true) throw new Error(data?.message || 'Curious returned an unsuccessful response');
+            answer = String(data?.data || '').trim();
+            if (!answer) throw new Error('Curious returned an empty response');
+        } catch (curiousError) {
+            console.error('[PasquaAI Curious Error]', curiousError.message);
+            return null;
         }
-        return null;
     }
+
+    const nextHistory = [...history,
+        { role: 'user', text: userText },
+        { role: 'assistant', text: answer },
+    ].slice(-(MAX_MEMORY_TURNS * 2));
+    conversationMemory.set(memKey, nextHistory);
+    return answer;
 }
 
 module.exports = {
