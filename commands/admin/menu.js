@@ -132,6 +132,7 @@ module.exports = {
             const category = categoryAliases[requestedCategory] || requestedCategory;
             const commands = commandLoader.getAll()
                 .filter(command => String(command.category || '').toLowerCase() === category)
+                .filter(command => !(category === 'textmaker' && command.name === 'textmaker'))
                 .sort((a, b) => a.name.localeCompare(b.name));
             if (!commands.length) {
                 const available = [...new Set(commandLoader.getAll().map(command => command.category))].sort();
