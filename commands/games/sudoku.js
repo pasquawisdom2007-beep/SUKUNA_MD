@@ -34,8 +34,9 @@ function textBoard(game) {
     return lines.join('\n');
 }
 function sudokuHtml(game) {
-    const cells = game.puzzle.flatMap((row, r) => row.map((value, c) => `<span class="cell ${value ? 'fixed' : 'open'}">${value || '·'}</span>`)).join('');
-    return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>*{box-sizing:border-box}body{margin:0;padding:7px;background:radial-gradient(circle at 50% 5%,#123b63,#06101f 75%);font-family:Arial,sans-serif;color:#e8f7ff}.card{max-width:420px;margin:auto;padding:15px;border:2px solid #35c9ff;border-radius:18px;background:linear-gradient(145deg,#081c35,#0b3854);box-shadow:0 0 22px #00aeff33}.title{text-align:center;color:#b8f1ff;font:bold 23px Arial Black,Arial;text-shadow:0 0 10px #16c9ff}.sub{text-align:center;color:#8fc7df;font:11px monospace;margin:5px 0 12px}.board{display:grid;grid-template-columns:repeat(9,1fr);border:2px solid #5bdcff;background:#071321}.cell{display:grid;place-items:center;aspect-ratio:1;border:1px solid #28617b;font:bold 20px monospace}.cell:nth-child(3n){border-right:2px solid #61dcff}.cell:nth-child(27n+1),.cell:nth-child(27n+10),.cell:nth-child(27n+19){border-top:2px solid #61dcff}.fixed{color:#fff;background:#123f5e}.open{color:#61e6ff;background:#0a2439}.info{margin-top:12px;padding:10px;border:1px solid #287793;border-radius:9px;color:#c9efff;font:12px/1.5 monospace}.footer{text-align:center;margin-top:9px;color:#72b5cb;font:10px monospace}</style></head><body><div class="card"><div class="title">SUDOKU</div><div class="sub">GENAI PUZZLE BOARD · MOVE ${game.moves}</div><div class="board">${cells}</div><div class="info">Empty cells are marked ·<br>Send: .sudoku row column number<br>Example: .sudoku 4 7 9<br>New puzzle: .sudoku new · Check: .sudoku check</div><div class="footer">SUKUNA MD · GENAI RICH GAME</div></div></body></html>`;
+    const puzzle = JSON.stringify(game.puzzle);
+    const solution = JSON.stringify(game.solution);
+    return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>*{box-sizing:border-box}body{margin:0;padding:7px;background:radial-gradient(circle at 50% 5%,#123b63,#06101f 75%);font-family:Arial,sans-serif;color:#e8f7ff}.card{max-width:420px;margin:auto;padding:15px;border:2px solid #35c9ff;border-radius:18px;background:linear-gradient(145deg,#081c35,#0b3854);box-shadow:0 0 22px #00aeff33}.title{text-align:center;color:#b8f1ff;font:bold 23px Arial Black,Arial;text-shadow:0 0 10px #16c9ff}.sub{text-align:center;color:#8fc7df;font:11px monospace;margin:5px 0 12px}.board{display:grid;grid-template-columns:repeat(9,1fr);border:2px solid #5bdcff;background:#071321}.cell{display:grid;place-items:center;aspect-ratio:1;border:1px solid #28617b;font:bold 20px monospace;color:#61e6ff;background:#0a2439;padding:0}.cell:nth-child(3n){border-right:2px solid #61dcff}.cell:nth-child(27n+1),.cell:nth-child(27n+10),.cell:nth-child(27n+19){border-top:2px solid #61dcff}.fixed{color:#fff;background:#123f5e}.selected{background:#1b6790!important;box-shadow:inset 0 0 0 2px #fff}.wrong{background:#7f2535!important}.numbers{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:10px}.numbers button,.actions button{height:36px;border:1px solid #38bde8;border-radius:8px;background:#0c3958;color:#d9f8ff;font:bold 14px monospace}.numbers button:active,.actions button:active{transform:scale(.95);background:#1c7096}.actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px}.status{text-align:center;min-height:20px;margin-top:9px;color:#b8efff;font:12px monospace}.footer{text-align:center;margin-top:9px;color:#72b5cb;font:10px monospace}</style></head><body><div class="card"><div class="title">SUDOKU</div><div class="sub">GENAI INTERACTIVE PUZZLE · MOVE ${game.moves}</div><div class="board" id="board"></div><div class="numbers" id="numbers"></div><div class="actions"><button id="check">CHECK</button><button id="reset">NEW PUZZLE</button></div><div class="status" id="status">Tap an empty cell, then choose a number</div><div class="footer">SUKUNA MD · PLAY INSIDE THIS CARD</div></div><script>(function(){var puzzle=${puzzle},solution=${solution},selected=-1,board=document.getElementById('board'),numbers=document.getElementById('numbers'),status=document.getElementById('status');function render(){board.innerHTML='';for(var i=0;i<81;i++){var r=Math.floor(i/9),c=i%9,b=document.createElement('button');b.className='cell '+(puzzle[r][c]?'fixed':'open')+(selected===i?' selected':'');b.textContent=puzzle[r][c]||'·';b.disabled=Boolean(puzzle[r][c]);(function(index){b.onclick=function(){selected=index;status.textContent='Choose a number for this cell';render()}})(i);board.appendChild(b)}}for(var n=1;n<=9;n++){var button=document.createElement('button');button.textContent=n;(function(value){button.onclick=function(){if(selected<0)return status.textContent='Select an empty cell first';var r=Math.floor(selected/9),c=selected%9;if(value===solution[r][c]){puzzle[r][c]=value;status.textContent='Correct';selected=-1;render()}else{status.textContent='Not quite — try another number';var cell=board.children[selected];cell.classList.add('wrong');setTimeout(function(){cell.classList.remove('wrong')},500)}}})(n);numbers.appendChild(button)}var clear=document.createElement('button');clear.textContent='CLEAR';clear.onclick=function(){if(selected>=0&&!puzzle[Math.floor(selected/9)][selected%9])status.textContent='Cell cleared'};numbers.appendChild(clear);document.getElementById('check').onclick=function(){var done=puzzle.every(function(row){return row.every(Boolean)});status.textContent=done?'Puzzle solved':'Keep going — fill every cell'};document.getElementById('reset').onclick=function(){location.reload()};render()})();</script></body></html>`;
 }
 async function sendBoard({ sock, msg, from, reply, game }) {
     try { await sendRichHtml({ sock, jid: from, quoted: msg, html: sudokuHtml(game) }); }
@@ -44,27 +45,14 @@ async function sendBoard({ sock, msg, from, reply, game }) {
 module.exports = {
     name: 'sudoku',
     aliases: ['sudokugame'],
-    description: 'Play an interactive Sudoku puzzle in WhatsApp GenAI',
+    description: 'Play Sudoku entirely inside a WhatsApp GenAI card',
     category: 'games',
     async execute({ sock, msg, reply, args, from, sender }) {
         const key = from || sender || 'private';
         const action = String(args[0] || '').toLowerCase();
         if (!games.has(key) || action === 'new' || action === 'start') games.set(key, newGame());
         const game = games.get(key);
-        if (action === 'check') {
-            const complete = game.puzzle.every((row, r) => row.every((n, c) => n === game.solution[r][c]));
-            return reply(complete ? '✅ Sudoku solved! Start another with `.sudoku new`.' : '⏳ The puzzle is not complete yet. Keep going.');
-        }
-        if (args.length === 3 && args.every(value => /^\d+$/.test(value))) {
-            const [r, c, n] = args.map(Number);
-            if (r < 1 || r > 9 || c < 1 || c > 9 || n < 1 || n > 9) return reply('Use numbers from 1 to 9: `.sudoku row column number`.');
-            if (game.puzzle[r - 1][c - 1] !== 0) return reply('That cell is fixed already. Choose an empty cell marked `·`.');
-            if (game.solution[r - 1][c - 1] !== n) return reply('❌ That number is not correct for this cell. Try again.');
-            game.puzzle[r - 1][c - 1] = n;
-            game.moves++;
-        }
-        const complete = game.puzzle.every(row => row.every(Boolean));
-        if (complete) return reply('🎉 Sudoku solved! Start another with `.sudoku new`.');
+        if (args.length && action !== 'new' && action !== 'start') return sendBoard({ sock, msg, from, reply, game });
         return sendBoard({ sock, msg, from, reply, game });
     },
 };
