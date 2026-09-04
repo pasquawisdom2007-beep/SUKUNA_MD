@@ -4,7 +4,7 @@
 // EASY SETUP: paste your Replicate API key between the quotes below.
 // Leave it blank to use REPLICATE_API_TOKEN or the local no-key fallback.
 // Do not share this file after adding your private key.
-const REPLICATE_API_KEY = '';
+const REPLICATE_API_KEY = 'r8_LAS6hB5lETpp2pmUYHpDBVkhRTVOKQ119wWnv';
 
 const { downloadMediaMessage } = require('@pasqua-baileys/baileys');
 const { localUpscale, upscaleWithReplicate, hasReplicateToken } = require('../../utils/upscale');
