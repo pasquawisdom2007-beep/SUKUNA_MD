@@ -59,6 +59,17 @@ class Database {
         this.save('settings');
     }
 
+    // ── Pasqua Baileys AI badge — bot-wide private-DM setting ───────────────
+    getAIBadge() {
+        return this.data.settings.aiBadge === true;
+    }
+
+    setAIBadge(enabled) {
+        this.data.settings.aiBadge = enabled === true;
+        this.save('settings');
+        return this.data.settings.aiBadge;
+    }
+
 
 
 
