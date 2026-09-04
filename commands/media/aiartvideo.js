@@ -14,9 +14,9 @@
 const axios = require('axios');
 
 // API Tokens
-const REPLICATE_API_TOKEN = process.env.REPLICATE_API_TOKEN || process.env.REPLICATE_TOKEN || '';
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '';
-const FAL_AI_API_KEY = process.env.FAL_AI_API_KEY || process.env.FAL_KEY || '';
+const REPLICATE_API_TOKEN = 'r8_Ua9NNqwunA2oSxOrY72d3Dfa8MS1vHe4Izs74';
+const GEMINI_API_KEY = 'AQ.Ab8RN6IG4tPICmpLgIWDbG3o3NvY9pZnpCw5d18ojZOB-xfI_w'; // Google Veo (Gemini API) — revocable by owner via AI Studio
+const FAL_AI_API_KEY = 'e457caff-1678-4b43-860b-19de81788c64:58306bf9f6f0f83befe5ad2fccd3d3c1'; // FAL.AI API Key
 const VEO_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 const FAL_AI_ENDPOINTS = [
     { name: 'Wan v2.7', url: 'https://fal.run/fal-ai/wan/v2.7/text-to-video' },
