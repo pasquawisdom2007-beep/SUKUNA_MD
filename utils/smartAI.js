@@ -233,6 +233,24 @@ const memory = new Map();
 
 function _hist(key) { if (!memory.has(key)) memory.set(key, []); return memory.get(key); }
 function clearMemory(key) { if (key) memory.delete(key); else memory.clear(); }
+
+// Keep casual chatbot replies short and natural without affecting other AI features.
+function compactChatReply(text, { maxChars = 320, maxSentences = 3 } = {}) {
+    if (!text) return null;
+    let reply = String(text).replace(/\s+/g, ' ').trim();
+    if (!reply) return null;
+
+    const sentences = reply.match(/[^.!?]+[.!?]+(?:["'”’)]*)|[^.!?]+$/g) || [reply];
+    if (sentences.length > maxSentences) {
+        reply = sentences.slice(0, maxSentences).join(' ').trim();
+    }
+    if (reply.length > maxChars) {
+        const short = reply.slice(0, maxChars - 1).replace(/\s+\S*$/, '').trim();
+        reply = short ? `${short}…` : `${reply.slice(0, maxChars - 1)}…`;
+    }
+    return reply;
+}
+
 function pushTurn(key, role, text) {
     if (!key || !text) return;
     const h = _hist(key);
@@ -249,7 +267,7 @@ function pushTurn(key, role, text) {
  * until one returns a usable reply. Returns a string, or null if the whole
  * chain failed.
  */
-async function ask({ key, system = '', user, remember = true }) {
+async function ask({ key, system = '', user, remember = true, compact = false }) {
     if (!user || !String(user).trim()) return null;
     const userText = String(user).trim();
 
@@ -273,6 +291,8 @@ async function ask({ key, system = '', user, remember = true }) {
             }
         }
     }
+
+    if (reply && compact) reply = compactChatReply(reply);
 
     if (reply && remember && key) {
         pushTurn(key, 'user', userText);
@@ -312,4 +332,4 @@ function getProviderInfo() {
     };
 }
 
-module.exports = { ask, generateImage, pushTurn, clearMemory, getProviderInfo };
+module.exports = { ask, generateImage, pushTurn, clearMemory, compactChatReply, getProviderInfo };
