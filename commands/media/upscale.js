@@ -1,16 +1,12 @@
 'use strict';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// EASY SETUP: paste your Replicate API key between the quotes below.
-// Leave it blank to use REPLICATE_API_TOKEN or the local no-key fallback.
-// Do not share this file after adding your private key.
-const REPLICATE_API_KEY = 'r8_LAS6hB5lETpp2pmUYHpDBVkhRTVOKQ119wWnv';
-
 const { downloadMediaMessage } = require('@pasqua-baileys/baileys');
 const upscaler = require('../../utils/upscale');
-// Compatibility with panel copies made before the helper was renamed.
+
 const localUpscale = upscaler.localUpscale || upscaler.upscaleImage;
+const upscaleWithUpscayl = upscaler.upscaleWithUpscayl;
 const upscaleWithReplicate = upscaler.upscaleWithReplicate;
+const hasUpscayl = upscaler.hasUpscayl || (() => false);
 const hasReplicateToken = upscaler.hasReplicateToken || (() => Boolean(process.env.REPLICATE_API_TOKEN || process.env.REPLICATE_TOKEN));
 
 function imageTarget(msg) {
@@ -24,13 +20,13 @@ function imageTarget(msg) {
 module.exports = {
     name: 'upscale',
     aliases: ['enhance', 'hd', '4k'],
-    description: 'Upscale a replied image with optional AI face and texture enhancement',
+    description: 'Upscale a replied image with Upscayl, AI, or a local fallback',
     category: 'media',
 
     async execute({ sock, msg, from, reply, args }) {
         const target = imageTarget(msg);
         if (!target) {
-            return reply('🖼️ Reply to an image with `.upscale` to enhance it.\n\n`.upscale` uses AI when configured, otherwise local mode.\nUse `.upscale local` to force the no-key fallback.');
+            return reply('🖼️ Reply to an image with `.upscale` to enhance it.\n\nDefault order: Upscayl → AI provider → local fallback.\nUse `.upscale local` to force the no-network fallback or `.upscale ai` to force the Replicate provider.');
         }
 
         const rawArgs = (args || []).map(value => String(value).toLowerCase());
@@ -38,8 +34,8 @@ module.exports = {
         const forceLocal = rawArgs.includes('local');
         const scale = Number(rawArgs.find(value => ['2', '4'].includes(value)) || 4);
         if (![2, 4].includes(scale)) return reply('❌ Choose a scale of `2` or `4`.');
-        const hasAIKey = Boolean(REPLICATE_API_KEY.trim()) || hasReplicateToken();
-        if (forceAI && !hasAIKey) return reply('⚙️ Paste your key into `REPLICATE_API_KEY` at the top of commands/media/upscale.js, or set `REPLICATE_API_TOKEN`.');
+        const aiAvailable = hasReplicateToken();
+        if (forceAI && !aiAvailable) return reply('⚙️ Set `REPLICATE_API_TOKEN` in the panel environment to use `.upscale ai`. Never paste the key into a command file.');
 
         try {
             const buffer = await downloadMediaMessage(target, 'buffer', {});
@@ -47,10 +43,21 @@ module.exports = {
             let output;
             let mode;
 
-            if (!forceLocal && hasAIKey) {
+            if (!forceLocal && !forceAI && hasUpscayl()) {
+                await reply(`⏳ Upscayl is enhancing the image ${scale}× locally...`);
+                try {
+                    output = await upscaleWithUpscayl(buffer, mimeType, scale);
+                    mode = 'Upscayl Real-ESRGAN';
+                } catch (upscaylError) {
+                    console.error('[upscale Upscayl]', upscaylError.message);
+                    await reply(`⚠️ Upscayl was unavailable (${upscaylError.message || 'provider error'}). Trying the next available method...`);
+                }
+            }
+
+            if (!output && !forceLocal && aiAvailable) {
                 await reply(`⏳ AI-upscaling image ${scale}× with face and texture enhancement...`);
                 try {
-                    output = await upscaleWithReplicate(buffer, mimeType, scale, true, REPLICATE_API_KEY.trim() || undefined);
+                    output = await upscaleWithReplicate(buffer, mimeType, scale, true);
                     mode = 'AI face + texture enhancement';
                 } catch (aiError) {
                     console.error('[upscale AI]', aiError.message);
@@ -59,7 +66,7 @@ module.exports = {
             }
 
             if (!output) {
-                if (typeof localUpscale !== 'function') throw new Error('upscale helper is outdated; update both commands/media/upscale.js and utils/upscale.js');
+                if (typeof localUpscale !== 'function') throw new Error('upscale helper is unavailable');
                 await reply(`⏳ Upscaling image ${scale}× locally...`);
                 output = await localUpscale(buffer, scale);
                 mode = 'local Sharp enhancement';

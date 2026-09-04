@@ -220,6 +220,22 @@ MIT License
   <sub>by PASQUA · The King of Curses</sub>
 </p>
 
+## Image upscaling
+
+The `.upscale` command supports three methods in this order: **Upscayl Real-ESRGAN**, the optional Replicate AI provider, and a Sharp-based local fallback. Reply to an image with `.upscale`, `.upscale 2`, or `.upscale 4`. Use `.upscale local` to avoid network providers, or `.upscale ai` to force Replicate.
+
+For the highest-quality local results, install and build the [Upscayl NCNN backend](https://github.com/upscayl/upscayl-ncnn), download the matching Real-ESRGAN model files, and configure these environment variables in the hosting panel:
+
+```env
+UPSCAYL_BIN=/opt/upscayl/upscayl-bin
+UPSCAYL_MODELS_DIR=/opt/upscayl/models
+UPSCAYL_MODEL=realesrgan-x4plus
+UPSCAYL_GPU_ID=0
+UPSCAYL_TIMEOUT_MS=180000
+```
+
+The bot writes each request to a temporary directory, invokes the backend with explicit input and output paths, validates the generated PNG, and removes temporary files even when processing fails. If Upscayl is unavailable, the command continues to the configured AI provider and finally to the Sharp fallback. Keep `REPLICATE_API_TOKEN` only in the hosting panel; never commit provider keys to JavaScript files.
+
 ## Deployment targets
 
 SUKUNA MD starts with `npm start`, which runs `node index.js`. The repository includes a root `Procfile` and a lightweight `/health` listener for platforms that require an HTTP process.
