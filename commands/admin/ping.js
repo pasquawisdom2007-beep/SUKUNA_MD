@@ -3,7 +3,54 @@
  * One line, bold-italic brand + 5-block bar + ms.
  */
 
-const { boldItalic } = require('../../utils/styleBox');
+const PHRASES = [
+    'UNTOUCHABLE.',
+    'EXPECTING SOMETHING SLOW?',
+    'RYŌIKI TENKAI.',
+    'EVEN LIGHT AIN’T THIS FAST.',
+    'CURSED ENERGY ONLINE.',
+    'DOMAIN EXPANDED.',
+    'THE CORE IS AWAKE.',
+    'NO LAG. JUST FEAR.',
+    'TOO FAST TO SEE.',
+    'SUKUNA APPROVES.',
+    'REACTION TIME: ILLEGAL.',
+    'THE VOID COULD NOT KEEP UP.',
+    'FASTER THAN A CURSE.',
+    'ZERO DELAY. FULL POWER.',
+    'THE SERVER BENDS.',
+    'SPEED OF THE KING.',
+    'NOTHING ESCAPES THIS PING.',
+    'RUNNING ON PURE CHAOS.',
+    'THE SIGNAL HAS SPOKEN.',
+    'INSTANT IMPACT.',
+    'NO MERCY FOR LATENCY.',
+    'CLEAN. COLD. CONNECTED.',
+    'THE CROWN IS ONLINE.',
+    'TOO SHARP TO BUFFER.',
+    'ABSOLUTE RESPONSE.',
+    'CURSED CORE RESPONDING.',
+    'BEYOND THE SPEED LIMIT.',
+    'THE NETWORK KNEELS.',
+    'FAST ENOUGH TO CUT SPACE.',
+    'PULSE LOCKED.',
+];
+
+const BOLD_DIGITS = Array.from('𝟎𝟏𝟐𝟑𝟒𝟓𝟔𝟕𝟖𝟗');
+const NORMAL_LETTERS = Array.from('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz');
+const BOLD_LETTERS = Array.from('𝐀𝐁𝐂𝐃𝐄𝐅𝐆𝐇𝐈𝐉𝐊𝐋𝐌𝐍𝐎𝐏𝐐𝐑𝐒𝐓𝐔𝐕𝐖𝐗𝐘𝐙𝐚𝐛𝐜𝐝𝐞𝐟𝐠𝐡𝐢𝐣𝐤𝐥𝐦𝐧𝐨𝐩𝐪𝐫𝐬𝐭𝐮𝐯𝐰𝐱𝐲𝐳');
+
+function toBoldDigits(value) {
+    return String(value).replace(/\d/g, digit => BOLD_DIGITS[Number(digit)]);
+}
+
+function toBoldText(value) {
+    return String(value).replace(/[A-Za-z]/g, char => BOLD_LETTERS[NORMAL_LETTERS.indexOf(char)] || char);
+}
+
+function pickPhrase() {
+    return PHRASES[Math.floor(Math.random() * PHRASES.length)];
+}
 
 module.exports = {
     name: 'ping',
@@ -20,9 +67,7 @@ module.exports = {
         } catch (_) {}
 
         const ms = Date.now() - start;
-        const filled = ms < 100 ? 5 : ms < 300 ? 4 : ms < 600 ? 3 : ms < 1000 ? 2 : 1;
-        const bar = '▰'.repeat(filled) + '▱'.repeat(5 - filled);
-        const result = `⛧ ${boldItalic('SUKUNA')} ⛧  ${bar}  ${ms}ms`;
+        const result = `⚡ ${toBoldDigits(ms)}𝐦𝐬 | ${toBoldText(pickPhrase())}`;
 
         if (placeholder?.key) {
             try {
