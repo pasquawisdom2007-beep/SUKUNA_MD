@@ -19,6 +19,7 @@
   "license": "MIT",
   "dependencies": {
     "@pasqua-baileys/baileys": "2.8.3",
+    "abir-photo360-apis": "^1.0.2",
     "axios": "^1.7.9",
     "chalk": "^4.1.2",
     "dotenv": "^16.4.5",
