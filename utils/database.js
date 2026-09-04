@@ -270,6 +270,18 @@ class Database {
         this.save('users');
     }
 
+    // ── Command reactions (per bot session) ───────────────────────────
+    getCmdReact(phoneNumber) {
+        if (!this.data.users[phoneNumber]) this.data.users[phoneNumber] = {};
+        return !!this.data.users[phoneNumber].cmdReact;
+    }
+
+    setCmdReact(phoneNumber, value) {
+        if (!this.data.users[phoneNumber]) this.data.users[phoneNumber] = {};
+        this.data.users[phoneNumber].cmdReact = !!value;
+        this.save('users');
+    }
+
     getOwnerNumber(phoneNumber) {
         if (!this.data.users[phoneNumber]) this.data.users[phoneNumber] = {};
         return this.data.users[phoneNumber].ownerNumber || phoneNumber;
