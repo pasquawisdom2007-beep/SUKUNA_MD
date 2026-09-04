@@ -113,6 +113,8 @@ async function generatedImage(query) {
 module.exports = {
     name: 'google',
     aliases: ['search', 'gsearch', 'web'],
+    // Internal source hooks reused by streamsearch; the public .google behavior is unchanged.
+    _sources: { ddg, wiki, ogImage, generatedImage },
     description: 'Search the web like Google — explanations, sites and a preview image',
     category: 'media',
     usage: '.google <query>',
