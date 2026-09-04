@@ -309,6 +309,61 @@ async function externalResult(name, input) {
         const summary = await ask({ key: `linkdigest:${url}`, user: text, compact: true, system: 'Summarize this webpage in 3 short, factual sentences. Do not invent details.' });
         return `🔗 ${summary || 'Page fetched successfully.'}\n${url}`;
     }
+    if (name === 'wordoftheday') {
+        const word = (await getJson('https://random-word-api.herokuapp.com/word', { params: { number: 1 } }))[0];
+        const data = await getJson(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
+        return `📘 Word of the day: *${word}*\n${data[0]?.meanings?.[0]?.definitions?.[0]?.definition || 'Definition unavailable.'}`;
+    }
+    if (name === 'onthisday') {
+        const now = new Date();
+        const data = await getJson(`https://en.wikipedia.org/api/rest_v1/feed/onthisday/events/${String(now.getUTCMonth() + 1).padStart(2, '0')}/${String(now.getUTCDate()).padStart(2, '0')}`);
+        return `📅 On this day:\n${(data.events || []).slice(0, 5).map(item => `• ${item.year}: ${item.text}`).join('\n') || 'No events found.'}`;
+    }
+    if (name === 'culturecard') {
+        const place = query || 'Nigeria';
+        const data = await getJson(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(place.replace(/\s+/g, '_'))}`);
+        return `🌍 ${data.title}\n${String(data.extract || 'No culture summary found.').slice(0, 900)}\n${data.content_urls?.desktop?.page || ''}`;
+    }
+    if (name === 'comicofday') {
+        const data = await getJson('https://xkcd.com/info.0.json');
+        return `🗯️ *${data.title}*\n${data.alt || ''}\n${data.img || ''}`;
+    }
+    if (name === 'recipe' || name === 'mealplan') {
+        const endpoint = query ? `https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(query)}` : 'https://www.themealdb.com/api/json/v1/1/random.php';
+        const data = await getJson(endpoint);
+        const meal = data.meals?.[0];
+        return meal ? `🍲 ${meal.strMeal}\nCategory: ${meal.strCategory || 'n/a'}\nArea: ${meal.strArea || 'n/a'}\n${meal.strYoutube || ''}` : '🍲 No recipe found.';
+    }
+    if (name === 'dependencycheck') {
+        const packageName = query || 'express';
+        const data = await getJson(`https://registry.npmjs.org/${encodeURIComponent(packageName)}`);
+        return `📦 ${data.name}: latest ${data['dist-tags']?.latest || 'n/a'}\nUpdated: ${data.time?.modified || 'n/a'}\n${data.repository?.url || ''}`;
+    }
+    if (name === 'licensecheck') {
+        const repo = query.replace(/^https?:\/\/github.com\//i, '').replace(/\.git$/, '').replace(/^\//, '');
+        const data = await getJson(`https://api.github.com/repos/${repo}/license`);
+        return `⚖️ ${repo}: ${data.license?.spdx_id || data.license?.name || 'license not detected'}\n${data.html_url || ''}`;
+    }
+    if (name === 'readmegen') {
+        const repo = query.replace(/^https?:\/\/github.com\//i, '').replace(/\.git$/, '').replace(/^\//, '');
+        const data = await getJson(`https://api.github.com/repos/${repo}/readme`, { headers: { Accept: 'application/vnd.github.raw+json' } });
+        const text = Buffer.from(data.content || '', 'base64').toString('utf8');
+        return `📖 README preview for ${repo}:\n${text.slice(0, 1800)}${text.length > 1800 ? '…' : ''}`;
+    }
+    if (name === 'apikeytest') {
+        const keys = ['GROQ_API_KEY','GEMINI_API_KEY','OPENAI_API_KEY','OPENROUTER_API_KEY','AI_GATEWAY_API_KEY','WEATHER_API_KEY'];
+        return `🔑 Provider keys:\n${keys.map(key => `${process.env[key] ? '✅' : '❌'} ${key}`).join('\n')}`;
+    }
+    if (name === 'weatheralerts') {
+        const location = await geocode(query || 'Lagos');
+        const data = await getJson('https://api.open-meteo.com/v1/forecast', { params: { latitude: location.latitude, longitude: location.longitude, daily: 'precipitation_probability_max,wind_speed_10m_max,weather_code', timezone: 'auto', forecast_days: 3 } });
+        return `⚠️ Weather outlook for ${location.name}:\n${(data.daily?.time || []).map((date, index) => `• ${date}: rain ${data.daily?.precipitation_probability_max?.[index] ?? '?'}%, wind ${data.daily?.wind_speed_10m_max?.[index] ?? '?'} km/h, code ${data.daily?.weather_code?.[index] ?? '?'}`).join('\n')}`;
+    }
+    if (name === 'travelplan') {
+        const location = await geocode(query || 'Lagos');
+        const data = await getJson('https://en.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(location.name));
+        return `🧳 ${location.name}: ${String(data.extract || 'Destination found.').slice(0, 700)}\n${data.content_urls?.desktop?.page || ''}`;
+    }
     if (name === 'translateall') {
         const [source, target, ...words] = query.split(/\s+/);
         const response = await axios.post('https://translate.astian.org/translate', { q: words.join(' '), source: source || 'auto', target: target || 'en', format: 'text' }, { timeout: 15000, headers: { Accept: 'application/json' } });
