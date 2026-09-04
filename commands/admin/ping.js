@@ -60,13 +60,16 @@ module.exports = {
     category: 'admin',
 
     async execute({ sock, msg, from, reply }) {
-        const start = Date.now();
+        const start = process.hrtime.bigint();
         let placeholder = null;
         try {
             placeholder = await sock.sendMessage(from, { text: '⛧ ' + boldItalic('pinging') + ' ⛧' }, { quoted: msg });
         } catch (_) {}
 
-        const ms = Date.now() - start;
+        // Measure the actual async send duration with sub-millisecond precision.
+        // Round up so an extremely fast local resolution is never displayed as 0ms.
+        const elapsedMs = Number(process.hrtime.bigint() - start) / 1e6;
+        const ms = Math.max(1, Math.ceil(elapsedMs));
         const result = `⚡ ${toBoldDigits(ms)}𝐦𝐬 | ${toBoldText(pickPhrase())}`;
 
         if (placeholder?.key) {
