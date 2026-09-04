@@ -38,13 +38,13 @@ module.exports = {
                 return reply('❌ All AI providers are busy right now. Please try again in a moment.');
             }
 
-            reply(
+            await reply(
                 `🤖 *AI*\n\n` +
                 `Q: ${prompt}\n\n` +
                 `A: ${response}`
             );
         } catch (err) {
-            reply(`❌ AI service error: ${err.message || 'Please try again later.'}`);
+            await reply(`❌ AI service error: ${err.message || 'Please try again later.'}`);
         }
     }
 };

@@ -6,7 +6,7 @@ const { ask } = require('../../utils/smartAI');
 
 module.exports = {
     name: 'aichat',
-    aliases: ['aibot', 'buddy', 'assistant'],
+    aliases: ['genai', 'aibot', 'buddy', 'assistant'],
     description: 'General purpose AI assistant (multi-provider, keyless fallback)',
     category: 'ai',
     async execute({ reply, args, from, sender, isGroup }) {
@@ -22,6 +22,6 @@ module.exports = {
             remember: true,
         });
         if (!out) return reply('❌ AI is busy right now. Try again in a moment.');
-        reply(out);
+        await reply(out);
     },
 };
