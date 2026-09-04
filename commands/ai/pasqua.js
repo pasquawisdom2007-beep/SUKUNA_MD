@@ -6,7 +6,10 @@
  * When a direct question is given, it replies immediately regardless of toggle.
  */
 
-const { ask: smartAsk } = require('../../utils/smartAI');
+const PREXZY_CHAT_URL = 'https://prexzyapis.com/ai/ch';
+const PREXZY_TIMEOUT_MS = 15000;
+const conversationMemory = new Map();
+const MAX_MEMORY_TURNS = 12;
 
 const SUKUNA_IDENTITY =
     'You are Sukuna, the King of Curses from Jujutsu Kaisen. ' +
@@ -27,18 +30,49 @@ const SUKUNA_IDENTITY =
     'Occasionally reference cursed energy, Malevolent Shrine, or your dominance.';
 
 /**
- * Call the Pasqua AI with conversation memory and return a reply string.
+ * Call the Prexzy chat API with Sukuna's identity and lightweight per-chat memory.
+ * The endpoint accepts one query parameter (`q`) and returns `{ status, response }`.
  */
 async function getPasquaAIReply(prompt, memKey = 'pasqua:global') {
+    const userText = String(prompt || '').trim();
+    if (!userText) return null;
+
+    const history = conversationMemory.get(memKey) || [];
+    const transcript = history
+        .map(turn => `${turn.role === 'assistant' ? 'Sukuna' : 'User'}: ${turn.text}`)
+        .join('\\n');
+    const query = [
+        SUKUNA_IDENTITY,
+        transcript ? `Conversation so far:\\n${transcript}` : '',
+        `User: ${userText}`,
+        'Sukuna:',
+    ].filter(Boolean).join('\\n\\n');
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), PREXZY_TIMEOUT_MS);
     try {
-        return await smartAsk({
-            key: memKey,
-            system: SUKUNA_IDENTITY,
-            user: prompt,
+        const response = await fetch(`${PREXZY_CHAT_URL}?q=${encodeURIComponent(query)}`, {
+            headers: { Accept: 'application/json' },
+            signal: controller.signal,
         });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data?.status === false) {
+            throw new Error(data?.message || data?.error || `HTTP ${response.status}`);
+        }
+        const answer = String(data?.response || '').trim();
+        if (!answer) throw new Error('Prexzy returned an empty response');
+
+        const nextHistory = [...history,
+            { role: 'user', text: userText },
+            { role: 'assistant', text: answer },
+        ].slice(-(MAX_MEMORY_TURNS * 2));
+        conversationMemory.set(memKey, nextHistory);
+        return answer;
     } catch (e) {
-        console.error('[PasquaAI API Error]', e.message);
+        console.error('[PasquaAI Prexzy Error]', e.name === 'AbortError' ? 'request timed out' : e.message);
         return null;
+    } finally {
+        clearTimeout(timeout);
     }
 }
 
