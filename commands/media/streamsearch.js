@@ -1,6 +1,7 @@
 'use strict';
 
 const google = require('./google');
+const { generateWAMessageFromContent, proto } = require('@pasqua-baileys/baileys');
 const { escapeHtml, sendRichHtml } = require('../../utils/genaiRich');
 
 const sources = google._sources || {};
@@ -58,6 +59,40 @@ function sourceRowsHtml(sites) {
     return `<div class="sources"><div class="sourceTitle">Sources</div>${sites.slice(0, MAX_RESULTS).map(site => `<a class="sourceRow" href="${escapeHtml(site.url)}" target="_blank"><img src="${escapeHtml(faviconUrl(site.url))}" alt=""><span class="sourceCopy"><b>${escapeHtml(site.title)}</b><small>${escapeHtml(site.domain || domainOf(site.url))}</small></span><span class="sourceArrow">›</span></a>`).join('')}</div>`;
 }
 
+async function sendStreamActions({ sock, msg, from, query, googleUrl, sites }) {
+    const button = (displayText, url) => ({
+        name: 'cta_url',
+        buttonParamsJson: JSON.stringify({ display_text: displayText, url, merchant_url: url }),
+    });
+    const buttons = [button('Open in Google', googleUrl)];
+    sites.slice(0, 2).forEach((site, index) => buttons.push(button(`Open result ${index + 1}`, site.url)));
+    try {
+        const interactive = {
+            body: { text: `Open a result for: ${query}` },
+            footer: { text: 'SUKUNA MD · STREAM SEARCH' },
+            header: { title: '⌕ Stream Search Actions', hasMediaAttachment: false },
+            nativeFlowMessage: { buttons, messageParamsJson: '' },
+        };
+        const wrapped = generateWAMessageFromContent(from, {
+            viewOnceMessage: {
+                message: {
+                    messageContextInfo: { deviceListMetadataVersion: 2, deviceListMetadata: {} },
+                    interactiveMessage: proto.Message.InteractiveMessage.fromObject(interactive),
+                },
+            },
+        }, {
+            userJid: sock.user?.id,
+            ...(msg?.message ? { quoted: msg } : {}),
+        });
+        await sock.relayMessage(from, wrapped.message, { messageId: wrapped.key.id });
+    } catch (error) {
+        console.error('[streamsearch:actions]', error.message);
+        await sock.sendMessage(from, {
+            text: `Open in Google: ${googleUrl}${sites.slice(0, 2).map((site, index) => `\nOpen result ${index + 1}: ${site.url}`).join('')}`,
+        }, { quoted: msg });
+    }
+}
+
 function streamSearchHtml(query, heading, abstract, sites, googleUrl) {
     const heroSite = sites[0];
     const heroImage = heroSite ? (cleanUrl(heroSite.image) || faviconUrl(heroSite.url)) : faviconUrl(googleUrl);
@@ -87,7 +122,9 @@ async function execute({ sock, msg, from, reply, args }) {
             const images = await Promise.all(sites.map(site => sources.ogImage(site.url).catch(() => '')));
             images.forEach((image, index) => { sites[index].image = cleanUrl(image); });
         }
-        await sendRichHtml({ sock, jid: from, quoted: msg, html: streamSearchHtml(query, heading, abstract, sites, buildGoogleUrl(query)) });
+        const googleUrl = buildGoogleUrl(query);
+        await sendRichHtml({ sock, jid: from, quoted: msg, html: streamSearchHtml(query, heading, abstract, sites, googleUrl) });
+        await sendStreamActions({ sock, msg, from, query, googleUrl, sites });
         await sock.sendMessage(from, { react: { text: '✅', key: msg.key } }).catch(() => {});
     } catch (error) {
         console.error('[streamsearch]', error.message);
@@ -102,5 +139,5 @@ module.exports = {
     usage: '.streamsearch <query>',
     category: 'media',
     execute,
-    _test: { collectSites, streamSearchHtml, buildGoogleUrl, faviconUrl },
+    _test: { collectSites, streamSearchHtml, buildGoogleUrl, faviconUrl, sendStreamActions },
 };
