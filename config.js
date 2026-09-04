@@ -87,6 +87,8 @@ module.exports = {
         maxMessagesPerSecond: 1,
         messageRateLimit: 1000,
         apiThrottleMs: 1000,
+        // CODY-style command flood control; owner/mod commands stay exempt.
+        commandCooldownMs: 3000,
         autoPauseThreshold: 5,
         autoPauseDuration: 180000
     }
