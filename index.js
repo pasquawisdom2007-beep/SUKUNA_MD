@@ -20,7 +20,7 @@ const chalk          = require('chalk');
 const commandLoader  = require('./utils/commandLoader');
 const config         = require('./config');
 const sessionManager = require('./lib/sessionManager');
-const { restoreSessionBase64 } = require('./utils/sessionBundle');
+const { restoreSessionBase64, decodeBase64Session, isBundle } = require('./utils/sessionBundle');
 
 const healthPort = Number(process.env.PORT || 3000);
 const webPairRequests = new Set();
@@ -114,47 +114,77 @@ async function main() {
     const active = (sessionManager.sessions && sessionManager.sessions.size) || 0;
     console.log(chalk.green(`[SYSTEM] ${active} session(s) restored.`));
 
-    // Auto-pair using config.pairNumber (or PAIR_NUMBER env override)
+    // Auto-pair using config.pairNumber (or PAIR_NUMBER env override).
+    // PAIR_NUMBER is optional when SESSION_ID contains registered credentials.
     const pairNumberRaw = (process.env.PAIR_NUMBER || config.pairNumber || '').toString();
-    const pairNumber = pairNumberRaw.replace(/[^0-9]/g, '');
+    const configuredPairNumber = pairNumberRaw.replace(/[^0-9]/g, '');
 
     // ── SESSION_ID short-circuit ────────────────────────────────────
-    // Supports a full Base64 auth bundle, legacy creds.json Base64, or a
-    // one-time Pasqua~shortId resolved through the Redis-backed PAIR_SITE bridge.
+    // Decode SESSION_ID first. The embedded creds.me.id is the canonical
+    // number for a self-contained auth bundle, so a missing/stale PAIR_NUMBER
+    // cannot make a valid session silently fall through to headless pairing.
     const sessionIdRaw = (process.env.SESSION_ID || config.sessionId || '').toString().trim();
+    let pairNumber = configuredPairNumber;
     let sessionIdUsed = false;
 
-    if (sessionIdRaw && pairNumber && pairNumber.length >= 8) {
+    if (sessionIdRaw) {
         try {
-            const fs   = require('fs');
+            const fs = require('fs');
             const path = require('path');
-            const sessionDir = path.resolve(process.cwd(), 'sessions', pairNumber);
-            const credsFile  = path.join(sessionDir, 'creds.json');
             let sessionBase64 = sessionIdRaw;
 
             if (/^Pasqua~/i.test(sessionIdRaw)) {
                 const markedPayload = sessionIdRaw.replace(/^Pasqua~/i, '').trim();
-                // A marked full payload is self-contained. Redis short IDs are
-                // resolved server-side through the one-time consume endpoint.
+                // Preserve legacy Pasqua~shortId compatibility. Any longer
+                // value is treated as the self-contained payload itself.
                 if (/^[A-Za-z0-9_-]{6,64}$/.test(markedPayload)) {
                     const pairSiteUrl = (process.env.PAIR_SITE_URL || 'https://pair-site-wmte.onrender.com').toString().trim().replace(/\/$/, '');
                     if (!pairSiteUrl) throw new Error('PAIR_SITE_URL is required for Pasqua~ short IDs');
                     const controller = new AbortController();
                     const timeout = setTimeout(() => controller.abort(), 15000);
-                    const response = await fetch(`${pairSiteUrl}/pair/session/${encodeURIComponent(markedPayload)}/consume`, { signal: controller.signal });
-                    clearTimeout(timeout);
-                    if (!response.ok) throw new Error(`PAIR_SITE returned HTTP ${response.status}`);
-                    const payload = await response.json();
-                    sessionBase64 = payload.session;
-                    if (!sessionBase64) throw new Error('PAIR_SITE response did not contain a session');
+                    try {
+                        const response = await fetch(`${pairSiteUrl}/pair/session/${encodeURIComponent(markedPayload)}/consume`, { signal: controller.signal });
+                        if (!response.ok) throw new Error(`PAIR_SITE returned HTTP ${response.status}`);
+                        const remotePayload = await response.json();
+                        sessionBase64 = remotePayload.session;
+                        if (!sessionBase64) throw new Error('PAIR_SITE response did not contain a session');
+                    } finally {
+                        clearTimeout(timeout);
+                    }
                 } else {
                     sessionBase64 = markedPayload;
                 }
             }
 
-            const hasAuthFiles = fs.existsSync(sessionDir) && fs.readdirSync(sessionDir).some(name => name !== 'creds.json' && !name.endsWith('.tmp'));
-            if (fs.existsSync(credsFile) && hasAuthFiles) {
-                console.log(chalk.green(`[SESSION] Live multi-file auth state exists for ${pairNumber}; keeping it and ignoring SESSION_ID.`));
+            const decoded = decodeBase64Session(sessionBase64);
+            let embeddedCreds = decoded;
+            if (isBundle(decoded)) {
+                const encodedCreds = decoded.files['creds.json'];
+                if (typeof encodedCreds !== 'string') throw new Error('SESSION_ID auth bundle is missing creds.json');
+                embeddedCreds = JSON.parse(Buffer.from(encodedCreds, 'base64').toString('utf8'));
+            }
+            const embeddedMeId = String(embeddedCreds?.me?.id || '');
+            const embeddedNumber = (embeddedMeId.split(':')[0] || embeddedMeId).replace(/\D/g, '');
+            if (embeddedNumber.length >= 8) {
+                if (configuredPairNumber && configuredPairNumber !== embeddedNumber) {
+                    console.log(chalk.yellow(`[SESSION] PAIR_NUMBER ${configuredPairNumber} differs from embedded number ${embeddedNumber}; using the embedded number.`));
+                }
+                pairNumber = embeddedNumber;
+            }
+            if (!pairNumber || pairNumber.length < 8) {
+                throw new Error('SESSION_ID has no registered WhatsApp number and PAIR_NUMBER is missing/invalid');
+            }
+
+            const sessionDir = path.resolve(process.cwd(), 'sessions', pairNumber);
+            const credsFile = path.join(sessionDir, 'creds.json');
+            let existingCreds;
+            if (fs.existsSync(credsFile)) {
+                try { existingCreds = JSON.parse(fs.readFileSync(credsFile, 'utf8')); } catch (_) {}
+            }
+            const existingMeId = String(existingCreds?.me?.id || '');
+            const existingNumber = (existingMeId.split(':')[0] || existingMeId).replace(/\D/g, '');
+            if (existingNumber.length >= 8) {
+                console.log(chalk.green(`[SESSION] Registered auth state exists for ${existingNumber}; keeping it and ignoring SESSION_ID.`));
                 sessionIdUsed = true;
             } else {
                 const restored = restoreSessionBase64(sessionBase64, sessionDir);
@@ -170,8 +200,6 @@ async function main() {
             console.log(chalk.red(`[SESSION] Invalid SESSION_ID (${e.message}). Falling back to pair-code flow.`));
             sessionIdUsed = false;
         }
-    } else if (sessionIdRaw && (!pairNumber || pairNumber.length < 8)) {
-        console.log(chalk.red('[SESSION] SESSION_ID is set but pairNumber is missing/invalid in config.js. Cannot restore.'));
     }
 
     let pairingFailed = false;
