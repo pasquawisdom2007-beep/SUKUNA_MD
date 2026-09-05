@@ -70,6 +70,37 @@ class Database {
         return this.data.settings.aiBadge;
     }
 
+    // ── AntiBot custom message-ID stamps (bot-wide) ───────────────────────
+    // These are detection fingerprints only; they do not alter identities,
+    // sessions, client metadata, or enforcement-evasion behavior.
+    getCustomBotStamps() {
+        if (!Array.isArray(this.data.settings.customBotStamps)) {
+            this.data.settings.customBotStamps = [];
+            this.save('settings');
+        }
+        return this.data.settings.customBotStamps;
+    }
+
+    addCustomBotStamp(stamp) {
+        const clean = String(stamp || '').trim().toUpperCase();
+        if (!clean || clean.length < 3 || clean.length > 80 || /\s/.test(clean)) return false;
+        const list = this.getCustomBotStamps();
+        if (list.includes(clean)) return false;
+        list.push(clean);
+        this.save('settings');
+        return true;
+    }
+
+    removeCustomBotStamp(stamp) {
+        const clean = String(stamp || '').trim().toUpperCase();
+        const list = this.getCustomBotStamps();
+        const index = list.indexOf(clean);
+        if (index === -1) return false;
+        list.splice(index, 1);
+        this.save('settings');
+        return true;
+    }
+
 
 
 
