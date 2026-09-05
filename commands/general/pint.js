@@ -1,5 +1,9 @@
 'use strict';
 
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
 // Pinterest-style image search without a browser, login, API key, or heavy scraper.
 // Wikimedia Commons provides stable public thumbnails and a searchable API.
 const COOLDOWN_MS = 45_000;
@@ -100,34 +104,43 @@ module.exports = {
 
             const pinterestUrl = `https://www.pinterest.com/search/pins/?q=${encodeURIComponent(query)}`;
             const cards = [];
-            for (const result of results) {
-                try {
-                    cards.push({
-                        // Use the fork's documented URL media shape. Passing a
-                        // Buffer here can force the media fallback on some builds.
-                        image: { url: result.url },
-                        caption: `📌 *${query}*\n${cards.length + 1}/${results.length}${result.title ? `\n_${result.title.slice(0, 120)}_` : ''}`,
-                        footer: 'Pinterest · SUKUNA MD',
-                        nativeFlow: [{ text: 'Source', url: pinterestUrl, useWebview: true }],
-                    });
-                    // Pace downloads so a slow source cannot create a burst of work.
-                    if (cards.length < results.length) await sleep(SEND_DELAY_MS);
-                } catch (error) {
-                    console.error('[pint:image]', error.message);
+            const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'sukuna-pint-'));
+            try {
+                for (const result of results) {
+                    try {
+                        // The fork's reference uses local URL paths. Download
+                        // first, then give Baileys `{ url: localPath }` so its
+                        // media resolver never depends on a remote stream.
+                        const buffer = await fetchImage(result.url);
+                        const filePath = path.join(tempDir, `image-${cards.length + 1}.jpg`);
+                        await fs.promises.writeFile(filePath, buffer);
+                        cards.push({
+                            image: { url: filePath },
+                            caption: `📌 *${query}*\n${cards.length + 1}/${results.length}${result.title ? `\n_${result.title.slice(0, 120)}_` : ''}`,
+                            footer: 'Pinterest · SUKUNA MD',
+                            nativeFlow: [{ text: 'Source', url: pinterestUrl, useWebview: true }],
+                        });
+                        if (cards.length < results.length) await sleep(SEND_DELAY_MS);
+                    } catch (error) {
+                        console.error('[pint:image]', error.message);
+                    }
                 }
+                if (!cards.length) {
+                    cooldowns.delete(key);
+                    return reply('❌ The image source returned unusable results. Try again with another prompt.');
+                }
+                // Keep the exact native carousel payload. Do not fall back to
+                // individual image sends because that defeats the horizontal UI.
+                await sock.sendMessage(from, {
+                    text: `📌 *${query}*\nSwipe horizontally through ${cards.length} results below.`,
+                    footer: 'SUKUNA MD · PINTEREST-STYLE SEARCH',
+                    cards,
+                    interactiveAsTemplate: false,
+                }, { quoted: msg });
+            } finally {
+                await fs.promises.rm(tempDir, { recursive: true, force: true }).catch(() => {});
             }
-            if (!cards.length) {
-                cooldowns.delete(key);
-                return reply('❌ The image source returned unusable results. Try again with another prompt.');
-            }
-            // Keep the exact native carousel payload. Do not fall back to
-            // individual image sends because that defeats the horizontal UI.
-            await sock.sendMessage(from, {
-                text: `📌 *${query}*\nSwipe horizontally through ${cards.length} results below.`,
-                footer: 'SUKUNA MD · PINTEREST-STYLE SEARCH',
-                cards,
-                interactiveAsTemplate: false,
-            }, { quoted: msg });
+
         } catch (error) {
             cooldowns.delete(key);
             console.error('[pint]', error.message);
