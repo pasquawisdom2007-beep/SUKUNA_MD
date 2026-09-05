@@ -121,6 +121,9 @@ module.exports = {
             }
             try {
                 await sock.sendMessage(from, {
+                    // Pasqua Baileys uses the outer text field to enter its
+                    // interactive-message pipeline before processing `cards`.
+                    text: `📌 *${query}*\nSwipe horizontally through ${cards.length} results below.`,
                     footer: 'SUKUNA MD · PINTEREST-STYLE SEARCH',
                     cards,
                 }, { quoted: msg });
