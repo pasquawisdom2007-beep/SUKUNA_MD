@@ -39,6 +39,50 @@ function findParticipant(meta, jid) {
     ) || null;
 }
 
+// Generic behavioral signals are deliberately bounded and weak. They can
+// identify bot-like behavior without knowing a framework, but they never
+// produce an immediate kick on their own.
+const MAX_TRACKED_GROUPS = 5000;
+const MAX_TRACKED_SENDERS = 20000;
+const lastPrefixHitAt = new Map();
+const burstTracker = new Map();
+
+function looksLikeCommand(text) {
+    return typeof text === 'string' && /^[.!/#]\w/.test(text.trim());
+}
+
+function noteGroupActivity(groupId, text, atMs = Date.now()) {
+    if (!groupId || !looksLikeCommand(text)) return;
+    if (lastPrefixHitAt.size >= MAX_TRACKED_GROUPS && !lastPrefixHitAt.has(groupId)) {
+        const oldestKey = lastPrefixHitAt.keys().next().value;
+        if (oldestKey !== undefined) lastPrefixHitAt.delete(oldestKey);
+    }
+    lastPrefixHitAt.set(groupId, atMs);
+}
+
+function rapidResponseSignal(groupId, atMs = Date.now()) {
+    const last = lastPrefixHitAt.get(groupId);
+    if (!last) return false;
+    const delta = atMs - last;
+    return delta >= 0 && delta < 900;
+}
+
+function burstSignal(groupId, jid, atMs = Date.now()) {
+    if (!groupId || !jid) return false;
+    const key = `${groupId}:${rawJid(jid)}`;
+    let entry = burstTracker.get(key);
+    if (!entry || atMs - entry.windowStart > 8000) {
+        entry = { count: 0, windowStart: atMs };
+    }
+    entry.count += 1;
+    if (burstTracker.size >= MAX_TRACKED_SENDERS && !burstTracker.has(key)) {
+        const oldestKey = burstTracker.keys().next().value;
+        if (oldestKey !== undefined) burstTracker.delete(oldestKey);
+    }
+    burstTracker.set(key, entry);
+    return entry.count >= 5;
+}
+
 function hasExplicitBotFlag(participant) {
     if (!participant || typeof participant !== 'object') return false;
     return participant.isBot === true
@@ -62,12 +106,12 @@ function hasMessageBotFlag(message) {
         || Boolean(context.isBot || context.isBaileys || context.bot);
 }
 
-function deriveBotFlags(message = {}) {
+function deriveBotFlags(message = {}, extraStamps = []) {
     const official = normalizeForAntiBot(message);
     const content = official.content || message?.message || {};
     const context = content.messageContextInfo || content.contextInfo || {};
     const messageId = official.messageId || message?.key?.id || message?.id || '';
-    const stamp = official.stamp || matchedStamp(messageId);
+    const stamp = matchedStamp(messageId, extraStamps) || official.stamp || null;
     const explicitBot = official.isBot === true
         || message.isBot === true
         || message.isAutomated === true
@@ -87,28 +131,34 @@ function deriveBotFlags(message = {}) {
     };
 }
 
-function annotateBotFlags(message) {
+function annotateBotFlags(message, extraStamps = []) {
     if (!message || typeof message !== 'object') return message;
-    const flags = deriveBotFlags(message);
-    // Keep these enumerable to match the attached framework’s `m.isBot` and
-    // `m.isBaileys` contract for downstream middleware and command handlers.
+    const flags = deriveBotFlags(message, extraStamps);
     message.isBot = flags.isBot;
     message.isBaileys = flags.isBaileys;
     return message;
 }
 
-function detectBotSignals({ jid, participant, messageId, message } = {}) {
+function detectBotSignals({ jid, participant, messageId, message, groupId, extraStamps = [], atMs = Date.now() } = {}) {
     const signals = [];
-    const flags = deriveBotFlags(message);
-    const stamp = flags.stamp || matchedStamp(messageId);
+    const flags = deriveBotFlags(message, extraStamps);
+    const stamp = flags.stamp || matchedStamp(messageId, extraStamps);
     if (stamp) signals.push({ type: 'message-id-stamp', value: stamp, confidence: 'high' });
     if (hasExplicitBotFlag(participant)) signals.push({ type: 'explicit-bot-flag', confidence: 'high' });
     if (hasMessageBotFlag(message)) signals.push({ type: 'explicit-message-bot-flag', confidence: 'high' });
     if (isMultiDeviceJid(jid)) signals.push({ type: 'linked-device-jid', confidence: 'weak' });
-
+    if (groupId && rapidResponseSignal(groupId, atMs)) {
+        signals.push({ type: 'instant-command-reply', confidence: 'weak' });
+    }
+    if (groupId && burstSignal(groupId, jid, atMs)) {
+        signals.push({ type: 'message-burst', confidence: 'weak' });
+    }
+    const highConfidence = signals.some(signal => signal.confidence === 'high');
+    const weakCount = signals.filter(signal => signal.confidence === 'weak').length;
     return {
         signals,
-        highConfidence: signals.some(signal => signal.confidence === 'high'),
+        highConfidence,
+        mediumConfidence: !highConfidence && weakCount >= 2,
         candidate: signals.length > 0,
         reason: signals.map(signal => signal.type === 'message-id-stamp'
             ? `${signal.type} (${signal.value})`
@@ -133,4 +183,6 @@ module.exports = {
     annotateBotFlags,
     detectBotSignals,
     shortJid,
+    noteGroupActivity,
+    looksLikeCommand,
 };

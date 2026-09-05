@@ -1,6 +1,7 @@
 'use strict';
 
 const database = require('./database');
+const { textFromMessage } = require('./commandHelpers');
 const {
     detectBotSignals,
     findParticipant,
@@ -8,6 +9,7 @@ const {
     sameIdentity,
     shortJid,
     annotateBotFlags,
+    noteGroupActivity,
 } = require('./antiBotSignals');
 
 function normalizeJid(value) {
@@ -82,10 +84,10 @@ async function removeMember(sock, groupId, jid, reason, canRemove) {
     }
 }
 
-async function enforceDetected(sock, groupId, jid, config, reason, message = null) {
+async function enforceDetected(sock, groupId, jid, config, reason, message = null, forcedAction = null) {
     const meta = await sock.groupMetadata(groupId).catch(() => null);
     const canRemove = botIsAdmin(meta, sock);
-    const action = antibotAction(config);
+    const action = forcedAction || antibotAction(config);
 
     if (action === 'delete') {
         const deleted = await deleteMessage(sock, groupId, message);
@@ -139,7 +141,8 @@ async function handleMessage(sock, message) {
     // Mirror the attached framework contract before applying AntiBot policy.
     // This makes `message.isBot` and `message.isBaileys` available to all
     // downstream checks without treating ordinary WhatsApp messages as bots.
-    annotateBotFlags(message);
+    const extraStamps = database.getCustomBotStamps();
+    annotateBotFlags(message, extraStamps);
     const groupId = message?.key?.remoteJid;
     if (!groupId || !groupId.endsWith('@g.us') || message?.key?.fromMe) return;
     const config = database.getGroup(groupId);
@@ -154,9 +157,22 @@ async function handleMessage(sock, message) {
         participant: findParticipant(meta, jid),
         messageId: message?.key?.id,
         message,
+        groupId,
+        extraStamps,
     });
-    if (detection.highConfidence) {
-        await enforceDetected(sock, groupId, jid, config, detection.reason || 'High-confidence bot signature.', message);
+    // Record command-looking activity only after detection so a message is
+    // never compared against itself. Behavioral matches stay warning-only.
+    noteGroupActivity(groupId, textFromMessage(message?.message));
+    if (detection.highConfidence || detection.mediumConfidence) {
+        await enforceDetected(
+            sock,
+            groupId,
+            jid,
+            config,
+            detection.reason || 'High-confidence bot signature.',
+            message,
+            detection.mediumConfidence ? 'warn' : null,
+        );
     }
 }
 
