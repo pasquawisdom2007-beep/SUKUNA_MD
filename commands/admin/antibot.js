@@ -1,179 +1,143 @@
-/**
- * AntiBot Command — Admin Only
- *
- * Detection methods (layered):
- *  1. JOIN event: every non-admin newcomer receives Guard verification
- *  2. MESSAGE: explicit bot metadata or known bot-library message-ID stamp
- *  3. JOIN/SCAN: linked-device JIDs are weak candidates only, never an
- *     automatic kick by themselves because legitimate companion devices use them
- *  4. SCAN: checks current members for high-confidence signatures
- *
- * Usage:
- *   .antibot on     — enable verification and high-confidence enforcement
- *   .antibot kick   — enable verification and remove confirmed bot signatures
- *   .antibot warn   — enable, warn only (no kick)
- *   .antibot off    — disable
- *   .antibot status — show current settings
- *   .antibot scan   — scan group for suspected bots now
- */
+'use strict';
 
 const database = require('../../utils/database');
 const {
     detectBotSignals,
-    findParticipant,
     participantIdentifiers,
     sameIdentity,
     shortJid,
 } = require('../../utils/antiBotSignals');
 const { challengeGroupMembers } = require('../../utils/antiBotEngine');
 
+function botJids(sock) {
+    return [sock.user?.id, sock.user?.lid, sock.user?.jid, sock.user?.phoneNumber].filter(Boolean);
+}
+
+function isSelf(sock, jid) {
+    return botJids(sock).some(identity => sameIdentity(identity, jid));
+}
+
+function actionLabel(config) {
+    return String(config.antibotAction || (config.antibotMode === 'warn' ? 'warn' : 'kick')).toLowerCase();
+}
+
 module.exports = {
     name: 'antibot',
     aliases: ['nobot', 'antibots'],
-    description: 'Automatically detect and remove other bots from the group',
+    description: 'Detect and control automated bot accounts and bot messages in groups',
     category: 'admin',
 
     async execute({ sock, reply, args, from, isGroup, isAdmin }) {
-        if (!isGroup) return reply('👥 This command can only be used in groups!');
-        if (!isAdmin) return reply('🛡️ *Admin Only!*\n\n❌ You must be a group admin to use this command.');
+        if (!isGroup) return reply('👥 This command can only be used in groups.');
+        if (!isAdmin) return reply('🛡️ *Admin only.* You must be a group admin to configure AntiBot.');
 
-        const action = (args[0] || '').toLowerCase();
-        const grp = database.getGroup(from);
-        const isEnabled = grp.antibot || false;
-        const currentMode = grp.antibotMode || 'kick';
+        const action = String(args[0] || '').toLowerCase();
+        const group = database.getGroup(from);
+        const currentAction = actionLabel(group);
+        const maxWarnings = Math.max(1, Number(group.antibotMaxWarnings) || 3);
 
-        if (!action || !['on', 'off', 'kick', 'warn', 'status', 'scan'].includes(action)) {
+        if (!action || !['on', 'off', 'delete', 'kick', 'warn', 'status', 'scan'].includes(action)) {
             return reply(
-                `╔══════════════════════════╗\n` +
-                `║      🤖 *ANTI-BOT*       ║\n` +
-                `╚══════════════════════════╝\n\n` +
-                `Status: ${isEnabled ? '✅ ACTIVE' : '❌ INACTIVE'}\n` +
-                `Mode: *${currentMode.toUpperCase()}*\n\n` +
-                `*Usage:*\n` +
-                `▸ .antibot on     — enable verification + enforcement\n` +
-                `▸ .antibot kick   — remove high-confidence bot signatures\n` +
-                `▸ .antibot warn   — warn only, no kick\n` +
-                `▸ .antibot off    — disable\n` +
-                `▸ .antibot scan   — scan & remove bots now\n` +
-                `▸ .antibot status — current settings\n\n` +
-                `*Protects and detects:*\n` +
-                `✓ Sender-bound verification for every non-admin newcomer\n` +
-                `✓ Explicit bot metadata and known bot-library ID stamps\n` +
-                `✓ Linked-device JIDs treated as candidates, not proof\n` +
-                `✓ Scan of current members for high-confidence signatures\n\n` +
-                `_Group admins and the bot itself are always exempt._`
+                '🤖 *AntiBot configuration*\n\n' +
+                `Status: ${group.antibot ? '✅ ACTIVE' : '❌ INACTIVE'}\n` +
+                `Action: *${currentAction.toUpperCase()}*\n` +
+                `Warning limit: *${maxWarnings}*\n\n` +
+                '*Usage:*\n' +
+                '• `.antibot delete` — delete detected bot messages\n' +
+                '• `.antibot kick` — delete and remove detected bots\n' +
+                '• `.antibot warn 3` — delete, warn, then remove at the limit\n' +
+                '• `.antibot on` — enable the current action\n' +
+                '• `.antibot scan` — scan current members\n' +
+                '• `.antibot status` — show current settings\n' +
+                '• `.antibot off` — disable AntiBot\n\n' +
+                '_Admins and the bot itself are always exempt._'
             );
         }
 
         if (action === 'status') {
             return reply(
-                `🤖 *Anti-Bot Status*\n\n` +
-                `Status: ${isEnabled ? '✅ ACTIVE' : '❌ INACTIVE'}\n` +
-                `Mode: *${currentMode.toUpperCase()}*\n\n` +
-                `_${isEnabled
-                    ? currentMode === 'kick'
-                    ? 'New members must pass verification; high-confidence bot signatures are removed.'
-                    : 'New members must pass verification; detected bots are warned only.'
-                    : 'Enable with .antibot on or .antibot kick'
-                }_`
+                '🤖 *AntiBot status*\n\n' +
+                `Active: ${group.antibot ? '✅ Yes' : '❌ No'}\n` +
+                `Action: *${currentAction.toUpperCase()}*\n` +
+                `Warning limit: *${maxWarnings}*\n\n` +
+                '_Detection combines explicit bot metadata, known library message-ID signatures, and sender-bound verification for bots that expose no metadata._'
             );
         }
 
         if (action === 'off') {
             database.setGroup(from, 'antibot', false);
-            return reply('❌ *Anti-Bot DISABLED*');
+            return reply('❌ *AntiBot disabled for this group.*');
         }
 
-        if (action === 'on' || action === 'kick' || action === 'warn') {
-            const mode = action === 'warn' ? 'warn' : 'kick';
+        if (['on', 'delete', 'kick', 'warn'].includes(action)) {
+            let selected = action === 'on' ? currentAction : action;
+            let selectedMax = maxWarnings;
+            if (action === 'warn' && args[1] !== undefined) {
+                selectedMax = Number.parseInt(args[1], 10);
+                if (!Number.isInteger(selectedMax) || selectedMax < 1 || selectedMax > 20) {
+                    return reply('Use a warning limit from 1 to 20, for example: `.antibot warn 3`');
+                }
+            }
             database.setGroup(from, 'antibot', true);
-            database.setGroup(from, 'antibotMode', mode);
+            database.setGroup(from, 'antibotAction', selected);
+            database.setGroup(from, 'antibotMode', selected === 'warn' ? 'warn' : 'kick');
+            if (selected === 'warn') database.setGroup(from, 'antibotMaxWarnings', selectedMax);
             return reply(
-                `✅ *Anti-Bot ENABLED*\n\n` +
-                `Mode: *${mode.toUpperCase()}*\n\n` +
-                    `_${mode === 'kick'
-                    ? '🦾 New members are verified; high-confidence bots are removed.'
-                    : '⚠️ New members are verified; detected bots receive warnings only.'
-                }_`
+                '✅ *AntiBot enabled*\n\n' +
+                `Action: *${selected.toUpperCase()}*` +
+                (selected === 'warn' ? `\nWarning limit: *${selectedMax}*` : '') +
+                '\n\n_Detected bot messages are handled immediately; group admins and this bot are excluded._'
             );
         }
 
         if (action === 'scan') {
-            await reply('🔍 *Scanning group for bots...*');
+            await reply('🔍 *Scanning current group members for high-confidence bot signatures...*');
             try {
                 const meta = await sock.groupMetadata(from);
-                const botIdentities = [sock.user?.id, sock.user?.lid, sock.user?.jid, sock.user?.phoneNumber].filter(Boolean);
-                const botParticipant = meta.participants.find(p =>
-                    participantIdentifiers(p).some(id => botIdentities.some(bot => sameIdentity(id, bot)))
+                const botIsAdmin = meta.participants.some(p =>
+                    participantIdentifiers(p).some(id => isSelf(sock, id)) && Boolean(p.admin)
                 );
-                const botIsAdmin = !!botParticipant?.admin;
-
-                const detected = meta.participants.filter(p => {
-                    const jid = p.id || p.jid || p.phoneNumber || p.lid;
-                    if (!jid || botIdentities.some(bot => sameIdentity(jid, bot))) return false;
-                    if (p.admin) return false;
-                    return detectBotSignals({ jid, participant: p }).highConfidence;
-                });
-
-                const candidates = meta.participants.filter(p => {
-                    const jid = p.id || p.jid || p.phoneNumber || p.lid;
-                    if (!jid || botIdentities.some(bot => sameIdentity(jid, bot)) || p.admin) return false;
-                    const detection = detectBotSignals({ jid, participant: p });
-                    return detection.candidate && !detection.highConfidence;
+                const detected = meta.participants.filter(participant => {
+                    const jid = participantIdentifiers(participant)[0];
+                    if (!jid || isSelf(sock, jid) || participant.admin) return false;
+                    return detectBotSignals({ jid, participant }).highConfidence;
                 });
 
                 if (!detected.length) {
-                    let challengeSummary = '';
+                    let verification = '';
                     try {
-                        const sweep = await challengeGroupMembers(sock, from);
-                        challengeSummary = `\n\n🛡️ Started sender-bound verification for *${sweep.issued}* non-admin member(s).\n_This catches bots from other libraries by their inability to complete the challenge._`;
-                    } catch (error) {
-                        challengeSummary = `\n\n⚠️ Could not start the verification sweep: ${error.message}.`;
-                    }
-                    return reply(
-                        `✅ *No high-confidence bot signatures detected.*\n\n` +
-                        `Scanned ${meta.participants.length} members.\n` +
-                        `${candidates.length ? `⚠️ ${candidates.length} linked-device candidate(s) remain protected by newcomer verification.` : '_Ordinary linked-device JIDs are not treated as proof of automation._'}` +
-                        challengeSummary
-                    );
+                        const result = await challengeGroupMembers(sock, from);
+                        verification = `\n\n🛡️ Sender-bound verification started for *${result.issued}* non-admin member(s).`;
+                    } catch (_) {}
+                    return reply(`✅ No high-confidence bot signatures found among ${meta.participants.length} members.${verification}`);
                 }
 
-                const list = detected.map(p => {
-                    const jid = p.id || p.jid || p.phoneNumber || p.lid;
-                    const detection = detectBotSignals({ jid, participant: p });
-                    return `• @${shortJid(jid)} — ${detection.reason || 'high-confidence signature'}`;
+                const list = detected.map(participant => {
+                    const jid = participantIdentifiers(participant)[0];
+                    const signal = detectBotSignals({ jid, participant });
+                    return `• @${shortJid(jid)} — ${signal.reason || 'bot signature'}`;
                 }).join('\n');
-                if (!botIsAdmin) {
-                    return reply(
-                        `🤖 *${detected.length} bot(s) found:*\n\n${list}\n\n` +
-                        `❌ I need to be a *group admin* to remove them.\n` +
-                        `_Promote me first, then run .antibot scan again._`
-                    );
+
+                if (!botIsAdmin && currentAction !== 'delete') {
+                    return reply(`🤖 *${detected.length} likely bot account(s) found:*\n\n${list}\n\n❌ Promote me to group admin before using kick enforcement.`);
                 }
 
-                await reply(
-                    `🤖 *${detected.length} bot(s) detected:*\n\n${list}\n\n` +
-                    `_Removing now..._`
-                );
+                if (currentAction === 'delete') {
+                    return reply(`🤖 *${detected.length} bot account(s) matched:*\n\n${list}\n\n_Delete mode applies to messages; use .antibot kick to remove existing members._`);
+                }
 
                 let removed = 0;
-                for (const bot of detected) {
+                for (const participant of detected) {
+                    const jid = participantIdentifiers(participant)[0];
                     try {
-                        const botJid = bot.id || bot.jid || bot.phoneNumber || bot.lid;
-                        await sock.groupParticipantsUpdate(from, [botJid], 'remove');
+                        await sock.groupParticipantsUpdate(from, [jid], 'remove');
+                        database.resetWarnings(from, jid);
                         removed++;
-                        await new Promise(r => setTimeout(r, 600));
                     } catch (_) {}
                 }
-
-                let sweepSummary = '';
-                try {
-                    const sweep = await challengeGroupMembers(sock, from);
-                    sweepSummary = ` Newcomer verification is active for *${sweep.issued}* remaining non-admin member(s).`;
-                } catch (_) {}
-                return reply(`✅ Removed *${removed}/${detected.length}* bot(s) from the group.${sweepSummary}`);
-            } catch (err) {
-                return reply(`❌ Scan failed: ${err.message}`);
+                return reply(`✅ Removed *${removed}/${detected.length}* detected bot account(s).`);
+            } catch (error) {
+                return reply(`❌ AntiBot scan failed: ${error.message}`);
             }
         }
     },

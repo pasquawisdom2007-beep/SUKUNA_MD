@@ -47,11 +47,26 @@ function hasExplicitBotFlag(participant) {
         || participant.automation === true;
 }
 
-function detectBotSignals({ jid, participant, messageId } = {}) {
+function hasMessageBotFlag(message) {
+    if (!message || typeof message !== 'object') return false;
+    const content = message.message || {};
+    const context = content.messageContextInfo || content.contextInfo || {};
+    return message.isBot === true
+        || message.isBaileys === true
+        || message.isAutomated === true
+        || content.isBot === true
+        || content.isBaileys === true
+        || content.bot === true
+        || Boolean(content.botInvokeMessage || content.botMessage || content.botMetadata)
+        || Boolean(context.isBot || context.isBaileys || context.bot);
+}
+
+function detectBotSignals({ jid, participant, messageId, message } = {}) {
     const signals = [];
     const stamp = matchedStamp(messageId);
     if (stamp) signals.push({ type: 'message-id-stamp', value: stamp, confidence: 'high' });
     if (hasExplicitBotFlag(participant)) signals.push({ type: 'explicit-bot-flag', confidence: 'high' });
+    if (hasMessageBotFlag(message)) signals.push({ type: 'explicit-message-bot-flag', confidence: 'high' });
     if (isMultiDeviceJid(jid)) signals.push({ type: 'linked-device-jid', confidence: 'weak' });
 
     return {
@@ -76,6 +91,7 @@ module.exports = {
     sameIdentity,
     findParticipant,
     hasExplicitBotFlag,
+    hasMessageBotFlag,
     detectBotSignals,
     shortJid,
 };

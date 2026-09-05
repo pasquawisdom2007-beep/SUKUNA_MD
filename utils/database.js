@@ -177,6 +177,8 @@ class Database {
             antihijack: false,
             antibot: false,
             antibotMode: 'kick',
+            antibotAction: 'kick',
+            antibotMaxWarnings: 3,
             antisticker: false,
             antiviewonce: false,
             antivideo: false,

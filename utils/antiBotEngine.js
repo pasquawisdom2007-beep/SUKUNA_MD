@@ -65,8 +65,64 @@ function getState(sock) {
     return sock.__sukunaAntiBotState;
 }
 
+function antibotAction(config) {
+    const action = String(config?.antibotAction || '').toLowerCase();
+    if (['delete', 'kick', 'warn'].includes(action)) return action;
+    return config?.antibotMode === 'warn' ? 'warn' : 'kick';
+}
+
 async function sendWarning(sock, groupId, jid, text) {
-    await sock.sendMessage(groupId, { text, mentions: [jid] }).catch(() => {});
+    await sock.sendMessage(groupId, { text, mentions: jid ? [jid] : [] }).catch(() => {});
+}
+
+async function deleteMessage(sock, groupId, message) {
+    const key = message?.key;
+    if (!key?.id) return false;
+    try {
+        await sock.sendMessage(groupId, { delete: {
+            remoteJid: key.remoteJid || groupId,
+            fromMe: Boolean(key.fromMe),
+            id: key.id,
+            participant: key.participant,
+        } });
+        return true;
+    } catch (error) {
+        console.error('[ANTIBOT] message deletion failed:', error.message);
+        return false;
+    }
+}
+
+async function enforceDetected(sock, groupId, jid, config, reason, message = null) {
+    const meta = await sock.groupMetadata(groupId).catch(() => null);
+    const canRemove = botIsAdmin(meta, sock);
+    const action = antibotAction(config);
+
+    if (action === 'delete') {
+        const deleted = await deleteMessage(sock, groupId, message);
+        await sendWarning(sock, groupId, jid, deleted
+            ? `🗑️ *AntiBot:* bot message from @${shortJid(jid)} was deleted.\n_${reason}_`
+            : `⚠️ *AntiBot:* @${shortJid(jid)} matched a bot signature, but its message could not be deleted.\n_${reason}_`);
+        return { action, deleted, removed: false };
+    }
+
+    if (action === 'warn') {
+        const count = database.addWarning(groupId, jid);
+        const max = Math.max(1, Number(config.antibotMaxWarnings) || 3);
+        await deleteMessage(sock, groupId, message);
+        if (count >= max && canRemove) {
+            const removed = await removeMember(sock, groupId, jid, `Warning limit reached (${count}/${max}). ${reason}`, true);
+            if (removed) database.resetWarnings(groupId, jid);
+            return { action, count, max, removed };
+        }
+        await sendWarning(sock, groupId, jid,
+            `⚠️ *AntiBot warning ${count}/${max}:* @${shortJid(jid)} matched a bot signature.\n_${reason}_` +
+            (canRemove ? '' : '\n_The bot needs admin rights before it can remove members._'));
+        return { action, count, max, removed: false };
+    }
+
+    const removed = await removeMember(sock, groupId, jid, reason, canRemove);
+    if (removed) database.resetWarnings(groupId, jid);
+    return { action, removed };
 }
 
 async function removeMember(sock, groupId, jid, reason, canRemove) {
@@ -105,15 +161,7 @@ async function finishChallenge(sock, state, entry, outcome, detail) {
         return;
     }
 
-    const meta = await sock.groupMetadata(entry.groupId).catch(() => null);
-    const canRemove = botIsAdmin(meta, sock);
-    if (entry.mode === 'warn') {
-        await sendWarning(sock, entry.groupId, entry.jid,
-            `⚠️ *AntiBot warning:* @${shortJid(entry.jid)} did not complete verification.\n_${detail}_\n\nThe member remains because AntiBot is in warn-only mode.`
-        );
-        return;
-    }
-    await removeMember(sock, entry.groupId, entry.jid, detail, canRemove);
+    await enforceDetected(sock, entry.groupId, entry.jid, database.getGroup(entry.groupId), detail, null);
 }
 
 async function issueChallenge(sock, groupId, jid, config, state) {
@@ -130,7 +178,7 @@ async function issueChallenge(sock, groupId, jid, config, state) {
         groupId,
         jid,
         token,
-        mode: config.antibotMode === 'warn' ? 'warn' : 'kick',
+        mode: antibotAction(config),
         failures: 0,
         timer: null,
     };
@@ -213,14 +261,14 @@ async function handleMessage(sock, message) {
         return;
     }
 
-    const detection = detectBotSignals({ jid, participant: findParticipant(meta, jid), messageId: message?.key?.id });
+    const detection = detectBotSignals({
+        jid,
+        participant: findParticipant(meta, jid),
+        messageId: message?.key?.id,
+        message,
+    });
     if (detection.highConfidence) {
-        const canRemove = botIsAdmin(meta, sock);
-        if (config.antibotMode === 'warn' || !canRemove) {
-            await sendWarning(sock, groupId, jid, `⚠️ *AntiBot:* @${shortJid(jid)} matched ${detection.reason || 'a high-confidence bot signature'}.`);
-        } else {
-            await removeMember(sock, groupId, jid, detection.reason || 'High-confidence bot signature.', canRemove);
-        }
+        await enforceDetected(sock, groupId, jid, config, detection.reason || 'High-confidence bot signature.', message);
         return;
     }
 
