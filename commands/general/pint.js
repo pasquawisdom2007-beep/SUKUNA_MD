@@ -102,12 +102,13 @@ module.exports = {
             const cards = [];
             for (const result of results) {
                 try {
-                    const buffer = await fetchImage(result.url);
                     cards.push({
-                        image: buffer,
+                        // Use the fork's documented URL media shape. Passing a
+                        // Buffer here can force the media fallback on some builds.
+                        image: { url: result.url },
                         caption: `📌 *${query}*\n${cards.length + 1}/${results.length}${result.title ? `\n_${result.title.slice(0, 120)}_` : ''}`,
-                        footer: 'SUKUNA MD · Pinterest search',
-                        nativeFlow: [{ text: 'View web', url: pinterestUrl, useWebview: true }],
+                        footer: 'Pinterest · SUKUNA MD',
+                        nativeFlow: [{ text: 'Source', url: pinterestUrl, useWebview: true }],
                     });
                     // Pace downloads so a slow source cannot create a burst of work.
                     if (cards.length < results.length) await sleep(SEND_DELAY_MS);
@@ -119,26 +120,14 @@ module.exports = {
                 cooldowns.delete(key);
                 return reply('❌ The image source returned unusable results. Try again with another prompt.');
             }
-            try {
-                await sock.sendMessage(from, {
-                    // Pasqua Baileys uses the outer text field to enter its
-                    // interactive-message pipeline before processing `cards`.
-                    text: `📌 *${query}*\nSwipe horizontally through ${cards.length} results below.`,
-                    footer: 'SUKUNA MD · PINTEREST-STYLE SEARCH',
-                    cards,
-                }, { quoted: msg });
-            } catch (carouselError) {
-                // Keep the command usable on clients that reject carousel cards.
-                console.error('[pint:carousel]', carouselError.message);
-                for (const card of cards) {
-                    await sock.sendMessage(from, {
-                        image: card.image,
-                        caption: card.caption,
-                        nativeFlow: card.nativeFlow,
-                    }, { quoted: msg });
-                    await sleep(SEND_DELAY_MS);
-                }
-            }
+            // Keep the exact native carousel payload. Do not fall back to
+            // individual image sends because that defeats the horizontal UI.
+            await sock.sendMessage(from, {
+                text: `📌 *${query}*\nSwipe horizontally through ${cards.length} results below.`,
+                footer: 'SUKUNA MD · PINTEREST-STYLE SEARCH',
+                cards,
+                interactiveAsTemplate: false,
+            }, { quoted: msg });
         } catch (error) {
             cooldowns.delete(key);
             console.error('[pint]', error.message);
