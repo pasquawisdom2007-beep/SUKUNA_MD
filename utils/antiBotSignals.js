@@ -1,6 +1,7 @@
 'use strict';
 
 const { matchedStamp } = require('./botIdStamp');
+const { normalizeForAntiBot } = require('./officialAntiBotAdapter');
 
 function rawJid(value) {
     return value == null ? '' : String(value).trim();
@@ -62,18 +63,21 @@ function hasMessageBotFlag(message) {
 }
 
 function deriveBotFlags(message = {}) {
-    const content = message?.message || {};
+    const official = normalizeForAntiBot(message);
+    const content = official.content || message?.message || {};
     const context = content.messageContextInfo || content.contextInfo || {};
-    const messageId = message?.key?.id || message?.id || '';
-    const stamp = matchedStamp(messageId);
-    const explicitBot = message.isBot === true
+    const messageId = official.messageId || message?.key?.id || message?.id || '';
+    const stamp = official.stamp || matchedStamp(messageId);
+    const explicitBot = official.isBot === true
+        || message.isBot === true
         || message.isAutomated === true
         || content.isBot === true
         || content.isAutomated === true
         || content.bot === true
         || Boolean(content.botInvokeMessage || content.botMessage || content.botMetadata)
         || Boolean(context.isBot || context.bot);
-    const explicitBaileys = message.isBaileys === true
+    const explicitBaileys = official.isBaileys === true
+        || message.isBaileys === true
         || content.isBaileys === true
         || context.isBaileys === true;
     return {
