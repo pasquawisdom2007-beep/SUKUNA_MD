@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('crypto');
 const google = require('./google');
 const { generateWAMessageFromContent, proto } = require('@pasqua-baileys/baileys');
 const { escapeHtml, sendRichHtml } = require('../../utils/genaiRich');
@@ -7,6 +8,8 @@ const { escapeHtml, sendRichHtml } = require('../../utils/genaiRich');
 const sources = google._sources || {};
 const MAX_RESULTS = 8;
 const MAX_SNIPPET = 190;
+const DETAILS_TTL_MS = 10 * 60 * 1000;
+const detailsCache = new Map();
 
 function cleanUrl(value) {
     return typeof value === 'string' && /^https?:\/\//i.test(value) ? value : '';
@@ -59,19 +62,20 @@ function sourceRowsHtml(sites) {
     return `<div class="sources"><div class="sourceTitle">Sources</div>${sites.slice(0, MAX_RESULTS).map(site => `<a class="sourceRow" href="${escapeHtml(site.url)}" target="_blank"><img src="${escapeHtml(faviconUrl(site.url))}" alt=""><span class="sourceCopy"><b>${escapeHtml(site.title)}</b><small>${escapeHtml(site.domain || domainOf(site.url))}</small></span><span class="sourceArrow">›</span></a>`).join('')}</div>`;
 }
 
-async function sendStreamActions({ sock, msg, from, query, googleUrl, sites }) {
-    const button = (displayText, url) => ({
-        name: 'cta_url',
-        buttonParamsJson: JSON.stringify({ display_text: displayText, url, merchant_url: url }),
-    });
-    const buttons = [button('View in Google', googleUrl)];
-    sites.slice(0, 2).forEach((site, index) => buttons.push(button(`View result ${index + 1}`, site.url)));
+async function sendSeeDetailsButton({ sock, msg, from, detailsId }) {
+    const button = {
+        name: 'quick_reply',
+        buttonParamsJson: JSON.stringify({
+            display_text: 'See details',
+            id: `stream_details:${detailsId}`,
+        }),
+    };
     try {
         const interactive = {
-            body: { text: `Tap a result to open it: ${query}` },
+            body: { text: 'Tap below to open the sources and details.' },
             footer: { text: 'SUKUNA MD · STREAM SEARCH' },
-            header: { title: '⌕ Search Results', hasMediaAttachment: false },
-            nativeFlowMessage: { buttons, messageParamsJson: '' },
+            header: { title: '⌕ Search details', hasMediaAttachment: false },
+            nativeFlowMessage: { buttons: [button], messageParamsJson: '' },
         };
         const wrapped = generateWAMessageFromContent(from, {
             viewOnceMessage: {
@@ -86,11 +90,26 @@ async function sendStreamActions({ sock, msg, from, query, googleUrl, sites }) {
         });
         await sock.relayMessage(from, wrapped.message, { messageId: wrapped.key.id });
     } catch (error) {
-        console.error('[streamsearch:actions]', error.message);
-        await sock.sendMessage(from, {
-            text: `View in Google: ${googleUrl}${sites.slice(0, 2).map((site, index) => `\nView result ${index + 1}: ${site.url}`).join('')}`,
-        }, { quoted: msg });
+        console.error('[streamsearch:details-button]', error.message);
+        await sock.sendMessage(from, { text: 'Tap the source cards above to open a result.' }, { quoted: msg });
     }
+}
+
+function sourceDetailsHtml(query, sites) {
+    const rows = sites.map(site => `<a class="detail" href="${escapeHtml(site.url)}" target="_blank" rel="noopener noreferrer"><img src="${escapeHtml(faviconUrl(site.url))}" alt=""><span><b>${escapeHtml(site.title)}</b><small>${escapeHtml(site.domain || domainOf(site.url))}</small></span><em>›</em></a>`).join('');
+    return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>*{box-sizing:border-box}body{margin:0;padding:0;background:#07090d;font-family:Arial,sans-serif;color:#f1f2f2}.details{padding:18px 16px 22px;background:#11161d;border-radius:26px 26px 0 0}.handle{width:42px;height:4px;margin:0 auto 18px;border-radius:99px;background:#8696a0}.title{font-size:22px;font-weight:700;margin-bottom:6px}.subtitle{color:#8696a0;font-size:12px;margin-bottom:18px}.detail{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid #26343b;text-decoration:none;color:#f1f2f2}.detail img{width:38px;height:38px;border-radius:50%;background:#202c33}.detail span{min-width:0;flex:1}.detail b,.detail small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.detail b{font-size:13px}.detail small{margin-top:4px;color:#8696a0;font-size:11px}.detail em{font-size:25px;color:#8696a0;font-style:normal}</style></head><body><div class="details"><div class="handle"></div><div class="title">Sources</div><div class="subtitle">Details for ${escapeHtml(query)} · tap a source to open it</div>${rows || '<div class="subtitle">No source details available.</div>'}</div></body></html>`;
+}
+
+async function handleButton(buttonId, { sock, msg, from }) {
+    const key = String(buttonId || '').slice('stream_details:'.length);
+    const cached = detailsCache.get(key);
+    if (!cached || Date.now() - cached.ts > DETAILS_TTL_MS) {
+        await sock.sendMessage(from, { text: 'These search details have expired. Run .sch again.' }, { quoted: msg });
+        return true;
+    }
+    await sendRichHtml({ sock, jid: from, quoted: msg, html: sourceDetailsHtml(cached.query, cached.sites) });
+    detailsCache.delete(key);
+    return true;
 }
 
 function streamSearchHtml(query, heading, abstract, sites, googleUrl) {
@@ -123,8 +142,13 @@ async function execute({ sock, msg, from, reply, args }) {
             images.forEach((image, index) => { sites[index].image = cleanUrl(image); });
         }
         const googleUrl = buildGoogleUrl(query);
+        const detailsId = crypto.randomUUID();
+        detailsCache.set(detailsId, { ts: Date.now(), query, sites: sites.map(site => ({ ...site })) });
+        for (const [key, value] of detailsCache) {
+            if (Date.now() - value.ts > DETAILS_TTL_MS) detailsCache.delete(key);
+        }
         await sendRichHtml({ sock, jid: from, quoted: msg, html: streamSearchHtml(query, heading, abstract, sites, googleUrl) });
-        await sendStreamActions({ sock, msg, from, query, googleUrl, sites });
+        await sendSeeDetailsButton({ sock, msg, from, detailsId });
         await sock.sendMessage(from, { react: { text: '✅', key: msg.key } }).catch(() => {});
     } catch (error) {
         console.error('[streamsearch]', error.message);
@@ -139,5 +163,6 @@ module.exports = {
     usage: '.streamsearch <query>',
     category: 'media',
     execute,
-    _test: { collectSites, streamSearchHtml, buildGoogleUrl, faviconUrl, sendStreamActions },
+    _test: { collectSites, streamSearchHtml, buildGoogleUrl, faviconUrl, sourceDetailsHtml },
+    handleButton,
 };
