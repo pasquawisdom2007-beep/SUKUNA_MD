@@ -7,7 +7,6 @@ const {
     sameIdentity,
     shortJid,
 } = require('../../utils/antiBotSignals');
-const { challengeGroupMembers } = require('../../utils/antiBotEngine');
 
 function botJids(sock) {
     return [sock.user?.id, sock.user?.lid, sock.user?.jid, sock.user?.phoneNumber].filter(Boolean);
@@ -60,7 +59,7 @@ module.exports = {
                 `Active: ${group.antibot ? '✅ Yes' : '❌ No'}\n` +
                 `Action: *${currentAction.toUpperCase()}*\n` +
                 `Warning limit: *${maxWarnings}*\n\n` +
-                '_Detection combines explicit bot metadata, known library message-ID signatures, and sender-bound verification for bots that expose no metadata._'
+                '_Detection uses explicit bot metadata and known library message-ID signatures. No member challenge is used._'
             );
         }
 
@@ -104,12 +103,7 @@ module.exports = {
                 });
 
                 if (!detected.length) {
-                    let verification = '';
-                    try {
-                        const result = await challengeGroupMembers(sock, from);
-                        verification = `\n\n🛡️ Sender-bound verification started for *${result.issued}* non-admin member(s).`;
-                    } catch (_) {}
-                    return reply(`✅ No high-confidence bot signatures found among ${meta.participants.length} members.${verification}`);
+                    return reply(`✅ No high-confidence bot signatures found among ${meta.participants.length} members.\n_No member challenge was started._`);
                 }
 
                 const list = detected.map(participant => {
