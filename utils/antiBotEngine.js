@@ -7,6 +7,7 @@ const {
     participantIdentifiers,
     sameIdentity,
     shortJid,
+    annotateBotFlags,
 } = require('./antiBotSignals');
 
 function normalizeJid(value) {
@@ -135,6 +136,10 @@ function messageSender(message) {
 }
 
 async function handleMessage(sock, message) {
+    // Mirror the attached framework contract before applying AntiBot policy.
+    // This makes `message.isBot` and `message.isBaileys` available to all
+    // downstream checks without treating ordinary WhatsApp messages as bots.
+    annotateBotFlags(message);
     const groupId = message?.key?.remoteJid;
     if (!groupId || !groupId.endsWith('@g.us') || message?.key?.fromMe) return;
     const config = database.getGroup(groupId);

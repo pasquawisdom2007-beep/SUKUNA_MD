@@ -61,9 +61,42 @@ function hasMessageBotFlag(message) {
         || Boolean(context.isBot || context.isBaileys || context.bot);
 }
 
+function deriveBotFlags(message = {}) {
+    const content = message?.message || {};
+    const context = content.messageContextInfo || content.contextInfo || {};
+    const messageId = message?.key?.id || message?.id || '';
+    const stamp = matchedStamp(messageId);
+    const explicitBot = message.isBot === true
+        || message.isAutomated === true
+        || content.isBot === true
+        || content.isAutomated === true
+        || content.bot === true
+        || Boolean(content.botInvokeMessage || content.botMessage || content.botMetadata)
+        || Boolean(context.isBot || context.bot);
+    const explicitBaileys = message.isBaileys === true
+        || content.isBaileys === true
+        || context.isBaileys === true;
+    return {
+        isBot: explicitBot || explicitBaileys || Boolean(stamp),
+        isBaileys: explicitBaileys || Boolean(stamp),
+        stamp,
+    };
+}
+
+function annotateBotFlags(message) {
+    if (!message || typeof message !== 'object') return message;
+    const flags = deriveBotFlags(message);
+    // Keep these enumerable to match the attached framework’s `m.isBot` and
+    // `m.isBaileys` contract for downstream middleware and command handlers.
+    message.isBot = flags.isBot;
+    message.isBaileys = flags.isBaileys;
+    return message;
+}
+
 function detectBotSignals({ jid, participant, messageId, message } = {}) {
     const signals = [];
-    const stamp = matchedStamp(messageId);
+    const flags = deriveBotFlags(message);
+    const stamp = flags.stamp || matchedStamp(messageId);
     if (stamp) signals.push({ type: 'message-id-stamp', value: stamp, confidence: 'high' });
     if (hasExplicitBotFlag(participant)) signals.push({ type: 'explicit-bot-flag', confidence: 'high' });
     if (hasMessageBotFlag(message)) signals.push({ type: 'explicit-message-bot-flag', confidence: 'high' });
@@ -92,6 +125,8 @@ module.exports = {
     findParticipant,
     hasExplicitBotFlag,
     hasMessageBotFlag,
+    deriveBotFlags,
+    annotateBotFlags,
     detectBotSignals,
     shortJid,
 };
