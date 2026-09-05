@@ -96,7 +96,7 @@ async function resolveChannel(sock, msg, args) {
     ];
     const contextJid = contextCandidates
         .map(context => normalizeNewsletterJid(context?.remoteJid || context?.newsletterJid))
-        .find(Boolean) || contextCandidates.map(findNewsletterJid).find(Boolean);
+        .find(Boolean) || contextCandidates.map(context => findNewsletterJid(context)).find(Boolean);
     const directJid = quotedKeyJid || currentChatJid || contextJid;
     const text = getSearchText(msg, args);
     const inviteCode = getChannelInvite(text);
