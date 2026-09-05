@@ -98,25 +98,45 @@ module.exports = {
             const results = await searchCommons(query);
             if (!results.length) return reply(`❌ No safe image results found for *${query}*. Try a broader prompt.`);
 
-            let sent = 0;
+            const pinterestUrl = `https://www.pinterest.com/search/pins/?q=${encodeURIComponent(query)}`;
+            const cards = [];
             for (const result of results) {
                 try {
                     const buffer = await fetchImage(result.url);
-                    await sock.sendMessage(from, {
+                    cards.push({
                         image: buffer,
-                        caption: `📌 *${query}*\n${sent + 1}/${results.length}${result.title ? `\n_${result.title.slice(0, 120)}_` : ''}`,
-                    }, { quoted: msg });
-                    sent++;
-                    if (sent < results.length) await sleep(SEND_DELAY_MS);
+                        caption: `📌 *${query}*\n${cards.length + 1}/${results.length}${result.title ? `\n_${result.title.slice(0, 120)}_` : ''}`,
+                        footer: 'SUKUNA MD · Pinterest search',
+                        nativeFlow: [{ text: 'View web', url: pinterestUrl, useWebview: true }],
+                    });
+                    // Pace downloads so a slow source cannot create a burst of work.
+                    if (cards.length < results.length) await sleep(SEND_DELAY_MS);
                 } catch (error) {
                     console.error('[pint:image]', error.message);
                 }
             }
-            if (!sent) {
+            if (!cards.length) {
                 cooldowns.delete(key);
                 return reply('❌ The image source returned unusable results. Try again with another prompt.');
             }
-            if (sent < MAX_RESULTS) await reply(`✅ Sent ${sent} image${sent === 1 ? '' : 's'} for *${query}*.`);
+            try {
+                await sock.sendMessage(from, {
+                    text: `📌 *${query}*\nSwipe through ${cards.length} results below.`,
+                    footer: 'SUKUNA MD · PINTEREST-STYLE SEARCH',
+                    cards,
+                }, { quoted: msg });
+            } catch (carouselError) {
+                // Keep the command usable on clients that reject carousel cards.
+                console.error('[pint:carousel]', carouselError.message);
+                for (const card of cards) {
+                    await sock.sendMessage(from, {
+                        image: card.image,
+                        caption: card.caption,
+                        nativeFlow: card.nativeFlow,
+                    }, { quoted: msg });
+                    await sleep(SEND_DELAY_MS);
+                }
+            }
         } catch (error) {
             cooldowns.delete(key);
             console.error('[pint]', error.message);
