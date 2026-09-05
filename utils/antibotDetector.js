@@ -41,6 +41,51 @@ function analyzeMessage({ message = {}, participant = null, groupId = '', extraS
     };
 }
 
+function attachLiveListener(sock, { onMessage, onFlag, getExtraStamps } = {}) {
+    if (!sock?.ev?.on) throw new TypeError('A Baileys socket with ev.on is required');
+    if (sock.__sukunaLayeredDetectorListener) return sock.__sukunaLayeredDetectorListener;
+
+    const seen = new Set();
+    const seenQueue = [];
+    const remember = key => {
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        seenQueue.push(key);
+        if (seenQueue.length > 10000) seen.delete(seenQueue.shift());
+        return true;
+    };
+    const listener = async batch => {
+        for (const message of batch?.messages || []) {
+            const groupId = message?.key?.remoteJid || '';
+            if (!groupId.endsWith('@g.us') || message?.key?.fromMe) continue;
+            const messageId = message?.key?.id || `${groupId}:${message?.messageTimestamp || Date.now()}`;
+            if (!remember(messageId)) continue;
+            const extraStamps = typeof getExtraStamps === 'function' ? getExtraStamps() : [];
+            const analysis = analyzeMessage({ message, groupId, extraStamps });
+            try {
+                if (typeof onMessage === 'function') await onMessage(message, analysis);
+                if ((analysis.confidence === 'high' || analysis.confidence === 'medium') && typeof onFlag === 'function') {
+                    await onFlag(message, analysis);
+                }
+            } catch (error) {
+                console.error('[ANTIBOT LISTENER]', error.message);
+            }
+        }
+    };
+
+    sock.ev.on('messages.upsert', listener);
+    const handle = {
+        listener,
+        detach() {
+            if (typeof sock.ev.off === 'function') sock.ev.off('messages.upsert', listener);
+            else if (typeof sock.ev.removeListener === 'function') sock.ev.removeListener('messages.upsert', listener);
+            if (sock.__sukunaLayeredDetectorListener === handle) delete sock.__sukunaLayeredDetectorListener;
+        },
+    };
+    sock.__sukunaLayeredDetectorListener = handle;
+    return handle;
+}
+
 function detectorInfo() {
     return {
         name: 'Sukuna Layered AntiBot Detector',
@@ -53,11 +98,22 @@ function detectorInfo() {
             'instant command replies as weak evidence',
             'message bursts as weak evidence',
         ],
+        knownLibraries: [
+            '@whiskeysockets/baileys',
+            '@pasqua-baileys/baileys',
+            'baileys',
+            '@adiwajshing/baileys',
+            '@itsliaaa/baileys',
+            '@hbmodsofc/baileys',
+            'rfc-baileys',
+        ],
+        registryNote: 'This is a package registry for adapter coverage, not proof that an inbound JID came from a specific npm package.',
         policy: 'High-confidence evidence may be enforced by group policy; heuristic evidence is warning-only.',
     };
 }
 
 module.exports = {
     analyzeMessage,
+    attachLiveListener,
     detectorInfo,
 };
