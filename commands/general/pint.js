@@ -8,7 +8,9 @@ const path = require('path');
 // Wikimedia Commons provides stable public thumbnails and a searchable API.
 const COOLDOWN_MS = 45_000;
 const SEND_DELAY_MS = 1_200;
-const MAX_RESULTS = 6;
+// Start with the fork's documented two-card carousel shape. More cards
+// are added only after the client accepts the native carousel consistently.
+const MAX_RESULTS = 2;
 const MAX_IMAGE_BYTES = 7 * 1024 * 1024;
 const cooldowns = new Map();
 
@@ -135,7 +137,6 @@ module.exports = {
                     text: `📌 *${query}*\nSwipe horizontally through ${cards.length} results below.`,
                     footer: 'SUKUNA MD · PINTEREST-STYLE SEARCH',
                     cards,
-                    interactiveAsTemplate: false,
                 }, { quoted: msg });
             } finally {
                 await fs.promises.rm(tempDir, { recursive: true, force: true }).catch(() => {});
