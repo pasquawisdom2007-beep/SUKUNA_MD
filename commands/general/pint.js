@@ -121,7 +121,6 @@ module.exports = {
             }
             try {
                 await sock.sendMessage(from, {
-                    text: `📌 *${query}*\nSwipe through ${cards.length} results below.`,
                     footer: 'SUKUNA MD · PINTEREST-STYLE SEARCH',
                     cards,
                 }, { quoted: msg });
