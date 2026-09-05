@@ -1,5 +1,7 @@
 'use strict';
 
+const { generateWAMessageFromContent, proto } = require('@pasqua-baileys/baileys');
+
 const CHANNEL_LINK_RE = /(?:https?:\/\/)?(?:www\.)?whatsapp\.com\/channel\/([A-Za-z0-9_-]+)/i;
 const NEWSLETTER_JID_RE = /^\d{8,}@newsletter$/i;
 
@@ -45,11 +47,44 @@ function getChannelInvite(text) {
     return String(text || '').match(CHANNEL_LINK_RE)?.[1] || null;
 }
 
+async function sendCopyButton({ sock, msg, from, id, body }) {
+    const button = {
+        name: 'cta_copy',
+        buttonParamsJson: JSON.stringify({
+            display_text: 'Copy Newsletter ID',
+            id: `channelid_copy_${Date.now()}`,
+            copy_code: id,
+        }),
+    };
+    try {
+        const wrapped = generateWAMessageFromContent(from, {
+            viewOnceMessage: {
+                message: {
+                    messageContextInfo: { deviceListMetadataVersion: 2, deviceListMetadata: {} },
+                    interactiveMessage: proto.Message.InteractiveMessage.fromObject({
+                        body: { text: body },
+                        footer: { text: 'SUKUNA MD · CHANNEL ID' },
+                        header: { title: '✦ NEWSLETTER ID ✦', hasMediaAttachment: false },
+                        nativeFlowMessage: { buttons: [button], messageParamsJson: '' },
+                    }),
+                },
+            },
+        }, { userJid: sock.user?.id, ...(msg?.message ? { quoted: msg } : {}) });
+        await sock.relayMessage(from, wrapped.message, { messageId: wrapped.key.id });
+    } catch (error) {
+        console.error('[channelid:copy-button]', error?.message || error);
+        await sock.sendMessage(from, { text: `${body}\n\n📋 Copy this ID:\n${id}` }, { quoted: msg });
+    }
+}
+
 async function resolveChannel(sock, msg, args) {
     const quoted = getQuotedMessage(msg);
     const quotedKeyJid = normalizeNewsletterJid(quoted?.key?.remoteJid || quoted?.remoteJid || quoted?.chat);
+    const currentChatJid = normalizeNewsletterJid(msg?.key?.remoteJid || msg?.remoteJid);
     const rawMessage = msg?.message || {};
     const contextCandidates = [
+        msg,
+        rawMessage,
         rawMessage.extendedTextMessage?.contextInfo,
         rawMessage.imageMessage?.contextInfo,
         rawMessage.videoMessage?.contextInfo,
@@ -59,8 +94,10 @@ async function resolveChannel(sock, msg, args) {
         quoted?.message?.imageMessage?.contextInfo,
         quoted?.message?.videoMessage?.contextInfo,
     ];
-    const contextJid = contextCandidates.map(findNewsletterJid).find(Boolean);
-    const directJid = quotedKeyJid || contextJid;
+    const contextJid = contextCandidates
+        .map(context => normalizeNewsletterJid(context?.remoteJid || context?.newsletterJid))
+        .find(Boolean) || contextCandidates.map(findNewsletterJid).find(Boolean);
+    const directJid = quotedKeyJid || currentChatJid || contextJid;
     const text = getSearchText(msg, args);
     const inviteCode = getChannelInvite(text);
 
@@ -98,7 +135,7 @@ module.exports = {
     usage: '.channelid <channel link> or reply to a channel message',
     category: 'general',
 
-    async execute({ sock, msg, args, reply, prefix = '.' }) {
+    async execute({ sock, msg, from, args, reply, prefix = '.' }) {
         try {
             const result = await resolveChannel(sock, msg, args);
             if (!result) {
@@ -113,15 +150,16 @@ module.exports = {
             const link = result.metadata?.invite
                 ? `https://whatsapp.com/channel/${result.metadata.invite}`
                 : null;
-            return reply(
+            const body =
                 `📡 *WHATSAPP CHANNEL ID*\n` +
                 `┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄\n` +
                 `🆔 *ID:* \`${result.id}\`\n` +
                 (name ? `📛 *Name:* ${name}\n` : '') +
                 `🔎 *Source:* ${result.source}\n` +
                 (link ? `🔗 *Link:* ${link}\n` : '') +
-                `\n_Copy the ID exactly, including @newsletter._`
-            );
+                `\n_Copy the ID exactly, including @newsletter._`;
+            await sendCopyButton({ sock, msg, from, id: result.id, body });
+            return;
         } catch (error) {
             console.error('[channelid]', error?.message || error);
             return reply(`❌ *Channel lookup failed:* ${error?.message || 'Unknown error'}`);
@@ -129,5 +167,5 @@ module.exports = {
     },
 
     // Exported for focused tests and future channel utilities.
-    _private: { normalizeNewsletterJid, findNewsletterJid, getChannelInvite, resolveChannel },
+    _private: { normalizeNewsletterJid, findNewsletterJid, getChannelInvite, resolveChannel, sendCopyButton },
 };
