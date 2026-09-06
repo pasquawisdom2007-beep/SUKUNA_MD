@@ -132,6 +132,13 @@ module.exports = {
                     const title = res.title || query;
                     const author = res.author || 'YouTube';
                     const duration = res.duration || '';
+                    if (thumbnailBuffer) {
+                        await sock.sendMessage(from, {
+                            image: thumbnailBuffer,
+                            caption: `🎵 *${title}*\\n👤 ${author}${duration ? `\\n⏱️ ${duration}` : ''}`,
+                        }, { quoted: msg });
+                    }
+
                     const audioMessage = {
                         audio: audioBuffer,
                         mimetype: 'audio/mpeg',
