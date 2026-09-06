@@ -1,7 +1,9 @@
 'use strict';
 
 const axios = require('axios');
-const { sendRichHtml, escapeHtml } = require('../../utils/genaiRich');
+const crypto = require('crypto');
+const { generateWAMessageFromContent, proto } = require('@pasqua-baileys/baileys');
+const { escapeHtml } = require('../../utils/genaiRich');
 
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 const INSTAGRAM_APP_ID = '936619743392459';
@@ -167,6 +169,76 @@ function instagramRichCard(profile) {
 </style></head><body><section class="sheet"><div class="handlebar"></div><div class="avatar-wrap"><img class="avatar" src="${escapeHtml(avatar)}" alt="Instagram profile"></div><div class="identity"><span class="name">${name}</span><span class="verified">${profile.verified ? '●' : '●'}</span></div><div class="stats">${stat(profile.postsCount)} posts · ${stat(profile.followers)} followers · ${stat(profile.following || profile.engagement)} ${profile.following ? 'following' : 'engagement'}</div><div class="bio">${escapeHtml(profile.biographyShort || profile.shortBio || profile.fullName || name)}</div><div class="actions"><a class="button primary" href="${escapeHtml(profileUrl)}">◎&nbsp;&nbsp;View profile</a></div><div class="description">${escapeHtml(description)}</div>${related}<div class="footer">Instagram · SUKUNA MD</div></section></body></html>`;
 }
 
+
+function instagramProfileData(profile, expanded = false) {
+    const username = usernameFromInput(profile.username || 'instagram');
+    const profileUrl = profile.profileUrl || profile.externalUrl || `https://instagram.com/${encodeURIComponent(username)}`;
+    const avatar = profile.avatar || `https://unavatar.io/instagram/${encodeURIComponent(username)}`;
+    const displayName = profile.fullName || profile.name || username;
+    const stats = `${profile.postsCount || '—'} posts · ${profile.followers || '—'} followers · ${profile.following || profile.engagement || '—'} ${profile.following ? 'following' : 'engagement'}`;
+    const sections = [
+        {
+            __typename: 'GenAIUnifiedResponseSection',
+            view_model: { __typename: 'GenAISingleLayoutViewModel', primitive: { __typename: 'FOATextPrimitive', text: expanded ? `${displayName}\n@${username}` : `@${username}` } },
+        },
+        {
+            __typename: 'GenAIUnifiedResponseSection',
+            view_model: { __typename: 'GenAISingleLayoutViewModel', primitive: { __typename: 'GenAIImagePrimitive', preview_image: { __typename: 'GenAIMediaItem', mime_type: 'image/jpeg', url: avatar }, full_image: { __typename: 'GenAIMediaItem', mime_type: 'image/jpeg', url: avatar } } },
+        },
+        {
+            __typename: 'GenAIUnifiedResponseSection',
+            view_model: { __typename: 'GenAISingleLayoutViewModel', primitive: { __typename: 'FOATextPrimitive', text: expanded ? `${stats}\n\n${profile.biography || profile.fullName || ''}` : displayName } },
+        },
+        {
+            __typename: 'GenAIUnifiedResponseSection',
+            view_model: {
+                __typename: 'GenAIActionRowLayoutViewModel',
+                primitives: [{
+                    __typename: 'GenAI3PExtWidgetPrimitive',
+                    header: { __typename: 'GenAI3PExtWidgetStandardHeader', title: expanded ? 'Instagram' : 'Profile' },
+                    body: { __typename: 'GenAI3PExtCalendarEventList', ctas: [{
+                        label: expanded ? 'Open profile' : 'View profile',
+                        state: 'PENDING',
+                        kind: 'OTHER',
+                        tool_call_id: expanded ? undefined : `instagram:profile:${username}`,
+                        cta_type: expanded ? 'OPEN_URL' : undefined,
+                        cta_url: expanded ? profileUrl : undefined,
+                        toast: { label: expanded ? 'Opening Instagram' : `Loading @${username}`, __typename: 'GenAI3PExtWidgetToast' },
+                        __typename: 'GenAI3PExtWidgetCTA',
+                    }], sections: [] },
+                }],
+            },
+        },
+    ];
+
+    if (expanded) {
+        sections.push({ __typename: 'GenAIUnifiedResponseSection', view_model: { __typename: 'GenAISingleLayoutViewModel', primitive: { __typename: 'FOATextPrimitive', text: profile.description || `About @${username}\n\n${profile.biography || 'No public biography was returned.'}` } } });
+        const posts = (profile.posts || []).filter(post => post?.image && post?.shortcode).slice(0, 8);
+        if (posts.length) {
+            sections.push({ __typename: 'GenAIUnifiedResponseSection', view_model: { __typename: 'GenAISingleLayoutViewModel', primitive: { __typename: 'FOATextPrimitive', text: 'Related posts' } } });
+            for (const post of posts) {
+                sections.push({ __typename: 'GenAIUnifiedResponseSection', view_model: { __typename: 'GenAISingleLayoutViewModel', primitive: { __typename: 'GenAIImagePrimitive', preview_image: { __typename: 'GenAIMediaItem', mime_type: 'image/jpeg', url: post.image }, full_image: { __typename: 'GenAIMediaItem', mime_type: 'image/jpeg', url: post.image } } } });
+            }
+        }
+    }
+    return { sections };
+}
+
+function buildInstagramContent(profile, expanded = false) {
+    const data = Buffer.from(JSON.stringify(instagramProfileData(profile, expanded))).toString('base64');
+    return proto.Message.fromObject({
+        messageContextInfo: { deviceListMetadataVersion: 2, deviceListMetadata: {}, messageSecret: crypto.randomBytes(32) },
+        botForwardedMessage: { message: { richResponseMessage: { messageType: 1, submessages: [], unifiedResponse: { data }, contextInfo: { isForwarded: true, forwardingScore: 1, forwardOrigin: 4 } } } },
+    });
+}
+
+async function sendInstagramRich({ sock, jid, quoted, profile, expanded = false }) {
+    const content = buildInstagramContent(profile, expanded);
+    const wrapped = generateWAMessageFromContent(jid, content, { userJid: sock.user?.id, quoted: quoted?.message ? quoted : undefined });
+    await sock.relayMessage(jid, wrapped.message, { messageId: wrapped.key.id });
+    return wrapped;
+}
+
 module.exports = {
     name: 'instagram',
     aliases: ['insta', 'ig', 'igdl', 'iguser', 'igstalk', 'profile'],
@@ -198,7 +270,7 @@ module.exports = {
             let profile;
             try { profile = await lookupPrexzy(username); }
             catch (prexzyError) { console.warn('[insta] Prexzy lookup:', prexzyError.message); profile = await lookupInstagramUser(username); }
-            await sendRichHtml({ sock, jid: from, quoted: msg, html: instagramRichCard(profile) });
+            await sendInstagramRich({ sock, jid: from, quoted: msg, profile, expanded: false });
             return sock.sendMessage(from, { react: { text: '✅', key: msg.key } }).catch(() => {});
         } catch (error) {
             console.error('[instagram profile]', error.message);
@@ -212,5 +284,8 @@ module.exports.resolveAndDownload = resolveAndDownload;
 module.exports.lookupInstagram = lookupPrexzy;
 module.exports.lookupInstagramUser = lookupInstagramUser;
 module.exports.instagramRichCard = instagramRichCard;
+module.exports.instagramProfileData = instagramProfileData;
+module.exports.buildInstagramContent = buildInstagramContent;
+module.exports.sendInstagramRich = sendInstagramRich;
 module.exports.normalizeUser = normalizeUser;
 module.exports.usernameFromInput = usernameFromInput;
