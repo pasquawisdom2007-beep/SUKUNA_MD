@@ -15,12 +15,12 @@
     },
     "SESSION_ID": {
       "description": "Complete Base64 auth bundle or one-time Pasqua session ID",
-      "required": false
+      "required": true 
     },
     "PAIR_SITE_URL": {
       "description": "Pair-site URL used to redeem Pasqua session IDs",
       "value": "https://pair-site-wmte.onrender.com",
-      "required": true
+      "required": false
     }
   }
 }
