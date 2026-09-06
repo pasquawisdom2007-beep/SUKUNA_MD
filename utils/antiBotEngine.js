@@ -12,6 +12,15 @@ const {
     noteGroupActivity,
 } = require('./antiBotSignals');
 
+const GROUP_SETTINGS_TTL_MS = 30_000;
+const MESSAGE_DEDUPE_TTL_MS = 30_000;
+const ACTION_COOLDOWN_MS = 30_000;
+const MAX_CACHE_ENTRIES = 2_000;
+const groupSettingsCache = new Map();
+const processedMessages = new Map();
+const actionCooldowns = new Map();
+const inFlightActions = new Set();
+
 function normalizeJid(value) {
     return String(value || '').trim().replace(/:\d+(?=@)/, '');
 }
@@ -39,9 +48,62 @@ function getState(sock) {
     return sock.__sukunaAntiBotState;
 }
 
+function evictOldest(map, limit = MAX_CACHE_ENTRIES) {
+    while (map.size > limit) map.delete(map.keys().next().value);
+}
+
+async function withTimeout(promise, ms, label) {
+    let timer;
+    try {
+        return await Promise.race([
+            promise,
+            new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`[ANTIBOT TIMEOUT] ${label}`)), ms); }),
+        ]);
+    } finally {
+        if (timer) clearTimeout(timer);
+    }
+}
+
+async function getGroupSettings(groupId) {
+    const now = Date.now();
+    const cached = groupSettingsCache.get(groupId);
+    if (cached && now - cached.timestamp < GROUP_SETTINGS_TTL_MS) return cached.value;
+    const value = database.getGroup(groupId) || {};
+    groupSettingsCache.set(groupId, { timestamp: now, value });
+    evictOldest(groupSettingsCache);
+    return value;
+}
+
+function markMessageProcessed(message) {
+    const rawId = message?.key?.id || message?.id;
+    if (!rawId) return false;
+    const id = `${message?.key?.remoteJid || message?.chat || ''}:${rawId}`;
+    const now = Date.now();
+    const previous = processedMessages.get(id);
+    if (previous && now - previous < MESSAGE_DEDUPE_TTL_MS) return true;
+    processedMessages.set(id, now);
+    evictOldest(processedMessages);
+    return false;
+}
+
+function actionAlreadyRunning(groupId, jid) {
+    const key = `${groupId}:${normalizeJid(jid)}`;
+    const now = Date.now();
+    const last = actionCooldowns.get(key);
+    if (inFlightActions.has(key) || (last && now - last < ACTION_COOLDOWN_MS)) return true;
+    actionCooldowns.set(key, now);
+    inFlightActions.add(key);
+    evictOldest(actionCooldowns);
+    return false;
+}
+
+function finishAction(groupId, jid) {
+    inFlightActions.delete(`${groupId}:${normalizeJid(jid)}`);
+}
+
 function antibotAction(config) {
     const action = String(config?.antibotAction || '').toLowerCase();
-    if (['delete', 'kick', 'warn'].includes(action)) return action;
+    if (['delete', 'kick', 'remove', 'warn'].includes(action)) return action === 'remove' ? 'kick' : action;
     return config?.antibotMode === 'warn' ? 'warn' : 'kick';
 }
 
@@ -85,6 +147,8 @@ async function removeMember(sock, groupId, jid, reason, canRemove) {
 }
 
 async function enforceDetected(sock, groupId, jid, config, reason, message = null, forcedAction = null) {
+    if (actionAlreadyRunning(groupId, jid)) return { action: 'cooldown', removed: false };
+    try {
     const meta = await sock.groupMetadata(groupId).catch(() => null);
     const canRemove = botIsAdmin(meta, sock);
     const action = forcedAction || antibotAction(config);
@@ -115,13 +179,16 @@ async function enforceDetected(sock, groupId, jid, config, reason, message = nul
     const removed = await removeMember(sock, groupId, jid, reason, canRemove);
     if (removed) database.resetWarnings(groupId, jid);
     return { action, removed };
+    } finally {
+        finishAction(groupId, jid);
+    }
 }
 
 async function handleJoin(sock, event) {
     if (!event?.id || event.action !== 'add') return;
-    const config = database.getGroup(event.id);
+    const config = await getGroupSettings(event.id);
     if (!config.antibot) return;
-    const meta = await sock.groupMetadata(event.id).catch(() => null);
+    const meta = await withTimeout(sock.groupMetadata(event.id).catch(() => null), 8_000, `groupMetadata(${event.id})`).catch(() => null);
 
     for (const raw of event.participants || []) {
         const jid = typeof raw === 'string' ? raw : raw?.id || raw?.jid || raw?.phoneNumber || raw?.lid;
@@ -134,22 +201,23 @@ async function handleJoin(sock, event) {
 }
 
 function messageSender(message) {
-    return message?.key?.participant || message?.participant || message?.key?.remoteJid || '';
+    return message?.key?.participant || message?.key?.participantAlt || message?.participant || message?.key?.remoteJid || '';
 }
 
 async function handleMessage(sock, message) {
     // Mirror the attached framework contract before applying AntiBot policy.
     // This makes `message.isBot` and `message.isBaileys` available to all
     // downstream checks without treating ordinary WhatsApp messages as bots.
+    if (markMessageProcessed(message)) return;
     const extraStamps = database.getCustomBotStamps();
     annotateBotFlags(message, extraStamps);
     const groupId = message?.key?.remoteJid;
     if (!groupId || !groupId.endsWith('@g.us') || message?.key?.fromMe) return;
-    const config = database.getGroup(groupId);
+    const config = await getGroupSettings(groupId);
     if (!config.antibot) return;
     const jid = messageSender(message);
     if (!jid || isBotSelf(sock, jid)) return;
-    const meta = await sock.groupMetadata(groupId).catch(() => null);
+    const meta = await withTimeout(sock.groupMetadata(groupId).catch(() => null), 8_000, `groupMetadata(${groupId})`).catch(() => null);
     if (isAdmin(meta, jid)) return;
 
     const detection = detectBotSignals({
