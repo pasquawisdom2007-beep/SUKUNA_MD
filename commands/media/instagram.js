@@ -231,12 +231,14 @@ function instagramProfileData(profile, expanded = false) {
                     header: { __typename: 'GenAI3PExtWidgetStandardHeader', title: expanded ? 'Instagram' : 'Profile' },
                     body: { __typename: 'GenAI3PExtCalendarEventList', ctas: [{
                         label: expanded ? 'Open profile' : 'View profile',
-                        state: 'PENDING',
+                        // A PENDING CTA creates a Meta AI tool session. SUKUNA
+                        // cannot answer Meta's private tool callback, which
+                        // leaves clients stuck on an empty loading screen.
+                        state: 'COMPLETED',
                         kind: 'OTHER',
-                        tool_call_id: expanded ? undefined : `instagram:profile:${username}`,
-                        cta_type: expanded ? 'OPEN_URL' : undefined,
-                        cta_url: expanded ? profileUrl : undefined,
-                        toast: { label: expanded ? 'Opening Instagram' : `Loading @${username}`, __typename: 'GenAI3PExtWidgetToast' },
+                        cta_type: 'OPEN_URL',
+                        cta_url: profileUrl,
+                        toast: { label: 'Opening Instagram', __typename: 'GenAI3PExtWidgetToast' },
                         __typename: 'GenAI3PExtWidgetCTA',
                     }], sections: [] },
                 }],
@@ -312,7 +314,10 @@ module.exports = {
             let profile;
             try { profile = await lookupPrexzy(username); }
             catch (prexzyError) { console.warn('[insta] Prexzy lookup:', prexzyError.message); profile = await lookupInstagramUser(username); }
-            await sendInstagramRich({ sock, jid: from, quoted: msg, profile, expanded: false });
+            // Include the live profile sections in the first payload. The
+            // button opens Instagram directly; no private Meta AI tool round
+            // trip is required to reveal the already-fetched feed.
+            await sendInstagramRich({ sock, jid: from, quoted: msg, profile, expanded: true });
             return sock.sendMessage(from, { react: { text: '✅', key: msg.key } }).catch(() => {});
         } catch (error) {
             console.error('[instagram profile]', error.message);
