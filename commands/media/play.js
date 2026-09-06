@@ -2,6 +2,47 @@
 
 const axios = require('axios');
 
+const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
+
+function safeFileName(value) {
+    return String(value || 'audio').replace(/[^a-z0-9 _-]/gi, '').trim().slice(0, 100) || 'audio';
+}
+
+async function fetchAudioBuffer(url) {
+    if (!/^https?:\/\//i.test(String(url || ''))) throw new Error('Provider returned an invalid audio URL');
+    const response = await axios.get(url, {
+        responseType: 'arraybuffer',
+        timeout: 60_000,
+        maxContentLength: MAX_AUDIO_BYTES,
+        maxRedirects: 6,
+        headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'audio/mpeg,audio/*,application/octet-stream;q=0.8,*/*;q=0.5' },
+        validateStatus: () => true,
+    });
+    const buffer = Buffer.from(response.data || '');
+    const contentType = String(response.headers?.['content-type'] || '').toLowerCase();
+    if (response.status < 200 || response.status >= 300) throw new Error(`Audio download HTTP ${response.status}`);
+    if (!buffer.length || contentType.includes('text/html') || contentType.includes('application/json')) throw new Error('Provider returned an invalid audio response');
+    return buffer;
+}
+
+async function fetchThumbnailBuffer(url) {
+    if (!/^https?:\/\//i.test(String(url || ''))) return null;
+    try {
+        const response = await axios.get(url, {
+            responseType: 'arraybuffer',
+            timeout: 15_000,
+            maxContentLength: 5 * 1024 * 1024,
+            headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'image/jpeg,image/*;q=0.8,*/*;q=0.5' },
+            validateStatus: () => true,
+        });
+        const contentType = String(response.headers?.['content-type'] || '').toLowerCase();
+        if (response.status >= 200 && response.status < 300 && contentType.includes('image/')) return Buffer.from(response.data);
+    } catch (error) {
+        console.warn('[play] thumbnail unavailable:', error.message);
+    }
+    return null;
+}
+
 module.exports = {
     name: 'play',
     aliases: ['song', 'music', 'audio'],
@@ -28,8 +69,7 @@ module.exports = {
             return reply(tr('play.noQuery'));
         }
 
-        await sock.sendMessage(from, { react: { text: '🔍', key: msg.key } });
-        await reply(tr('play.searching', { query }));
+        await sock.sendMessage(from, { react: { text: '⏳', key: msg.key } }).catch(() => {});
 
         const strategies = [
             // Strategy 1: Primary API provided by user
@@ -40,7 +80,9 @@ module.exports = {
                         url: data.result.download_url,
                         title: data.result.title,
                         thumbnail: data.result.thumbnail,
-                        duration: data.result.duration
+                        duration: data.result.duration,
+                        author: data.result.author || data.result.artist || data.result.channel || 'YouTube',
+                        sourceUrl: data.result.url || ''
                     };
                 }
                 throw new Error('Primary API failed');
@@ -57,7 +99,9 @@ module.exports = {
                         url: dlRes.data.result.download_url,
                         title: video.title,
                         thumbnail: video.thumbnail,
-                        duration: video.duration
+                        duration: video.duration,
+                        author: video.author || 'YouTube',
+                        sourceUrl: video.url
                     };
                 }
                 throw new Error('Secondary API failed');
@@ -70,7 +114,9 @@ module.exports = {
                         url: data.data.downloadUrl,
                         title: data.data.title || query,
                         thumbnail: data.data.thumbnail,
-                        duration: data.data.duration
+                        duration: data.data.duration,
+                        author: data.data.author || data.data.artist || data.data.channel || 'YouTube',
+                        sourceUrl: video.url
                     };
                 }
                 throw new Error('Agatz API failed');
@@ -81,20 +127,30 @@ module.exports = {
             try {
                 const res = await strategy();
                 if (res?.url) {
-                    // Send thumbnail first
-                    if (res.thumbnail) {
-                        await sock.sendMessage(from, {
-                            image: { url: res.thumbnail },
-                            caption: tr('play.thumbCaption', { title: res.title })
-                        }, { quoted: msg });
-                    }
-
-                    // Send audio
-                    await sock.sendMessage(from, {
-                        audio: { url: res.url },
+                    const audioBuffer = await fetchAudioBuffer(res.url);
+                    const thumbnailBuffer = await fetchThumbnailBuffer(res.thumbnail);
+                    const title = res.title || query;
+                    const author = res.author || 'YouTube';
+                    const duration = res.duration || '';
+                    const audioMessage = {
+                        audio: audioBuffer,
                         mimetype: 'audio/mpeg',
-                        fileName: `${res.title}.mp3`
-                    }, { quoted: msg });
+                        fileName: `${safeFileName(title)}.mp3`,
+                        ptt: false,
+                        contextInfo: {
+                            externalAdReply: {
+                                title,
+                                body: `${author}${duration ? ` • ${duration}` : ''}`,
+                                ...(thumbnailBuffer ? { thumbnail: thumbnailBuffer } : {}),
+                                ...(res.thumbnail ? { thumbnailUrl: res.thumbnail } : {}),
+                                mediaType: 2,
+                                renderLargerThumbnail: true,
+                                showAdAttribution: false,
+                                ...(res.sourceUrl ? { sourceUrl: res.sourceUrl } : {}),
+                            },
+                        },
+                    };
+                    await sock.sendMessage(from, audioMessage, { quoted: msg });
 
                     await sock.sendMessage(from, { react: { text: '✅', key: msg.key } });
                     return;
