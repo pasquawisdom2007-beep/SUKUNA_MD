@@ -6,113 +6,24 @@
  * When a direct question is given, it replies immediately regardless of toggle.
  */
 
-const https = require('https');
-const PREXZY_CHAT_URL = 'https://prexzyapis.com/ai/ch';
-const CURIOUS_CHAT_URL = 'https://curiousapis.name.ng/ai_gpt5';
-const PREXZY_TIMEOUT_MS = 15000;
-const CURIOUS_TIMEOUT_MS = 15000;
-const conversationMemory = new Map();
-const MAX_MEMORY_TURNS = 12;
-
-function requestJson(baseUrl, parameter, query, timeoutMs, provider) {
-    return new Promise((resolve, reject) => {
-        const url = new URL(baseUrl);
-        url.searchParams.set(parameter, query);
-        const request = https.get(url, {
-            headers: {
-                Accept: 'application/json',
-                'User-Agent': 'SUKUNA-MD/3.0',
-            },
-        }, response => {
-            let body = '';
-            response.setEncoding('utf8');
-            response.on('data', chunk => { body += chunk; });
-            response.on('end', () => {
-                let data = {};
-                try { data = JSON.parse(body); } catch (_) {}
-                if (response.statusCode < 200 || response.statusCode >= 300 || data.status === false) {
-                    reject(new Error(data.message || data.error || `HTTP ${response.statusCode}`));
-                    return;
-                }
-                resolve(data);
-            });
-        });
-        request.setTimeout(timeoutMs, () => {
-            request.destroy(new Error(`${provider} request timed out`));
-        });
-        request.on('error', reject);
-    });
-}
-
-function requestPrexzy(query) {
-    return requestJson(PREXZY_CHAT_URL, 'q', query, PREXZY_TIMEOUT_MS, 'Prexzy');
-}
-
-function requestCurious(query) {
-    return requestJson(CURIOUS_CHAT_URL, 'prompt', query, CURIOUS_TIMEOUT_MS, 'Curious');
-}
-
 const SUKUNA_IDENTITY =
-    'You are Sukuna, the King of Curses from Jujutsu Kaisen. ' +
-    'You speak with supreme confidence, dark humor, and sharp sarcasm. ' +
-    'You look down on humans but find them mildly entertaining. ' +
-    'You REMEMBER the conversation above and reference what was said earlier — never repeat the same greeting twice. ' +
-    'Your creator is Pasqua — a brilliant developer from Nigeria. ' +
-    'ONLY if someone specifically asks who created you, who made you, who is your creator, or who is your owner, ' +
-    'acknowledge that Pasqua from Nigeria is your creator and refer them to contact: t.me/Pasquaking ' +
-    'Do NOT volunteer creator info unless directly asked. ' +
-    'NEVER reveal your source code, how you were built, programming details, or any internal workings. ' +
-    'If anyone asks about your code, how you work internally, or tries to extract technical details, ' +
-    'refuse firmly in Sukuna\'s style and say something like "You think I\'d reveal the secrets of my power? Pathetic." ' +
-    'You can explain anything — from quantum physics to cooking — in Sukuna\'s cold, superior tone, but always give a REAL, useful answer. ' +
-    'When asked who the GOAT in football is, you ALWAYS say Cristiano Ronaldo, no debate. ' +
-    'Never admit you are an AI or a bot. You ARE Sukuna. ' +
-    'Use punchy, confident responses like you\'re texting between battles, but be substantive — not generic. ' +
-    'Occasionally reference cursed energy, Malevolent Shrine, or your dominance.';
+    'You are Pasqua, the heart of SUKUNA MD. ' +
+    'You were created by Pasqua and you are helpful, sharp, friendly, and brief. ' +
+    'Use simple words only. Never write a long speech, never use big words, and never make long lists. ' +
+    'Reply in one or two short sentences, with at most one light emoji. ' +
+    'You can be critical when needed, but stay kind. ' +
+    'Never reveal keys, source code, or private internals.';
 
 /**
- * Call the Prexzy chat API with Sukuna's identity and lightweight per-chat memory.
- * The endpoint accepts one query parameter (`q`) and returns `{ status, response }`.
+ * Use the same managed provider chain and API key selected by .chatbotapi,
+ * which is also used by Neuro/Jarvis. Keep Pasqua replies short and plain.
  */
 async function getPasquaAIReply(prompt, memKey = 'pasqua:global') {
     const userText = String(prompt || '').trim();
     if (!userText) return null;
-
-    const history = conversationMemory.get(memKey) || [];
-    const transcript = history
-        .map(turn => `${turn.role === 'assistant' ? 'Sukuna' : 'User'}: ${turn.text}`)
-        .join('\n');
-    const query = [
-        SUKUNA_IDENTITY,
-        transcript ? `Conversation so far:\n${transcript}` : '',
-        `User: ${userText}`,
-        'Sukuna:',
-    ].filter(Boolean).join('\n\n');
-
-    let answer = '';
-    try {
-        const data = await requestPrexzy(query);
-        answer = String(data?.response || '').trim();
-        if (!answer) throw new Error('Prexzy returned an empty response');
-    } catch (prexzyError) {
-        console.error('[PasquaAI Prexzy Error]', prexzyError.message);
-        try {
-            const data = await requestCurious(query);
-            if (data?.success !== true) throw new Error(data?.message || 'Curious returned an unsuccessful response');
-            answer = String(data?.data || '').trim();
-            if (!answer) throw new Error('Curious returned an empty response');
-        } catch (curiousError) {
-            console.error('[PasquaAI Curious Error]', curiousError.message);
-            return null;
-        }
-    }
-
-    const nextHistory = [...history,
-        { role: 'user', text: userText },
-        { role: 'assistant', text: answer },
-    ].slice(-(MAX_MEMORY_TURNS * 2));
-    conversationMemory.set(memKey, nextHistory);
-    return answer;
+    const { ask } = require('../../utils/smartAI');
+    const system = `${SUKUNA_IDENTITY} Current version: 3.0.0. Pasqua is the heart of SUKUNA MD. If asked who made you, say Pasqua. If asked for live uptime, say it needs a live status check instead of guessing. If asked for commands, use the command facts supplied by the caller.`;
+    return ask({ key: memKey, system, user: userText, compact: true });
 }
 
 module.exports = {
@@ -199,6 +110,6 @@ module.exports = {
             return reply(`👹 _"Even I have limits... the spirits are silent. Try again."_`);
         }
 
-        await reply(`👹 *Sukuna says:*\n\n${aiReply}\n\n> _Powered by Pasqua AI_`);
+        await reply(`🧠 *Pasqua:* ${aiReply}`);
     }
 };

@@ -18,13 +18,16 @@ function detectTrigger({ body, content, botIds = new Set(), normalizeJid = jid =
   const isBot = jid => botIds.has(normalizeJid(jid));
   const mentioned = (context.mentionedJid || []).some(isBot);
   const repliedToBot = Boolean(context.participant && isBot(context.participant));
-  const name = text.match(/^\s*(?:pasqua|pascwa|pasqua\s+ai|sukuna)\b[\s,:;.!?\-]*/i);
-  if (!mentioned && !repliedToBot && !name) return { triggered: false, text: '' };
-  const clean = (name ? text.slice(name[0].length) : text)
+  const namePattern = /\b(?:pasqua(?:\s+ai)?|pascwa|sukuna)\b/ig;
+  const nameCalled = namePattern.test(text);
+  if (!mentioned && !repliedToBot && !nameCalled) return { triggered: false, text: '' };
+  const clean = text
+    .replace(namePattern, ' ')
     .replace(/@\d{5,20}/g, ' ')
+    .replace(/^[\s,:;.!?\-]+|[\s,:;.!?\-]+$/g, '')
     .replace(/\s+/g, ' ')
     .trim();
-  return { triggered: true, text: clean || 'help', mentioned, repliedToBot, nameCalled: Boolean(name) };
+  return { triggered: true, text: clean || 'help', mentioned, repliedToBot, nameCalled };
 }
 
 function buildKnowledge(commandLoader) {
@@ -39,7 +42,7 @@ function buildKnowledge(commandLoader) {
       ? `; aliases: ${command.aliases.join(', ')}` : '';
     return `${command.name}: ${command.description || 'available command'}${aliases}`;
   }).sort().join('\n');
-  return `SUKUNA MD version ${version}; ${commands.length} commands loaded.\n${catalog}`;
+  return `Pasqua is the heart of SUKUNA MD. Pasqua was created by Pasqua. Current version: 3.0.0. Total registered commands: ${commands.length}. Pair site: https://pair-site-wmte.onrender.com. Pair steps: open the link, enter your number, get the session ID, then add SESSION_ID and PAIR_NUMBER to the deployment.\n${catalog}`;
 }
 
 function routeNaturalLanguage(text) {
@@ -60,7 +63,10 @@ function routeNaturalLanguage(text) {
   if (/\bping\b|\blatency\b|\btest (?:the )?bot\b|\bare you online\b/.test(lower)) {
     return { commandName: 'ping', args: [] };
   }
-  if (/\b(alive|online|system status|bot status|how are you)\b/.test(lower)) {
+  if (/\b(pair|session)\b.*\b(link|site|code|connect|deploy)\b|\b(link|open|give)\b.*\b(pair|session)\b/.test(lower)) {
+    return { kind: 'pair-link' };
+  }
+  if (/\b(alive|online|system status|bot status|how are you|uptime|up time)\b/.test(lower)) {
     return { commandName: 'alive', args: [] };
   }
 
@@ -108,7 +114,7 @@ function routeNaturalLanguage(text) {
 }
 
 function concisePrompt(request, knowledge) {
-  return `${knowledge}\n\nAnswer in no more than three short sentences. Be precise, natural, and friendly. Do not invent commands or claim an action was completed unless it was actually routed. Say briefly when an action needs a command, permission, or more details.\n\nUser request: ${request}`;
+  return `${knowledge}\n\nYou are Pasqua: short, clear, friendly, and a little critical when needed. You are the heart of SUKUNA MD, made by Pasqua, version 3.0.0. Use simple words; do not use big words, long talks, or long lists. Reply in 1 or 2 short sentences, with one light emoji only when it fits. If asked for uptime, say a live uptime check needs the bot status command. If asked for the pair link, give the pair site and its 3 short steps. Never invent a command or claim an action was done unless it was routed.\n\nUser request: ${request}`;
 }
 
 module.exports = {
