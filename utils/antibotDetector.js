@@ -99,7 +99,6 @@ function detectorInfo() {
             'message bursts as weak evidence',
         ],
         knownLibraries: [
-            '@whiskeysockets/baileys',
             '@pasqua-baileys/baileys',
             'baileys',
             '@adiwajshing/baileys',

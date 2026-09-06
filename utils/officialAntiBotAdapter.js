@@ -4,7 +4,7 @@ const {
     normalizeMessageContent,
     getContentType,
     isJidBot,
-} = require('@whiskeysockets/baileys');
+} = require('@pasqua-baileys/baileys');
 const { matchedStamp } = require('./botIdStamp');
 
 const BOT_CONTENT_TYPES = new Set([
@@ -35,7 +35,7 @@ function normalizeForAntiBot(message = {}) {
         messageId,
         isBot: officialBotJid || officialBotContent || Boolean(stamp),
         isBaileys: officialBotJid || Boolean(stamp),
-        source: 'whiskeysockets-baileys',
+        source: 'pasqua-baileys',
     };
 }
 

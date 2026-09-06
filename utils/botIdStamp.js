@@ -12,8 +12,8 @@
  *
  * IMPORTANT — what this does NOT do: this only catches bots built on a
  * library that happens to use one of these known stamps. A bot on a
- * different Baileys fork, on whiskeysockets/baileys directly, or on a
- * non-Baileys WhatsApp automation tool generates IDs with none of these
+ * different Baileys fork or a non-Baileys WhatsApp automation tool generates
+ * IDs with none of these
  * substrings and will NOT be caught by this check. It's a real, solid
  * signal for this specific family of bots — not a universal bot detector,
  * and it should be combined with other signals (like the existing
