@@ -303,11 +303,46 @@ async function sendInstagramProfileCard({ sock, jid, quoted, profile }) {
     const content = {
         caption,
         footer: 'SUKUNA MD · Instagram live profile',
-        nativeFlow: [{ text: 'View profile', url: profileUrl, useWebview: true }],
+        nativeFlow: [
+            { text: 'Profile', id: `instagram:profile:${username}` },
+            { text: 'Posts', id: `instagram:posts:${username}` },
+            { text: 'View profile', url: profileUrl, useWebview: true },
+        ],
     };
     if (isHttpUrl(profile.avatar)) content.image = { url: profile.avatar };
     else content.text = caption;
     return sock.sendMessage(jid, content, { quoted });
+}
+
+async function sendInstagramPosts({ sock, jid, quoted, profile }) {
+    const username = usernameFromInput(profile.username || 'instagram');
+    const posts = (profile.posts || []).filter(post => post?.shortcode || post?.image).slice(0, 6);
+    if (!posts.length) {
+        return sock.sendMessage(jid, {
+            text: `📷 *${username}'s posts*\n\nNo public recent posts were returned by the lookup provider.`,
+        }, { quoted });
+    }
+    await sock.sendMessage(jid, { text: `📷 *${username}'s recent posts*\nSending ${posts.length} result${posts.length === 1 ? '' : 's'}...` }, { quoted });
+    let sent = 0;
+    for (const post of posts) {
+        try {
+            const url = post.image || `https://instagram.com/p/${post.shortcode}/`;
+            if (isHttpUrl(post.image)) {
+                await sock.sendMessage(jid, {
+                    image: { url: post.image },
+                    caption: `📷 *${username} · post ${sent + 1}/${posts.length}*\n🔗 https://instagram.com/p/${post.shortcode || ''}`,
+                    nativeFlow: [{ text: 'View post', url, useWebview: true }],
+                }, { quoted });
+            } else {
+                await sock.sendMessage(jid, { text: `📷 ${sent + 1}. https://instagram.com/p/${post.shortcode}/` }, { quoted });
+            }
+            sent++;
+            if (sent < posts.length) await new Promise(resolve => setTimeout(resolve, 800));
+        } catch (error) {
+            console.error('[instagram posts]', error.message);
+        }
+    }
+    return sent;
 }
 
 module.exports = {
@@ -362,5 +397,6 @@ module.exports.instagramProfileData = instagramProfileData;
 module.exports.buildInstagramContent = buildInstagramContent;
 module.exports.sendInstagramRich = sendInstagramRich;
 module.exports.sendInstagramProfileCard = sendInstagramProfileCard;
+module.exports.sendInstagramPosts = sendInstagramPosts;
 module.exports.normalizeUser = normalizeUser;
 module.exports.usernameFromInput = usernameFromInput;
