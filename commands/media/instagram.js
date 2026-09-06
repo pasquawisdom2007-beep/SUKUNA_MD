@@ -1,8 +1,7 @@
 'use strict';
 
 const axios = require('axios');
-const crypto = require('crypto');
-const { generateWAMessageFromContent, proto } = require('@pasqua-baileys/baileys');
+const { generateWAMessageFromContent, proto, wrapToBotForwardedMessage } = require('@pasqua-baileys/baileys');
 const { escapeHtml } = require('../../utils/genaiRich');
 
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
@@ -259,11 +258,20 @@ function instagramProfileData(profile, expanded = false) {
 }
 
 function buildInstagramContent(profile, expanded = false) {
-    const data = Buffer.from(JSON.stringify(instagramProfileData(profile, expanded))).toString('base64');
-    return proto.Message.fromObject({
-        messageContextInfo: { deviceListMetadataVersion: 2, deviceListMetadata: {}, messageSecret: crypto.randomBytes(32) },
-        botForwardedMessage: { message: { richResponseMessage: { messageType: 1, submessages: [], unifiedResponse: { data }, contextInfo: { isForwarded: true, forwardingScore: 1, forwardOrigin: 4 } } } },
+    const unified = instagramProfileData(profile, expanded);
+    const richResponseMessage = proto.AIRichResponseMessage.create({
+        submessages: [],
+        messageType: proto.AIRichResponseMessageType.AI_RICH_RESPONSE_TYPE_STANDARD,
+        // Pasqua expects the serialized unified JSON bytes here, not Base64 text.
+        unifiedResponse: { data: Buffer.from(JSON.stringify(unified)) },
+        contextInfo: {
+            isForwarded: true,
+            forwardingScore: 1,
+            forwardedAiBotMessageInfo: { botJid: '867051314767696@bot' },
+            forwardOrigin: 4,
+        },
     });
+    return proto.Message.fromObject(wrapToBotForwardedMessage(richResponseMessage));
 }
 
 async function sendInstagramRich({ sock, jid, quoted, profile, expanded = false }) {
