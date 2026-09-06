@@ -2,9 +2,9 @@
 
 const { generateWAMessageFromContent, proto, prepareWAMessageMedia } = require('@pasqua-baileys/baileys');
 
-// Pinterest-style image carousel without a browser, login, API key, or heavy
-// scraper. Wikimedia Commons provides stable public thumbnails and a
-// searchable API.
+// Pinterest image carousel powered exclusively by the public Prexzy Pinterest
+// search endpoint. The provider returns direct image URLs; this command
+// downloads and validates those images before building the WhatsApp carousel.
 //
 // NOTE ON IMPLEMENTATION: the top-level `cards` / `nativeFlow` shorthand from
 // the fork's README (passed straight into sock.sendMessage) is NOT used here.
@@ -278,39 +278,28 @@ async function fetchOpenverseImages(query, limit) {
     }).slice(0, limit);
 }
 
-// Public entry point used by execute(): entity-verified images first, topped
-// up by the tightened Commons text search, and only then by Openverse —
-// each tier only runs if the previous one came up short of MAX_RESULTS.
+// Sole Pinterest search provider. The command keeps its existing WhatsApp
+// carousel and individual-image fallback, but all search results come from the
+// user-provided Prexzy endpoint.
 async function findImages(query) {
-    const entityResults = await findEntityImages(query, MAX_RESULTS);
-    const merged = [...entityResults];
-    const seen = new Set(merged.map(item => item.url));
-
-    if (merged.length < MAX_RESULTS) {
-        const textResults = await searchCommonsPrecise(query);
-        for (const item of textResults) {
-            if (merged.length >= MAX_RESULTS) break;
-            if (seen.has(item.url)) continue;
-            merged.push(item);
-            seen.add(item.url);
-        }
+    const url = new URL('https://prexzyapis.com/search/pinterest');
+    url.search = new URLSearchParams({ q: query });
+    const payload = await fetchJson(url, 'Prexzy Pinterest search');
+    if (payload?.status !== true || Number(payload?.statusCode) !== 200 || !Array.isArray(payload?.data)) {
+        throw new Error('Prexzy returned an invalid Pinterest response');
     }
 
-    if (merged.length < MAX_RESULTS) {
-        try {
-            const openverseResults = await fetchOpenverseImages(query, MAX_RESULTS - merged.length);
-            for (const item of openverseResults) {
-                if (merged.length >= MAX_RESULTS) break;
-                if (seen.has(item.url)) continue;
-                merged.push(item);
-                seen.add(item.url);
-            }
-        } catch (error) {
-            console.error('[pint:openverse]', error?.message || error);
-        }
-    }
-
-    return merged;
+    const seen = new Set();
+    return payload.data
+        .map(value => String(value || '').trim())
+        .filter(value => /^https?:\/\/[^\s]+$/i.test(value) && !seen.has(value) && seen.add(value))
+        .slice(0, MAX_RESULTS)
+        .map((imageUrl, index) => ({
+            url: imageUrl,
+            title: `${query} · result ${index + 1}`,
+            mime: '',
+            size: 0,
+        }));
 }
 
 async function fetchImage(url) {
@@ -509,8 +498,7 @@ module.exports = {
     },
 
     _private: {
-        searchCommons, searchCommonsPrecise, findEntityImages, fetchOpenverseImages, findImages,
-        titleMatchesQuery, resolveWikidataId, fetchWikidataClaims,
+        findImages,
         fetchImage, cooldowns, ctaUrl, buildCard, sendCarousel,
     },
 };
