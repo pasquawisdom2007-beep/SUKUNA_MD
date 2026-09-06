@@ -13,7 +13,7 @@ const DOWNLOAD_TIMEOUT_MS = 60_000;
 const MAX_MEDIA_BYTES = 90 * 1024 * 1024;
 const MIN_MEDIA_BYTES = 512;
 
-function isInstagramUrl(value) { return typeof value === 'string' && /^https?:\/\/(www\.)?instagram\.com\/(p|reel|reels|tv)\//i.test(value.trim()); }
+function isInstagramUrl(value) { return typeof value === 'string' && /^https?:\/\/(?:www\.|m\.)?instagram\.com\/(?:p|reel|reels|tv|share\/reel)\//i.test(value.trim()); }
 function isHttpUrl(value) { return typeof value === 'string' && /^https?:\/\//i.test(value.trim()); }
 
 async function getJson(url, options = {}) {
@@ -36,8 +36,37 @@ async function fromReelApi(postUrl) {
     return { mediaUrl, caption: String(data?.title || data?.description || '').trim(), author: '' };
 }
 
+function htmlDecode(value) {
+    return String(value || '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#x27;|&#39;/g, "'");
+}
+
+function metaContent(html, property) {
+    const escaped = property.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = html.match(new RegExp(`<meta[^>]+(?:property|name)=["']${escaped}["'][^>]+content=["']([^"']+)["']`, 'i')) ||
+        html.match(new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${escaped}["']`, 'i'));
+    return htmlDecode(match?.[1] || '');
+}
+
+async function fromInstagramPage(postUrl) {
+    const response = await axios.get(postUrl, {
+        timeout: JSON_TIMEOUT_MS,
+        maxContentLength: 8 * 1024 * 1024,
+        maxRedirects: 5,
+        headers: { 'User-Agent': USER_AGENT, Accept: 'text/html,application/xhtml+xml' },
+        validateStatus: () => true,
+    });
+    const html = String(response.data || '');
+    if (response.status < 200 || response.status >= 300 || !html) throw new Error(`Instagram page HTTP ${response.status}`);
+    const mediaUrl = metaContent(html, 'og:video') || metaContent(html, 'twitter:player:stream') ||
+        html.match(/"video_url"\s*:\s*"(https?:\\?[^"\\]+)"/i)?.[1]?.replace(/\\u0026/g, '&').replace(/\\\//g, '/');
+    const imageUrl = metaContent(html, 'og:image');
+    const resolvedUrl = isHttpUrl(mediaUrl) ? mediaUrl : (isHttpUrl(imageUrl) ? imageUrl : '');
+    if (!resolvedUrl) throw new Error('Instagram page contained no public media URL');
+    return { mediaUrl: resolvedUrl, caption: metaContent(html, 'og:description'), author: '', isVideo: Boolean(mediaUrl), provider: 'instagram-page' };
+}
+
 async function fromVercelDownloader(postUrl) {
-    const data = await getJson('https://instagram-reels-downloader-tau.vercel.app/api/video', { params: { postUrl, enhanced: 'true' } });
+    const data = await getJson('https://instagram-reels-downloader-tau.vercel.app/api/video', { params: { postUrl, url: postUrl, enhanced: 'true' } });
     const payload = data?.data || {};
     const medias = Array.isArray(payload.medias) ? payload.medias : [];
     const bestMedia = medias.find(m => m?.type === 'video' && isHttpUrl(m?.url)) || medias.find(m => isHttpUrl(m?.url));
@@ -65,11 +94,16 @@ async function downloadBinary(url) {
 }
 
 async function resolveAndDownload(postUrl) {
-    const providers = [['reel-api', fromReelApi], ['vercel-downloader', fromVercelDownloader]];
+    const cleanUrl = String(postUrl).trim().replace(/[?#].*$/, '');
+    const providers = [
+        ['instagram-page', fromInstagramPage],
+        ['vercel-downloader', fromVercelDownloader],
+        ['reel-api', fromReelApi],
+    ];
     let lastError = null;
     for (const [name, provider] of providers) {
         try {
-            const info = await provider(postUrl);
+            const info = await provider(cleanUrl);
             const { buffer, isVideo } = await downloadBinary(info.mediaUrl);
             return { buffer, isVideo, caption: info.caption, author: info.author, provider: name };
         } catch (error) {
