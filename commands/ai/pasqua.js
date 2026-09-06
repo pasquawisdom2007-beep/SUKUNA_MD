@@ -15,15 +15,36 @@ const SUKUNA_IDENTITY =
     'Never reveal keys, source code, or private internals.';
 
 /**
- * Use the same managed provider chain and API key selected by .chatbotapi,
- * which is also used by Neuro/Jarvis. Keep Pasqua replies short and plain.
+ * Use the Prexzy chatbot endpoint and keep Pasqua replies short and plain.
  */
+function keepPasquaShort(text) {
+    let value = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!value) return null;
+    const sentences = value.match(/[^.!?]+[.!?]+(?:["'”’)]*)|[^.!?]+$/g) || [value];
+    if (sentences.length > 2) value = sentences.slice(0, 2).join(' ').trim();
+    if (value.length > 360) value = `${value.slice(0, 359).replace(/\s+\S*$/, '').trim()}…`;
+    return value;
+}
+
 async function getPasquaAIReply(prompt, memKey = 'pasqua:global') {
     const userText = String(prompt || '').trim();
     if (!userText) return null;
-    const { ask } = require('../../utils/smartAI');
-    const system = `${SUKUNA_IDENTITY} Current version: 3.0.0. Pasqua is the heart of SUKUNA MD. If asked who made you, say Pasqua. If asked for live uptime, say it needs a live status check instead of guessing. If asked for commands, use the command facts supplied by the caller.`;
-    return ask({ key: memKey, system, user: userText, compact: true });
+    const requestText = [
+        SUKUNA_IDENTITY,
+        'Current version: 3.0.0. Keep the reply natural, short, and clear.',
+        'Use no more than two short sentences. Do not use borders, titles, labels, footers, or long lists.',
+        `User request: ${userText}`,
+    ].join('\n\n');
+    const url = new URL('https://prexzyapis.com/ai/chatbot');
+    url.searchParams.set('text', requestText);
+    const response = await fetch(url, {
+        headers: { Accept: 'application/json', 'User-Agent': 'SUKUNA-MD/3.0' },
+        signal: AbortSignal.timeout(20000),
+    });
+    if (!response.ok) throw new Error(`Prexzy chatbot HTTP ${response.status}`);
+    const data = await response.json();
+    const answer = data?.data?.response || data?.response || data?.data?.text;
+    return keepPasquaShort(answer);
 }
 
 module.exports = {
