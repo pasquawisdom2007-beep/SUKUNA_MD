@@ -283,6 +283,33 @@ async function sendInstagramRich({ sock, jid, quoted, profile, expanded = false 
     return wrapped;
 }
 
+async function sendInstagramProfileCard({ sock, jid, quoted, profile }) {
+    const username = usernameFromInput(profile.username || 'instagram');
+    const profileUrl = profile.profileUrl || profile.externalUrl || `https://instagram.com/${encodeURIComponent(username)}`;
+    const stats = `${profile.postsCount || '—'} posts · ${profile.followers || '—'} followers · ${profile.following || '—'} following`;
+    const posts = (profile.posts || []).filter(post => post?.shortcode).slice(0, 6);
+    const recent = posts.length
+        ? `\n\n*Recent posts*\n${posts.map((post, i) => `${i + 1}. https://instagram.com/p/${post.shortcode}/`).join('\n')}`
+        : '';
+    const caption = [
+        `📸 *Instagram profile*`,
+        `@${username}${profile.verified ? ' ✓' : ''}`,
+        `*${profile.fullName || username}*`,
+        '',
+        stats,
+        profile.biography ? `\n${profile.biography.slice(0, 500)}` : '',
+        recent,
+    ].filter(Boolean).join('\n');
+    const content = {
+        caption,
+        footer: 'SUKUNA MD · Instagram live profile',
+        nativeFlow: [{ text: 'View profile', url: profileUrl, useWebview: true }],
+    };
+    if (isHttpUrl(profile.avatar)) content.image = { url: profile.avatar };
+    else content.text = caption;
+    return sock.sendMessage(jid, content, { quoted });
+}
+
 module.exports = {
     name: 'instagram',
     aliases: ['insta', 'ig', 'igdl', 'iguser', 'igstalk', 'profile'],
@@ -314,10 +341,10 @@ module.exports = {
             let profile;
             try { profile = await lookupPrexzy(username); }
             catch (prexzyError) { console.warn('[insta] Prexzy lookup:', prexzyError.message); profile = await lookupInstagramUser(username); }
-            // Include the live profile sections in the first payload. The
-            // button opens Instagram directly; no private Meta AI tool round
-            // trip is required to reveal the already-fetched feed.
-            await sendInstagramRich({ sock, jid: from, quoted: msg, profile, expanded: true });
+            // Use a normal Pasqua interactive message. A bot cannot answer
+            // Meta's private GenAI tool session, so botForwarded rich cards
+            // open an empty Meta AI screen on ordinary accounts.
+            await sendInstagramProfileCard({ sock, jid: from, quoted: msg, profile });
             return sock.sendMessage(from, { react: { text: '✅', key: msg.key } }).catch(() => {});
         } catch (error) {
             console.error('[instagram profile]', error.message);
@@ -334,5 +361,6 @@ module.exports.instagramRichCard = instagramRichCard;
 module.exports.instagramProfileData = instagramProfileData;
 module.exports.buildInstagramContent = buildInstagramContent;
 module.exports.sendInstagramRich = sendInstagramRich;
+module.exports.sendInstagramProfileCard = sendInstagramProfileCard;
 module.exports.normalizeUser = normalizeUser;
 module.exports.usernameFromInput = usernameFromInput;
