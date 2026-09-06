@@ -37,6 +37,7 @@ module.exports = {
     getPasquaAIReply,
 
     async execute({ sock, msg, from, sender, args, isGroup, reply, database }) {
+        const plainReply = text => reply(text, { raw: true });
         const input = args.join(' ').trim();
         const sub   = input.toLowerCase();
         const chatKey = isGroup ? from : sender;
@@ -46,36 +47,36 @@ module.exports = {
             const v = sub.split(/\s+/)[1];
             if (v !== 'on' && v !== 'off') {
                 const cur = database.getGroup(chatKey)?.pasquaVoice === true;
-                return reply(`Voice replies are ${cur ? 'on' : 'off'}. Use .pasqua voice on or .pasqua voice off.`);
+                return plainReply(`Voice replies are ${cur ? 'on' : 'off'}. Use .pasqua voice on or .pasqua voice off.`);
             }
             database.setGroup(chatKey, 'pasquaVoice', v === 'on');
-            return reply(v === 'on' ? 'Voice replies are on.' : 'Voice replies are off.');
+            return plainReply(v === 'on' ? 'Voice replies are on.' : 'Voice replies are off.');
         }
 
         // ── Toggle on ──────────────────────────────────────────────────────
         if (sub === 'on') {
             database.setGroup(chatKey, 'pasquaai', true);
-            return reply('Okay, I’ll reply here now. 🙂');
+            return plainReply('Okay, I’ll reply here now. 🙂');
         }
 
         // ── Toggle off ────────────────────────────────────────────────────
         if (sub === 'off') {
             database.setGroup(chatKey, 'pasquaai', false);
-            return reply('Okay, I’ll stay quiet here.');
+            return plainReply('Okay, I’ll stay quiet here.');
         }
 
         // ── Direct question ───────────────────────────────────────────────
         if (!input) {
-            return reply('Ask me anything, or use `.pasqua on` to let me reply here.');
+            return plainReply('Ask me anything, or use `.pasqua on` to let me reply here.');
         }
 
         // Ask the AI directly
         const aiReply = await getPasquaAIReply(input, 'pasqua:' + chatKey);
 
         if (!aiReply) {
-            return reply('I can’t reach the AI right now. Try again soon.');
+            return plainReply('I can’t reach the AI right now. Try again soon.');
         }
 
-        await reply(aiReply);
+        await plainReply(aiReply);
     }
 };
