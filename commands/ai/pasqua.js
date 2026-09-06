@@ -46,70 +46,36 @@ module.exports = {
             const v = sub.split(/\s+/)[1];
             if (v !== 'on' && v !== 'off') {
                 const cur = database.getGroup(chatKey)?.pasquaVoice === true;
-                return reply(
-                    `🎙️ *Sukuna Voice Mode*\n\n` +
-                    `Status: ${cur ? '✅ ON' : '❌ OFF'}\n\n` +
-                    `*Usage:*\n` +
-                    `• *.pasqua voice on* — reply with Sukuna's deep male voice\n` +
-                    `• *.pasqua voice off* — reply with text only`
-                );
+                return reply(`Voice replies are ${cur ? 'on' : 'off'}. Use .pasqua voice on or .pasqua voice off.`);
             }
             database.setGroup(chatKey, 'pasquaVoice', v === 'on');
-            return reply(
-                v === 'on'
-                    ? `🎙️ *Sukuna voice mode ENABLED.*\n\n_"Hear my voice, mortal."_\n\n_(Make sure .pasqua on is also active.)_`
-                    : `🔇 *Sukuna voice mode DISABLED.* Replies will be text again.`
-            );
+            return reply(v === 'on' ? 'Voice replies are on.' : 'Voice replies are off.');
         }
 
         // ── Toggle on ──────────────────────────────────────────────────────
         if (sub === 'on') {
             database.setGroup(chatKey, 'pasquaai', true);
-            return reply(
-                `👹 *PASQUA AI — ACTIVATED*\n\n` +
-                `_"Interesting... you've chosen to let me speak freely. Don't regret it."_\n\n` +
-                `I will now reply to every message in this chat.\n` +
-                `Use *.pasqua voice on* to make me reply with my voice.\n` +
-                `Use *.pasqua off* to silence me.\n\n` +
-                `> *— Sukuna, King of Curses*`
-            );
+            return reply('Okay, I’ll reply here now. 🙂');
         }
 
         // ── Toggle off ────────────────────────────────────────────────────
         if (sub === 'off') {
             database.setGroup(chatKey, 'pasquaai', false);
-            return reply(
-                `👹 *PASQUA AI — DEACTIVATED*\n\n` +
-                `_"Fine. I'll spare you... for now."_\n\n` +
-                `Auto-reply is off. Use *.pasqua on* to re-enable.\n\n` +
-                `> *— Sukuna, King of Curses*`
-            );
+            return reply('Okay, I’ll stay quiet here.');
         }
 
         // ── Direct question ───────────────────────────────────────────────
         if (!input) {
-            return reply(
-                `👹 *PASQUA AI — SUKUNA MODE*\n\n` +
-                `*Usage:*\n` +
-                `• *.pasqua on* — Auto-reply to all messages\n` +
-                `• *.pasqua off* — Disable auto-reply\n` +
-                `• *.pasqua <question>* — Ask me anything\n\n` +
-                `_"Ask, or don't. I don't particularly care."_\n\n` +
-                `> *Created by Pasqua 👑*`
-            );
+            return reply('Ask me anything, or use `.pasqua on` to let me reply here.');
         }
 
         // Ask the AI directly
-        await sock.sendMessage(from, {
-            react: { text: '👹', key: msg.key }
-        }).catch(() => {});
-
         const aiReply = await getPasquaAIReply(input, 'pasqua:' + chatKey);
 
         if (!aiReply) {
-            return reply(`👹 _"Even I have limits... the spirits are silent. Try again."_`);
+            return reply('I can’t reach the AI right now. Try again soon.');
         }
 
-        await reply(`🧠 *Pasqua:* ${aiReply}`);
+        await reply(aiReply);
     }
 };
