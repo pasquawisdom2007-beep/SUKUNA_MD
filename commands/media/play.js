@@ -22,7 +22,8 @@ async function fetchAudioBuffer(url) {
     const contentType = String(response.headers?.['content-type'] || '').toLowerCase();
     if (response.status < 200 || response.status >= 300) throw new Error(`Audio download HTTP ${response.status}`);
     if (!buffer.length || contentType.includes('text/html') || contentType.includes('application/json')) throw new Error('Provider returned an invalid audio response');
-    return buffer;
+    const mimetype = contentType.includes('audio/') ? contentType.split(';')[0] : 'audio/mpeg';
+    return { buffer, mimetype };
 }
 
 async function fetchThumbnailBuffer(url) {
@@ -116,7 +117,7 @@ module.exports = {
                         thumbnail: data.data.thumbnail,
                         duration: data.data.duration,
                         author: data.data.author || data.data.artist || data.data.channel || 'YouTube',
-                        sourceUrl: video.url
+                        sourceUrl: data.data.url || query
                     };
                 }
                 throw new Error('Agatz API failed');
@@ -127,7 +128,9 @@ module.exports = {
             try {
                 const res = await strategy();
                 if (res?.url) {
-                    const audioBuffer = await fetchAudioBuffer(res.url);
+                    const downloadedAudio = await fetchAudioBuffer(res.url);
+                    const audioBuffer = downloadedAudio.buffer;
+                    const audioMimetype = downloadedAudio.mimetype;
                     const thumbnailBuffer = await fetchThumbnailBuffer(res.thumbnail);
                     const title = res.title || query;
                     const author = res.author || 'YouTube';
@@ -139,23 +142,14 @@ module.exports = {
                         }, { quoted: msg });
                     }
 
+                    await sock.sendMessage(from, {
+                        text: `🎵 *${title}*\n👤 ${author}${duration ? `\n⏱️ ${duration}` : ''}`,
+                    }, { quoted: msg });
                     const audioMessage = {
                         audio: audioBuffer,
-                        mimetype: 'audio/mpeg',
-                        fileName: `${safeFileName(title)}.mp3`,
+                        mimetype: audioMimetype,
+                        fileName: `${safeFileName(title)}${audioMimetype.includes('mpeg') ? '.mp3' : '.audio'}`,
                         ptt: false,
-                        contextInfo: {
-                            externalAdReply: {
-                                title,
-                                body: `${author}${duration ? ` • ${duration}` : ''}`,
-                                ...(thumbnailBuffer ? { thumbnail: thumbnailBuffer } : {}),
-                                ...(res.thumbnail ? { thumbnailUrl: res.thumbnail } : {}),
-                                mediaType: 2,
-                                renderLargerThumbnail: true,
-                                showAdAttribution: false,
-                                ...(res.sourceUrl ? { sourceUrl: res.sourceUrl } : {}),
-                            },
-                        },
                     };
                     await sock.sendMessage(from, audioMessage, { quoted: msg });
 
