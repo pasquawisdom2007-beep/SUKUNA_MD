@@ -2,8 +2,8 @@
  * Pasqua AI Command — Sukuna personality AI
  * Usage: .pasqua on | .pasqua off | .pasqua <question>
  *
- * When turned on, the AI replies to every message in the chat.
- * When a direct question is given, it replies immediately regardless of toggle.
+ * When turned on, the AI replies to every Pasqua-triggered message in the chat.
+ * When turned off, Pasqua stays silent for mentions, replies, names, and direct questions.
  */
 
 const { ask: smartAsk, getLastAIError } = require('../../utils/smartAI');
@@ -77,10 +77,15 @@ module.exports = {
         // ── Toggle off ────────────────────────────────────────────────────
         if (sub === 'off') {
             database.setGroup(chatKey, 'pasquaai', false);
+            database.setGroup(chatKey, 'pasquaVoice', false);
             return plainReply('Okay, I’ll stay quiet here.');
         }
 
         // ── Direct question ───────────────────────────────────────────────
+        // Pasqua must be explicitly enabled before it answers any question.
+        if (!database.getGroup(chatKey)?.pasquaai) {
+            return reply('👹 Pasqua AI is off in this chat. Use /pasqua on to enable it.');
+        }
         if (!input) {
             return plainReply('Ask me anything, or use `.pasqua on` to let me reply here.');
         }
