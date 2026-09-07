@@ -84,7 +84,7 @@ function routeNaturalLanguage(text) {
     arabic: 'ar', hindi: 'hi', turkish: 'tr', yoruba: 'yo', igbo: 'ig',
   };
 
-  if (/\b(show|open|display|give me|bring up)\b.*\b(menu|commands?)\b|\b(main menu|command list|what can you do|capabilities|help)\b/.test(lower)) {
+  if (/\b(show|open|display|bring up)\b.*\b(menu|commands?)\b|\b(main menu|command list|what can you do|capabilities|list your commands|show commands)\b/.test(lower)) {
     return { commandName: 'menu', args: [] };
   }
   if (/\bping\b|\blatency\b|\btest (?:the )?bot\b|\bare you online\b/.test(lower)) {
