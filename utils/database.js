@@ -17,7 +17,8 @@ class Database {
             banned: this.load('banned') || {},
             lastSeen: this.load('lastSeen') || {},
             ownerInfo: this.load('ownerInfo') || {},
-            settings: this.load('settings') || {}
+            settings: this.load('settings') || {},
+            chatMemory: this.load('chatMemory') || {}
         };
         this._lastSeenSaveAt = 0;
     }
@@ -175,6 +176,24 @@ class Database {
     save(filename) {
         const filePath = path.join(this.dataDir, `${filename}.json`);
         fs.writeFileSync(filePath, JSON.stringify(this.data[filename], null, 2));
+    }
+
+    // ── Pasqua AI chat memory ─────────────────────────────────────────────
+    getChatMemory(chatId) {
+        const key = String(chatId || '');
+        if (!this.data.chatMemory) this.data.chatMemory = {};
+        if (!this.data.chatMemory[key]) {
+            this.data.chatMemory[key] = { enabled: true, messages: [], facts: [], updatedAt: 0 };
+            this.save('chatMemory');
+        }
+        return this.data.chatMemory[key];
+    }
+
+    setChatMemory(chatId, value) {
+        const key = String(chatId || '');
+        this.data.chatMemory[key] = value;
+        this.save('chatMemory');
+        return value;
     }
 
     // Group methods

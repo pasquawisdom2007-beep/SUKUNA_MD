@@ -1,12 +1,49 @@
-/**
- * Pasqua AI Command — Sukuna personality AI
- * Usage: .pasqua on | .pasqua off | .pasqua <question>
- *
- * When turned on, the AI replies to every Pasqua-triggered message in the chat.
- * When turned off, Pasqua stays silent for mentions, replies, names, and direct questions.
- */
+"use strict";
 
 const { ask: smartAsk, getLastAIError } = require('../../utils/smartAI');
+const conversationMemory = new Map();
+const MAX_MEMORY_TURNS = 12;
+
+function renderMemoryContext(memoryContext) {
+    if (!memoryContext) return '';
+    const facts = Array.isArray(memoryContext.facts) && memoryContext.facts.length
+        ? `Durable facts and requests:\n${memoryContext.facts.map(item => `- ${item.text}`).join('\\n')}` : '';
+    const transcript = Array.isArray(memoryContext.messages) && memoryContext.messages.length
+        ? `Recent chat transcript:\n${memoryContext.messages.map(item => `${item.senderLabel || 'User'}: ${item.text}`).join('\\n')}` : '';
+    const atmosphere = memoryContext.atmosphere?.label
+        ? `Current atmosphere: ${memoryContext.atmosphere.label}` : '';
+    return [facts, transcript, atmosphere].filter(Boolean).join('\\n\\n');
+}
+
+function keepPasquaShort(text) {
+    let value = String(text || '').replace(/\\s+/g, ' ').trim();
+    if (!value) return null;
+    value = value.replace(/[😎🙂😊🤖✨🙌💯]/gu, '').replace(/\\s{2,}/g, ' ').trim();
+    value = value.replace(/^(how can i assist you today\\??|i am here to help[.!]?|as an ai[,\\s]*)/i, '').trim();
+    if (!value) return null;
+    const sentences = value.match(/[^.!?]+[.!?]+(?:["'”’)]*)|[^.!?]+$/g) || [value];
+    if (sentences.length > 2) value = sentences.slice(0, 2).join(' ').trim();
+    if (value.length > 360) value = `${value.slice(0, 359).replace(/\\s+\\S*$/, '').trim()}…`;
+    return value;
+}
+
+async function getPasquaAIReply(prompt, memKey = 'pasqua:global', options = {}) {
+    const userText = String(prompt || '').trim();
+    if (!userText) return null;
+    const memoryText = renderMemoryContext(options.memoryContext);
+    const enrichedPrompt = [
+        memoryText ? `Use this private chat context carefully. Do not invent facts:\\n${memoryText}` : '',
+        userText,
+    ].filter(Boolean).join('\\n\\n');
+    const answer = await smartAsk({
+        key: memKey,
+        system: SUKUNA_IDENTITY,
+        user: enrichedPrompt,
+        remember: true,
+        compact: true,
+    });
+    return keepPasquaShort(answer);
+}
 
 const SUKUNA_IDENTITY =
     'You are Pasqua, the cool, sharp, street-smart AI personality of SUKUNA MD. ' +
@@ -24,9 +61,6 @@ const SUKUNA_IDENTITY =
 function keepPasquaShort(text) {
     let value = String(text || '').replace(/\s+/g, ' ').trim();
     if (!value) return null;
-
-    // Remove generic assistant-style reactions that models tend to append.
-    // Contextual emojis are allowed, but Pasqua should not look like a sticker bot.
     value = value.replace(/[😎🙂😊🤖✨🙌💯]/gu, '').replace(/\s{2,}/g, ' ').trim();
     value = value.replace(/^(how can i assist you today\??|i am here to help[.!]?|as an ai[,\s]*)/i, '').trim();
     if (!value) return null;
@@ -36,13 +70,18 @@ function keepPasquaShort(text) {
     return value;
 }
 
-async function getPasquaAIReply(prompt, memKey = 'pasqua:global') {
+async function getPasquaAIReply(prompt, memKey = 'pasqua:global', options = {}) {
     const userText = String(prompt || '').trim();
     if (!userText) return null;
+    const memoryText = renderMemoryContext(options.memoryContext);
+    const enrichedPrompt = [
+        memoryText ? `Use this private chat context carefully. Do not invent facts:\n${memoryText}` : '',
+        userText,
+    ].filter(Boolean).join('\n\n');
     const answer = await smartAsk({
         key: memKey,
         system: SUKUNA_IDENTITY,
-        user: userText,
+        user: enrichedPrompt,
         remember: true,
         compact: true,
     });
@@ -58,12 +97,25 @@ module.exports = {
 
     // Export for sessionManager
     getPasquaAIReply,
+    renderMemoryContext,
 
     async execute({ sock, msg, from, sender, args, isGroup, reply, database }) {
         const plainReply = text => reply(text, { raw: true });
         const input = args.join(' ').trim();
         const sub   = input.toLowerCase();
         const chatKey = isGroup ? from : sender;
+        const memory = (() => { try { return require('../../utils/pasquaMemory'); } catch (_) { return null; } })();
+
+        if (sub === 'memory on' || sub === 'memory off' || sub === 'memory clear' || sub === 'memory status') {
+            if (!memory) return reply('Memory module is unavailable.');
+            if (sub === 'memory clear') { memory.clear(database, chatKey); return reply('🧠 Pasqua memory cleared for this chat.'); }
+            if (sub === 'memory status') {
+                const context = memory.getContext(database, chatKey);
+                return reply(`🧠 *Pasqua Memory*\n\nStatus: ${memory.isEnabled(database, chatKey) ? 'ON' : 'OFF'}\nStored messages: ${context.messages.length}\nRemembered facts: ${context.facts.length}\nAtmosphere: ${context.atmosphere.label}`);
+            }
+            memory.setEnabled(database, chatKey, sub.endsWith('on'));
+            return reply(sub.endsWith('on') ? '🧠 Pasqua memory is now ON for this chat.' : '🧠 Pasqua memory is now OFF. New chat content will not be stored or used.');
+        }
 
         // ── Voice sub-mode: .pasqua voice on|off ──────────────────────────
         if (sub.startsWith('voice')) {
@@ -99,7 +151,13 @@ module.exports = {
         }
 
         // Ask the AI directly
-        const aiReply = await getPasquaAIReply(input, 'pasqua:' + chatKey);
+        await sock.sendMessage(from, {
+            react: { text: '👹', key: msg.key }
+        }).catch(() => {});
+
+        const aiReply = await getPasquaAIReply(input, 'pasqua:' + chatKey, {
+            memoryContext: memory?.getContext(database, chatKey),
+        });
 
         if (!aiReply) {
             const failure = getLastAIError();
