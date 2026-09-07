@@ -40,6 +40,7 @@ const TIMEOUT_MS = 12000;
 // VERCEL_AI_GATEWAY_KEY that the Vercel project exposes.
 const GATEWAY_KEY = process.env.VERCEL_AI_GATEWAY_KEY || process.env.AI_GATEWAY_API_KEY || '';
 let lastProviderError = null;
+let lastProviderFailures = [];
 
 /* ------------------------------------------------------------------ *
  * Provider registry
@@ -71,7 +72,9 @@ function openAICompatible({ name, url, key, models }) {
                 validateStatus: () => true,
             });
             if (status < 200 || status >= 300) {
-                throw new Error(data?.error?.message || `HTTP ${status}`);
+                const error = new Error(data?.error?.message || `HTTP ${status}`);
+                error.status = status;
+                throw error;
             }
             const txt = data?.choices?.[0]?.message?.content;
             return (txt && String(txt).trim()) || null;
@@ -105,7 +108,9 @@ function geminiProvider(key) {
                 validateStatus: () => true,
             });
             if (status < 200 || status >= 300) {
-                throw new Error(data?.error?.message || `HTTP ${status}`);
+                const error = new Error(data?.error?.message || `HTTP ${status}`);
+                error.status = status;
+                throw error;
             }
             const txt = data?.candidates?.[0]?.content?.parts?.[0]?.text;
             return (txt && String(txt).trim()) || null;
@@ -129,7 +134,11 @@ function prexzyProvider() {
                 headers: { Accept: 'application/json' },
                 validateStatus: () => true,
             });
-            if (status < 200 || status >= 300) throw new Error(`HTTP ${status}`);
+            if (status < 200 || status >= 300) {
+                const error = new Error(`HTTP ${status}`);
+                error.status = status;
+                throw error;
+            }
             if (data?.status !== true) throw new Error(data?.message || 'Prexzy returned an unsuccessful response');
             const text = data?.response;
             return text && String(text).trim() ? String(text).trim() : null;
@@ -153,7 +162,9 @@ function pollinationsProvider() {
                 validateStatus: () => true,
             });
             if (status < 200 || status >= 300) {
-                throw new Error(`HTTP ${status}`);
+                const error = new Error(`HTTP ${status}`);
+                error.status = status;
+                throw error;
             }
             const txt = typeof data === 'string'
                 ? data
@@ -278,6 +289,8 @@ function pushTurn(key, role, text) {
  */
 async function ask({ key, system = '', user, remember = true, compact = false }) {
     if (!user || !String(user).trim()) return null;
+    lastProviderError = null;
+    lastProviderFailures = [];
     const userText = String(user).trim();
 
     const history = key ? _hist(key).slice() : [];
@@ -296,7 +309,15 @@ async function ask({ key, system = '', user, remember = true, compact = false })
                 reply = await provider.call(model, messages);
                 if (reply) break outer;
             } catch (e) {
-                lastProviderError = { provider: provider.name, model, message: String(e.message || e) };
+                const failure = {
+                    provider: provider.name,
+                    model,
+                    status: Number.isInteger(e.status) ? e.status : undefined,
+                    code: e.code || undefined,
+                    message: String(e.message || e),
+                };
+                lastProviderFailures.push(failure);
+                if (!lastProviderError || provider.name === AI_PROVIDER) lastProviderError = failure;
                 console.error('[AI]', provider.name, model, e.message);
             }
         }
@@ -335,6 +356,17 @@ function getLastAIError() {
     return lastProviderError ? { ...lastProviderError } : null;
 }
 
+function getAIStatus() {
+    return {
+        primary: AI_PROVIDER,
+        configured: Boolean(AI_API_KEY),
+        model: AI_MODELS[0],
+        chain: buildChain().map(provider => provider.name),
+        lastError: getLastAIError(),
+        failures: lastProviderFailures.map(failure => ({ ...failure })),
+    };
+}
+
 function getProviderInfo() {
     const chain = buildChain();
     return {
@@ -346,4 +378,4 @@ function getProviderInfo() {
     };
 }
 
-module.exports = { ask, generateImage, pushTurn, clearMemory, compactChatReply, getProviderInfo, getLastAIError };
+module.exports = { ask, generateImage, pushTurn, clearMemory, compactChatReply, getProviderInfo, getLastAIError, getAIStatus };

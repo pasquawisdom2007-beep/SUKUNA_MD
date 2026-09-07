@@ -351,8 +351,9 @@ async function externalResult(name, input) {
         return `📖 README preview for ${repo}:\n${text.slice(0, 1800)}${text.length > 1800 ? '…' : ''}`;
     }
     if (name === 'apikeytest') {
-        const keys = ['GROQ_API_KEY','GEMINI_API_KEY','OPENAI_API_KEY','OPENROUTER_API_KEY','AI_GATEWAY_API_KEY','WEATHER_API_KEY'];
-        return `🔑 Provider keys:\n${keys.map(key => `${process.env[key] ? '✅' : '❌'} ${key}`).join('\n')}`;
+        const keys = ['AGNES_API_KEY','GROQ_API_KEY','GEMINI_API_KEY','OPENAI_API_KEY','OPENROUTER_API_KEY','AI_GATEWAY_API_KEY','WEATHER_API_KEY'];
+        const directAgnes = (() => { try { return require('./smartAI').getProviderInfo().key === 'configured'; } catch (_) { return false; } })();
+        return `🔑 Provider keys:\n${keys.map(key => `${process.env[key] ? '✅' : '❌'} ${key}`).join('\n')}\n${directAgnes ? '✅' : '❌'} AGNES_API_KEY_FILE (direct config)`;
     }
     if (name === 'weatheralerts') {
         const location = await geocode(query || 'Lagos');

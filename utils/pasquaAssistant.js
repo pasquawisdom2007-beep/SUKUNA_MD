@@ -37,12 +37,16 @@ function buildKnowledge(commandLoader) {
     version = packageJson.version || version;
   } catch (_) {}
   const commands = commandLoader?.getAll ? commandLoader.getAll() : [];
-  const catalog = commands.map(command => {
+  const rows = commands.map(command => {
     const aliases = Array.isArray(command.aliases) && command.aliases.length
-      ? `; aliases: ${command.aliases.join(', ')}` : '';
-    return `${command.name}: ${command.description || 'available command'}${aliases}`;
-  }).sort().join('\n');
-  return `Pasqua is the heart of SUKUNA MD. Pasqua was created by Pasqua. Current version: 3.0.0. Total registered commands: ${commands.length}. Pair site: https://pair-site-wmte.onrender.com. Pair steps: open the link, enter your number, get the session ID, then add SESSION_ID and PAIR_NUMBER to the deployment.\n${catalog}`;
+      ? `; aliases: ${command.aliases.slice(0, 3).join(', ')}` : '';
+    return `${command.name}: ${String(command.description || 'available command').slice(0, 100)}${aliases}`;
+  }).sort();
+  // Do not send the entire command registry to the model. Large deployments
+  // can have 1,000+ commands, which creates a 50k+ character prompt and makes
+  // otherwise normal chat requests fail at the provider context limit.
+  const catalog = rows.join('\n').slice(0, 9000);
+  return `Pasqua is the heart of SUKUNA MD. Pasqua was created by Pasqua. Current version: 3.0.0. Total registered commands: ${commands.length}. Pair site: https://pair-site-wmte.onrender.com. Pair steps: open the link, enter your number, get the session ID, then add SESSION_ID and PAIR_NUMBER to the deployment. The command router handles common commands before AI; use this compact command reference only when explaining capabilities:\n${catalog}`;
 }
 
 function routeNaturalLanguage(text) {
