@@ -14,13 +14,21 @@
  */
 const axios = require('axios');
 
+// ┌──────────────────────────────────────────────────────────────────────┐
+// │ DIRECT AGNES CONFIG                                                   │
+// │ Paste your Agnes secret between the quotes if you want file-based     │
+// │ configuration. Leave empty to use AGNES_API_KEY from the environment. │
+// │ Never paste the real key into a public commit or screenshot.          │
+// └──────────────────────────────────────────────────────────────────────┘
+const AGNES_API_KEY_FILE = '';
+const AGNES_MODEL_FILE = 'agnes-2.5-flash';
+
 // ===== BEGIN AI CONFIG (managed by .chatbotapi) =====
-// Agnes is the default Pasqua AI provider. Set AGNES_API_KEY in the host
-// environment; the key is intentionally never stored in this repository.
+// Agnes is the default Pasqua AI provider.
 const AI_PROVIDER = 'agnes';
-const AI_API_KEY  = process.env.AGNES_API_KEY || '';
+const AI_API_KEY  = AGNES_API_KEY_FILE.trim() || process.env.AGNES_API_KEY || '';
 const AI_URL      = 'https://apihub.agnes-ai.com/v1/chat/completions';
-const AI_MODELS   = [process.env.AGNES_MODEL || 'agnes-2.5-flash'];
+const AI_MODELS   = [AGNES_MODEL_FILE || process.env.AGNES_MODEL || 'agnes-2.5-flash'];
 // ===== END AI CONFIG =====
 
 const MAX_TURNS  = 12;
