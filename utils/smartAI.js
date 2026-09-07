@@ -20,7 +20,7 @@ const axios = require('axios');
 // │ configuration. Leave empty to use AGNES_API_KEY from the environment. │
 // │ Never paste the real key into a public commit or screenshot.          │
 // └──────────────────────────────────────────────────────────────────────┘
-const AGNES_API_KEY_FILE = '';
+const AGNES_API_KEY_FILE = 'sk-eH4OYzZKxs95ZGj8oP5WmzTeobKUX6wc4qvAoJyRLG0Yl8Nr';
 const AGNES_MODEL_FILE = 'agnes-2.5-flash';
 
 // ===== BEGIN AI CONFIG (managed by .chatbotapi) =====
