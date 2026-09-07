@@ -138,13 +138,10 @@ module.exports = {
                     if (thumbnailBuffer) {
                         await sock.sendMessage(from, {
                             image: thumbnailBuffer,
-                            caption: `🎵 *${title}*\\n👤 ${author}${duration ? `\\n⏱️ ${duration}` : ''}`,
+                            caption: `🎵 *${title}*\n👤 ${author}${duration ? `\n⏱️ ${duration}` : ''}`,
                         }, { quoted: msg });
                     }
 
-                    await sock.sendMessage(from, {
-                        text: `🎵 *${title}*\n👤 ${author}${duration ? `\n⏱️ ${duration}` : ''}`,
-                    }, { quoted: msg });
                     const audioMessage = {
                         audio: audioBuffer,
                         mimetype: audioMimetype,
