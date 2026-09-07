@@ -11,23 +11,46 @@ function getContextInfo(content) {
     || {};
 }
 
-function detectTrigger({ body, content, botIds = new Set(), normalizeJid = jid => String(jid || '').split(':')[0] }) {
+const CONVERSATION_TTL_MS = 10 * 60 * 1000;
+const conversationUntil = new Map();
+
+function detectTrigger({ body, content, botIds = new Set(), normalizeJid = jid => String(jid || '').split(':')[0], conversationKey = '', isPrivate = false, allowNaturalChat = true }) {
   const text = String(body || '').trim();
   if (!text) return { triggered: false, text: '' };
   const context = getContextInfo(content);
-  const isBot = jid => botIds.has(normalizeJid(jid));
+  const normalizedBotIds = new Set([...botIds].map(normalizeJid));
+  const isBot = jid => normalizedBotIds.has(normalizeJid(jid));
   const mentioned = (context.mentionedJid || []).some(isBot);
   const repliedToBot = Boolean(context.participant && isBot(context.participant));
+  const numericMention = [...normalizedBotIds].some(id => {
+    const digits = String(id).split('@')[0].replace(/\D/g, '');
+    return digits.length > 4 && new RegExp(`@${digits}(?:\\b|\\s|$)`).test(text);
+  });
   const namePattern = /\b(?:pasqua(?:\s+ai)?|pascwa|sukuna)\b/ig;
   const nameCalled = namePattern.test(text);
-  if (!mentioned && !repliedToBot && !nameCalled) return { triggered: false, text: '' };
+  namePattern.lastIndex = 0;
+  const wasOpen = Boolean(conversationKey && conversationUntil.get(conversationKey) > Date.now());
+  const naturalChat = Boolean(allowNaturalChat && (isPrivate || wasOpen));
+  const triggered = mentioned || numericMention || repliedToBot || nameCalled || naturalChat;
+  if (!triggered) return { triggered: false, text: '' };
+  if (conversationKey && (mentioned || numericMention || repliedToBot || nameCalled || naturalChat)) {
+    conversationUntil.set(conversationKey, Date.now() + CONVERSATION_TTL_MS);
+  }
   const clean = text
     .replace(namePattern, ' ')
     .replace(/@\d{5,20}/g, ' ')
     .replace(/^[\s,:;.!?\-]+|[\s,:;.!?\-]+$/g, '')
     .replace(/\s+/g, ' ')
     .trim();
-  return { triggered: true, text: clean || 'help', mentioned, repliedToBot, nameCalled };
+  return {
+    triggered: true,
+    text: clean || 'Hi',
+    mentioned: mentioned || numericMention,
+    repliedToBot,
+    nameCalled,
+    naturalChat,
+    conversationOpen: true,
+  };
 }
 
 function buildKnowledge(commandLoader) {
