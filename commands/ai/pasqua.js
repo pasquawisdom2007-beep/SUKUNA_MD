@@ -6,6 +6,8 @@
  * When a direct question is given, it replies immediately regardless of toggle.
  */
 
+const { ask: smartAsk, getLastAIError } = require('../../utils/smartAI');
+
 const SUKUNA_IDENTITY =
     'You are Pasqua, the heart of SUKUNA MD. ' +
     'You were created by Pasqua and you are helpful, sharp, friendly, and brief. ' +
@@ -29,21 +31,13 @@ function keepPasquaShort(text) {
 async function getPasquaAIReply(prompt, memKey = 'pasqua:global') {
     const userText = String(prompt || '').trim();
     if (!userText) return null;
-    const requestText = [
-        SUKUNA_IDENTITY,
-        'Current version: 3.0.0. Keep the reply natural, short, and clear.',
-        'Use no more than two short sentences. Do not use borders, titles, labels, footers, or long lists.',
-        `User request: ${userText}`,
-    ].join('\n\n');
-    const url = new URL('https://prexzyapis.com/ai/chatbot');
-    url.searchParams.set('text', requestText);
-    const response = await fetch(url, {
-        headers: { Accept: 'application/json', 'User-Agent': 'SUKUNA-MD/3.0' },
-        signal: AbortSignal.timeout(20000),
+    const answer = await smartAsk({
+        key: memKey,
+        system: SUKUNA_IDENTITY,
+        user: userText,
+        remember: true,
+        compact: true,
     });
-    if (!response.ok) throw new Error(`Prexzy chatbot HTTP ${response.status}`);
-    const data = await response.json();
-    const answer = data?.data?.response || data?.response || data?.data?.text;
     return keepPasquaShort(answer);
 }
 
@@ -95,7 +89,11 @@ module.exports = {
         const aiReply = await getPasquaAIReply(input, 'pasqua:' + chatKey);
 
         if (!aiReply) {
-            return plainReply('I can’t reach the AI right now. Try again soon.');
+            const failure = getLastAIError();
+            const detail = failure?.provider
+                ? ` Provider: ${failure.provider}${failure.model ? `/${failure.model}` : ''}; reason: ${failure.message}.`
+                : '';
+            return plainReply(`I can’t reach the AI right now. Check AGNES_API_KEY or try again soon.${detail}`);
         }
 
         await plainReply(aiReply);

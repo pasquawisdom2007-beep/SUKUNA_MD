@@ -16,3 +16,7 @@ services:
         sync: false
       - key: OWNER_NUMBER
         sync: false
+      - key: AGNES_API_KEY
+        sync: false
+      - key: AGNES_MODEL
+        value: agnes-2.5-flash

@@ -15,12 +15,12 @@
 const axios = require('axios');
 
 // ===== BEGIN AI CONFIG (managed by .chatbotapi) =====
-const AI_PROVIDER = 'groq';
-const AI_API_KEY  = process.env.GROQ_API_KEY || '';
-const AI_URL      = 'https://api.groq.com/openai/v1/chat/completions';
-// Fast 8B model FIRST so replies come back near-instantly; the heavier 70B
-// model is only used as a fallback if the fast one fails.
-const AI_MODELS   = ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile'];
+// Agnes is the default Pasqua AI provider. Set AGNES_API_KEY in the host
+// environment; the key is intentionally never stored in this repository.
+const AI_PROVIDER = 'agnes';
+const AI_API_KEY  = process.env.AGNES_API_KEY || '';
+const AI_URL      = 'https://apihub.agnes-ai.com/v1/chat/completions';
+const AI_MODELS   = [process.env.AGNES_MODEL || 'agnes-2.5-flash'];
 // ===== END AI CONFIG =====
 
 const MAX_TURNS  = 12;
@@ -31,6 +31,7 @@ const TIMEOUT_MS = 12000;
 // Vercel AI Gateway key — accept either the classic AI_GATEWAY_API_KEY or the
 // VERCEL_AI_GATEWAY_KEY that the Vercel project exposes.
 const GATEWAY_KEY = process.env.VERCEL_AI_GATEWAY_KEY || process.env.AI_GATEWAY_API_KEY || '';
+let lastProviderError = null;
 
 /* ------------------------------------------------------------------ *
  * Provider registry
@@ -212,15 +213,15 @@ function buildChain() {
     //    It is also a safe fallback if a configured provider is temporarily down.
     add(prexzyProvider());
 
-    // 4) High-Performance Neuro Brain (OpenRouter)
-    add(openAICompatible({
+    // Optional OpenRouter fallback. Never embed a live key in source.
+    if (process.env.OPENROUTER_NEURO_API_KEY) add(openAICompatible({
         name: 'openrouter-neuro',
         url: 'https://openrouter.ai/api/v1/chat/completions',
-        key: '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',
+        key: process.env.OPENROUTER_NEURO_API_KEY,
         models: ['meta-llama/llama-3.3-70b-instruct', 'google/gemini-2.0-flash-exp:free'],
     }));
 
-    // 5) Final keyless backup so AI never fully dies.
+    // Final keyless backup so AI never fully dies.
     add(pollinationsProvider());
 
     return chain;
@@ -287,6 +288,7 @@ async function ask({ key, system = '', user, remember = true, compact = false })
                 reply = await provider.call(model, messages);
                 if (reply) break outer;
             } catch (e) {
+                lastProviderError = { provider: provider.name, model, message: String(e.message || e) };
                 console.error('[AI]', provider.name, model, e.message);
             }
         }
@@ -321,15 +323,19 @@ async function generateImage(prompt, { width = 1024, height = 1024 } = {}) {
     }
 }
 
+function getLastAIError() {
+    return lastProviderError ? { ...lastProviderError } : null;
+}
+
 function getProviderInfo() {
     const chain = buildChain();
     return {
         provider: AI_PROVIDER,
-        key: AI_API_KEY,
+        key: AI_API_KEY ? 'configured' : '',
         url: AI_URL,
         models: AI_MODELS,
         chain: chain.map(p => p.name),
     };
 }
 
-module.exports = { ask, generateImage, pushTurn, clearMemory, compactChatReply, getProviderInfo };
+module.exports = { ask, generateImage, pushTurn, clearMemory, compactChatReply, getProviderInfo, getLastAIError };
