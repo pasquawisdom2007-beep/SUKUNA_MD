@@ -161,7 +161,13 @@ async function main() {
             if (isBundle(decoded)) {
                 const encodedCreds = decoded.files['creds.json'];
                 if (typeof encodedCreds !== 'string') throw new Error('SESSION_ID auth bundle is missing creds.json');
-                embeddedCreds = JSON.parse(Buffer.from(encodedCreds, 'base64').toString('utf8'));
+                const credsText = Buffer.from(encodedCreds, 'base64').toString('utf8').trim();
+                if (!credsText) throw new Error('SESSION_ID auth bundle has an empty creds.json');
+                try {
+                    embeddedCreds = JSON.parse(credsText);
+                } catch (_) {
+                    throw new Error('SESSION_ID auth bundle has invalid creds.json');
+                }
             }
             const embeddedMeId = String(embeddedCreds?.me?.id || '');
             const embeddedNumber = (embeddedMeId.split(':')[0] || embeddedMeId).replace(/\D/g, '');
