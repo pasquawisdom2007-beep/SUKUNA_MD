@@ -42,7 +42,19 @@ const {
 const { PassThrough } = require('stream');
 
 const TEXT_BG_COLOR = '#9C27B0';
+const TEXT_FG_COLOR = '#FFFFFF';
 const TIMEOUT_MS    = 30_000;
+
+function hexToArgb(hex, alpha = 0xFF) {
+    const clean = String(hex || '').replace('#', '').trim();
+    const value = clean.length === 3
+        ? clean.split('').map(ch => ch + ch).join('')
+        : clean.padStart(6, '0').slice(-6);
+    return (((alpha & 0xFF) << 24) | parseInt(value, 16)) >>> 0;
+}
+
+const STATUS_BG_ARGB = hexToArgb(TEXT_BG_COLOR);
+const STATUS_FG_ARGB = hexToArgb(TEXT_FG_COLOR);
 
 // ── OFFICIAL CHANNEL (View Channel pill on every status post) ─────────────
 const CHANNEL_JID  = '120363426805095237@newsletter';
@@ -192,6 +204,10 @@ async function postGroupStatus(sock, groupJid, content) {
             if (previewTitle)       payload.previewTitle       = previewTitle;
             if (previewDescription) payload.previewDescription = previewDescription;
             if (previewImage)       payload.previewImage       = previewImage;
+            // Keep the native color metadata on direct/fallback link posts too.
+            payload.backgroundArgb = STATUS_BG_ARGB;
+            payload.textArgb = STATUS_FG_ARGB;
+            payload.font = 0;
         }
         return await sock.sendMessage(groupJid, payload);
     } catch (e) {
@@ -390,6 +406,11 @@ async function createImageLinkPreview(sock, url, title, description, imageBuffer
                 title: title || 'Link',
                 description: description || url,
                 previewType: 5, // IMAGE - not blue
+                // Native status color fields prevent WhatsApp from treating the
+                // link as a default blue/blurred text preview.
+                backgroundArgb: STATUS_BG_ARGB,
+                textArgb: STATUS_FG_ARGB,
+                font: 0,
                 ...(thumbnail || { jpegThumbnail: undefined }),
             }
         };
@@ -432,6 +453,11 @@ async function postGroupStatusLinkPreview(sock, groupJid, url) {
     }
 
     const inner = { ...imagePrev };
+    if (inner.extendedTextMessage) {
+        inner.extendedTextMessage.backgroundArgb = STATUS_BG_ARGB;
+        inner.extendedTextMessage.textArgb = STATUS_FG_ARGB;
+        inner.extendedTextMessage.font = 0;
+    }
     attachChannelCtxToInner(inner);
 
     const secret = crypto.randomBytes(32);
