@@ -1,6 +1,7 @@
 "use strict";
 
-const { ask: smartAsk, getLastAIError } = require('../../utils/smartAI');
+const { ask: smartAsk, askMultimodal, getLastAIError } = require('../../utils/smartAI');
+const { extractPasquaMedia } = require('../../utils/pasquaMedia');
 const conversationMemory = new Map();
 const MAX_MEMORY_TURNS = 12;
 
@@ -141,13 +142,21 @@ module.exports = {
             return plainReply('Okay, I’ll stay quiet here.');
         }
 
-        // ── Direct question ───────────────────────────────────────────────
-        // Pasqua must be explicitly enabled before it answers any question.
+        // ── Direct question or attached-media analysis ─────────────────────
+        // Pasqua must be explicitly enabled before it answers.
         if (!database.getGroup(chatKey)?.pasquaai) {
             return reply('👹 Pasqua AI is off in this chat. Use /pasqua on to enable it.');
         }
-        if (!input) {
-            return plainReply('Ask me anything, or use `.pasqua on` to let me reply here.');
+
+        let attachment = null;
+        try {
+            attachment = await extractPasquaMedia(msg);
+        } catch (error) {
+            console.error('[Pasqua media]', error.message);
+            return plainReply(`I could not read that media: ${error.message}`);
+        }
+        if (!input && !attachment) {
+            return plainReply('Ask me anything, or attach a photo/video and ask me to analyze it.');
         }
 
         // Ask the AI directly
@@ -155,9 +164,21 @@ module.exports = {
             react: { text: '👹', key: msg.key }
         }).catch(() => {});
 
-        const aiReply = await getPasquaAIReply(input, 'pasqua:' + chatKey, {
-            memoryContext: memory?.getContext(database, chatKey),
-        });
+        const userPrompt = input || (attachment?.type === 'video'
+            ? 'Analyze this video and explain what it contains, including the main actions, people, objects, text, and notable details.'
+            : 'Analyze this image and explain clearly what it contains, including people, objects, text, setting, and notable details.');
+        const aiReply = attachment
+            ? await askMultimodal({
+                key: 'pasqua:' + chatKey,
+                system: SUKUNA_IDENTITY + ' You can inspect attached photos and sampled video frames. Be clear about what is directly visible and do not invent details.',
+                user: userPrompt,
+                media: attachment.media,
+                remember: true,
+                compact: true,
+            })
+            : await getPasquaAIReply(input, 'pasqua:' + chatKey, {
+                memoryContext: memory?.getContext(database, chatKey),
+            });
 
         if (!aiReply) {
             const failure = getLastAIError();

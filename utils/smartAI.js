@@ -52,6 +52,7 @@ function openAICompatible({ name, url, key, models }) {
         name,
         key,
         models,
+        supportsVision: true,
         async call(model, messages) {
             const { data, status } = await axios.post(url, {
                 model,
@@ -89,14 +90,28 @@ function geminiProvider(key) {
         name: 'gemini',
         key,
         models,
+        supportsVision: true,
         async call(model, messages) {
             // Fold system + history into Gemini's contents format.
             const sys = messages.filter(m => m.role === 'system').map(m => m.content).join('\n');
+            const toParts = content => {
+                if (typeof content === 'string') return [{ text: content }];
+                if (!Array.isArray(content)) return [{ text: String(content || '') }];
+                return content.flatMap(item => {
+                    if (item?.type === 'text') return [{ text: String(item.text || '') }];
+                    if (item?.type === 'image_url') {
+                        const url = String(item.image_url?.url || '');
+                        const match = url.match(/^data:([^;]+);base64,(.+)$/);
+                        return match ? [{ inlineData: { mimeType: match[1], data: match[2] } }] : [];
+                    }
+                    return [];
+                });
+            };
             const contents = messages
                 .filter(m => m.role !== 'system')
                 .map(m => ({
                     role: m.role === 'assistant' ? 'model' : 'user',
-                    parts: [{ text: m.content }],
+                    parts: toParts(m.content),
                 }));
             const body = { contents };
             if (sys) body.systemInstruction = { parts: [{ text: sys }] };
@@ -333,6 +348,51 @@ async function ask({ key, system = '', user, remember = true, compact = false })
 }
 
 /**
+ * Ask configured vision-capable providers about one or more image data URLs.
+ * Text-only keyless providers are skipped because they cannot inspect media.
+ */
+async function askMultimodal({ key, system = '', user, media = [], remember = true, compact = false }) {
+    if (!user || !String(user).trim() || !Array.isArray(media) || !media.length) return null;
+    lastProviderError = null;
+    lastProviderFailures = [];
+    const userText = String(user).trim();
+    const history = key ? _hist(key).slice() : [];
+    const messages = [];
+    if (system) messages.push({ role: 'system', content: system });
+    for (const t of history) messages.push({ role: t.role, content: t.content });
+    messages.push({
+        role: 'user',
+        content: [
+            { type: 'text', text: userText },
+            ...media.map(item => ({ type: 'image_url', image_url: { url: item } })),
+        ],
+    });
+
+    let reply = null;
+    outer:
+    for (const provider of buildChain()) {
+        if (!provider.supportsVision) continue;
+        for (const model of provider.models) {
+            try {
+                reply = await provider.call(model, messages);
+                if (reply) break outer;
+            } catch (e) {
+                const failure = { provider: provider.name, model, status: Number.isInteger(e.status) ? e.status : undefined, code: e.code || undefined, message: String(e.message || e) };
+                lastProviderFailures.push(failure);
+                if (!lastProviderError || provider.name === AI_PROVIDER) lastProviderError = failure;
+                console.error('[AI:vision]', provider.name, model, e.message);
+            }
+        }
+    }
+    if (reply && compact) reply = compactChatReply(reply);
+    if (reply && remember && key) {
+        pushTurn(key, 'user', userText);
+        pushTurn(key, 'assistant', reply);
+    }
+    return reply;
+}
+
+/**
  * Generate an image from a text prompt. Uses Pollinations (KEYLESS) which is
  * reliable and needs no API key. Returns a Buffer, or null on failure.
  */
@@ -378,4 +438,4 @@ function getProviderInfo() {
     };
 }
 
-module.exports = { ask, generateImage, pushTurn, clearMemory, compactChatReply, getProviderInfo, getLastAIError, getAIStatus };
+module.exports = { ask, askMultimodal, generateImage, pushTurn, clearMemory, compactChatReply, getProviderInfo, getLastAIError, getAIStatus };
