@@ -47,6 +47,11 @@ const PRESERVE = new Set([
     '.env.local',
     'package-lock.json',
     'bun.lock',
+    // User-selected menu media must survive every update.
+    'assets/menuimage.jpg',
+    'assets/menuvideo.mp4',
+    'assets/menuvideo.meta.json',
+    'assets/menugif.mp4',
 ]);
 
 // Files where a change means a restart is strongly recommended.
@@ -207,6 +212,7 @@ function shouldSkipLocalPath(relativePath) {
     return first === '.git'
         || first === 'node_modules'
         || PRESERVE.has(first)
+        || PRESERVE.has(normalized)
         || first === '.update-tmp'
         || first === '.cache'
         || first === 'cache'
@@ -360,7 +366,7 @@ async function tarballUpdate() {
     function copyRecursive(srcDir, dstDir, relBase = '') {
         for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
             const rel = relBase ? `${relBase}/${entry.name}` : entry.name;
-            if (PRESERVE.has(rel.split('/')[0])) continue;
+            if (PRESERVE.has(rel) || PRESERVE.has(rel.split('/')[0])) continue;
             const src = path.join(srcDir, entry.name);
             const dst = path.join(dstDir, entry.name);
             if (entry.isDirectory()) {

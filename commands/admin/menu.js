@@ -22,8 +22,9 @@ const fontSystem     = require('../../utils/fontSystem');
 const langSystem     = require('../../utils/langSystem');
 
 const VIDEO_PATH  = path.join(__dirname, '..', '..', 'assets', 'menuvideo.mp4');
-const IMAGE_PATH  = path.join(__dirname, '..', '..', 'assets', 'menuimage.jpg');
-const GIF_PATH    = path.join(__dirname, '..', '..', 'assets', 'menugif.mp4');
+const IMAGE_PATH         = path.join(__dirname, '..', '..', 'assets', 'menuimage.jpg');
+const DEFAULT_IMAGE_PATH = path.join(__dirname, '..', '..', 'assets', 'default-menuimage.png');
+const GIF_PATH           = path.join(__dirname, '..', '..', 'assets', 'menugif.mp4');
 
 
 function fmtUptime(sec) {
@@ -311,7 +312,7 @@ module.exports = {
                 });
             }
 
-            // Priority: menu image > menu GIF (gifPlayback loop) > menu video > text
+            // Priority: user image > user GIF > user video > built-in default image > text.
             if (fs.existsSync(IMAGE_PATH)) {
                 return await sock.sendMessage(
                     from,
@@ -350,6 +351,17 @@ module.exports = {
                     {
                         video:    { url: VIDEO_PATH },
                         mimetype: 'video/mp4',
+                        caption,
+                        mentions,
+                    },
+                    { quoted: msg }
+                );
+            }
+            if (fs.existsSync(DEFAULT_IMAGE_PATH)) {
+                return await sock.sendMessage(
+                    from,
+                    {
+                        image: fs.readFileSync(DEFAULT_IMAGE_PATH),
                         caption,
                         mentions,
                     },
