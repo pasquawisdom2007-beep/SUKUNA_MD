@@ -135,19 +135,33 @@ async function main() {
 
             if (/^Pasqua~/i.test(sessionIdRaw)) {
                 const markedPayload = sessionIdRaw.replace(/^Pasqua~/i, '').trim();
-                // Preserve legacy Pasqua~shortId compatibility. Any longer
-                // value is treated as the self-contained payload itself.
-                if (/^[A-Za-z0-9_-]{6,64}$/.test(markedPayload)) {
+                // Resolve the pair site’s Redis token. The current site accepts
+                // 6–128 alphanumeric characters and returns the one-time auth
+                // bundle from /pair/session/:token/consume.
+                if (/^[A-Za-z0-9_-]{6,128}$/.test(markedPayload)) {
                     const pairSiteUrl = (process.env.PAIR_SITE_URL || 'https://pair-site-wmte.onrender.com').toString().trim().replace(/\/$/, '');
                     if (!pairSiteUrl) throw new Error('PAIR_SITE_URL is required for Pasqua~ short IDs');
                     const controller = new AbortController();
                     const timeout = setTimeout(() => controller.abort(), 15000);
                     try {
-                        const response = await fetch(`${pairSiteUrl}/pair/session/${encodeURIComponent(markedPayload)}/consume`, { signal: controller.signal });
-                        if (!response.ok) throw new Error(`PAIR_SITE returned HTTP ${response.status}`);
-                        const remotePayload = await response.json();
-                        sessionBase64 = remotePayload.session;
-                        if (!sessionBase64) throw new Error('PAIR_SITE response did not contain a session');
+                        const response = await fetch(`${pairSiteUrl}/pair/session/${encodeURIComponent(markedPayload)}/consume`, {
+                            signal: controller.signal,
+                            headers: { Accept: 'application/json', 'User-Agent': 'SukunaMD/3.0' },
+                        });
+                        const remotePayload = await response.json().catch(() => ({}));
+                        if (!response.ok) {
+                            const reason = remotePayload.error || remotePayload.message || `HTTP ${response.status}`;
+                            throw new Error(`PAIR_SITE ${reason}`);
+                        }
+                        sessionBase64 = remotePayload.session
+                            || remotePayload.sessionId
+                            || remotePayload.session_id
+                            || remotePayload.data?.session
+                            || remotePayload.data?.sessionId
+                            || remotePayload.payload;
+                        if (!sessionBase64 || typeof sessionBase64 !== 'string') {
+                            throw new Error('PAIR_SITE response did not contain SESSION_ID/session data');
+                        }
                     } finally {
                         clearTimeout(timeout);
                     }
@@ -203,7 +217,12 @@ async function main() {
                 console.log(chalk.red(`[SESSION] Connection failed: ${result.error}`));
             }
         } catch (e) {
-            console.log(chalk.red(`[SESSION] Invalid SESSION_ID (${e.message}). Falling back to pair-code flow.`));
+            console.log(chalk.red(`[SESSION] Invalid SESSION_ID (${e.message}).`));
+            if (/^Pasqua~/i.test(sessionIdRaw)) {
+                console.log(chalk.yellow('[SESSION] For the current pair site, use Generate Script → Redis session token, not the temporary Pair Code display.'));
+                console.log(chalk.yellow('[SESSION] Set SESSION_ID=Pasqua~<token>, PAIR_NUMBER=<number>, and PAIR_SITE_URL=https://pair-site-wmte.onrender.com.'));
+            }
+            console.log(chalk.yellow('[SESSION] Falling back to pair-code flow.'));
             sessionIdUsed = false;
         }
     }
