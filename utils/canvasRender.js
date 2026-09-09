@@ -847,37 +847,69 @@ async function renderUptimeCard({
     botName   = 'SUKUNA · MD',
     labels    = {},
 } = {}) {
-    const W = 980, H = 540;
-    const accent = '#a855f7';
-    const tile = (label, value, x, y, sub = '') => `
+        const W = 980, H = 560;
+    const accent = '#22d3ee';
+    const cyan = '#67e8f9';
+    const blue = '#2563eb';
+    const tile = (label, value, x, y, sub = '', span = 280) => `
       <g transform="translate(${x}, ${y})">
-        <rect width="280" height="120" rx="16" fill="#000" fill-opacity="0.45"
-              stroke="${accent}" stroke-opacity="0.35"/>
-        <text x="20" y="34" font-family="Georgia, serif" font-size="12"
-              letter-spacing="4" fill="#e5e7eb" fill-opacity="0.7">${esc(label)}</text>
-        <text x="20" y="80" font-family="Georgia, serif" font-size="30"
-              font-weight="bold" fill="#fbbf24">${esc(value)}</text>
-        ${sub ? `<text x="20" y="105" font-family="Georgia, serif" font-size="13"
-              fill="#e5e7eb" fill-opacity="0.7">${esc(sub)}</text>` : ''}
+        <rect width="${span}" height="122" rx="14" fill="#061326" fill-opacity="0.92"
+              stroke="${accent}" stroke-opacity="0.52" stroke-width="1.5"/>
+        <rect x="0" y="0" width="${span}" height="4" rx="2" fill="url(#uptimeLine)"/>
+        <circle cx="${span - 22}" cy="22" r="4" fill="${cyan}"/>
+        <circle cx="${span - 22}" cy="22" r="10" fill="none" stroke="${cyan}" stroke-opacity="0.24"/>
+        <text x="20" y="34" font-family="'Courier New', monospace" font-size="12"
+              letter-spacing="3" fill="#bae6fd" fill-opacity="0.82">${esc(label)}</text>
+        <text x="20" y="82" font-family="'Courier New', monospace" font-size="29"
+              font-weight="bold" fill="#f8fafc">${esc(value)}</text>
+        ${sub ? `<text x="20" y="106" font-family="'Courier New', monospace" font-size="13"
+              fill="#7dd3fc" fill-opacity="0.82">${esc(sub)}</text>` : ''}
       </g>`;
     const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-      ${chrome(W, H, accent)}
-      <text x="48" y="78" font-family="Georgia, serif" font-size="14"
-            letter-spacing="6" fill="#e5e7eb" fill-opacity="0.7">${esc(labels.statusHeader || 'SYSTEM · LIVE STATUS')}</text>
-      <text x="48" y="130" font-family="Georgia, serif" font-size="42" font-weight="bold"
-            fill="#fbbf24">${esc(botName)}</text>
-      <text x="48" y="160" font-family="Georgia, serif" font-size="16"
-            fill="#e5e7eb" fill-opacity="0.85">⚡ ${esc(labels.online || 'Online · all cursed engines running')}</text>
-
-      ${tile(labels.botUptime || 'BOT UPTIME', botUptime, 48,  200)}
-      ${tile(labels.systemUptime || 'SYSTEM UPTIME', sysUptime, 348, 200)}
-      ${tile(labels.botMemory || 'BOT MEMORY', `${botMem} MB`, 648, 200)}
-      ${tile(labels.platform || 'PLATFORM', `${platform}`, 48,  340, arch)}
-      ${tile(labels.totalRam || 'TOTAL RAM', `${totalMem} GB`, 348, 340)}
-      ${tile(labels.freeRam || 'FREE RAM',  `${freeMem} GB`,  648, 340)}
-
-      ${footer(W, H)}
+      <defs>
+        <linearGradient id="uptimeBg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#020617"/>
+          <stop offset="55%" stop-color="#071a38"/>
+          <stop offset="100%" stop-color="#0c1d45"/>
+        </linearGradient>
+        <linearGradient id="uptimeLine" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="#2563eb"/>
+          <stop offset="50%" stop-color="#22d3ee"/>
+          <stop offset="100%" stop-color="#38bdf8"/>
+        </linearGradient>
+        <radialGradient id="uptimeAura" cx="86%" cy="8%" r="70%">
+          <stop offset="0%" stop-color="#0ea5e9" stop-opacity="0.34"/>
+          <stop offset="55%" stop-color="#1d4ed8" stop-opacity="0.10"/>
+          <stop offset="100%" stop-color="#020617" stop-opacity="0"/>
+        </radialGradient>
+        <pattern id="uptimeGrid" width="36" height="36" patternUnits="userSpaceOnUse">
+          <path d="M36 0H0V36" fill="none" stroke="#7dd3fc" stroke-opacity="0.07"/>
+        </pattern>
+        <pattern id="uptimeScan" width="4" height="4" patternUnits="userSpaceOnUse">
+          <rect width="4" height="2" fill="#fff" fill-opacity="0.018"/>
+        </pattern>
+      </defs>
+      <rect width="${W}" height="${H}" fill="url(#uptimeBg)"/>
+      <rect width="${W}" height="${H}" fill="url(#uptimeAura)"/>
+      <rect width="${W}" height="${H}" fill="url(#uptimeGrid)"/>
+      <rect width="${W}" height="${H}" fill="url(#uptimeScan)"/>
+      <rect x="12" y="12" width="${W - 24}" height="${H - 24}" rx="22" fill="none" stroke="#22d3ee" stroke-opacity="0.68" stroke-width="2"/>
+      <rect x="21" y="21" width="${W - 42}" height="${H - 42}" rx="17" fill="none" stroke="#2563eb" stroke-opacity="0.55"/>
+      <path d="M34 72V34H72M908 34H946V72M34 488V526H72M908 526H946V488" fill="none" stroke="${cyan}" stroke-width="3" stroke-linecap="square"/>
+      <text x="48" y="68" font-family="'Courier New', monospace" font-size="14" letter-spacing="5" fill="${cyan}">${esc(labels.statusHeader || 'SYSTEM · LIVE STATUS')}</text>
+      <text x="${W - 48}" y="68" text-anchor="end" font-family="'Courier New', monospace" font-size="13" letter-spacing="2" fill="#86efac">● ONLINE</text>
+      <text x="48" y="132" font-family="'Courier New', monospace" font-size="42" font-weight="bold" fill="#f8fafc">${esc(botName)}</text>
+      <text x="48" y="164" font-family="'Courier New', monospace" font-size="15" fill="#bae6fd">&gt; ${esc(labels.online || 'All systems operational · telemetry stream active')}</text>
+      <line x1="48" y1="184" x2="${W - 48}" y2="184" stroke="url(#uptimeLine)" stroke-opacity="0.7"/>
+      ${tile(labels.botUptime || 'BOT UPTIME', botUptime, 48,  208)}
+      ${tile(labels.systemUptime || 'SYSTEM UPTIME', sysUptime, 348, 208)}
+      ${tile(labels.botMemory || 'BOT MEMORY', `${botMem} MB`, 648, 208)}
+      ${tile(labels.platform || 'PLATFORM', `${platform}`, 48,  348, arch)}
+      ${tile(labels.totalRam || 'TOTAL RAM', `${totalMem} GB`, 348, 348)}
+      ${tile(labels.freeRam || 'FREE RAM',  `${freeMem} GB`,  648, 348)}
+      <line x1="48" y1="500" x2="${W - 48}" y2="500" stroke="#2563eb" stroke-opacity="0.6"/>
+      <text x="${W / 2}" y="530" text-anchor="middle" font-family="'Courier New', monospace" font-size="13" letter-spacing="4" fill="#67e8f9">SUKUNA MD · CYBER TELEMETRY</text>
     </svg>`;
     return svgToPng(svg);
 }
