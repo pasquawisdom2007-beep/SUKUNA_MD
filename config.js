@@ -67,7 +67,10 @@ module.exports = {
         openai: process.env.OPENAI_API_KEY || '',
         weather: process.env.WEATHER_API_KEY || '',
         imgbb: process.env.IMGBB_API_KEY || 'dada6d77f27b31a3f28c30f61728cedf',
-        klipy: process.env.KLIPY_API_KEY || 'x98VATj2HVtGsRNU3ca07NZFreZL22DUD5NMbXillsC4yTGuWR40E1H9SUJc5uS9'
+        klipy: process.env.KLIPY_API_KEY || 'x98VATj2HVtGsRNU3ca07NZFreZL22DUD5NMbXillsC4yTGuWR40E1H9SUJc5uS9',
+        // BILLIE_MD uses remove.bg for this command. Override with
+        // REMOVEBG_API_KEY in production if the key is rotated.
+        removebg: process.env.REMOVEBG_API_KEY || 'EjbUZznRavViVPC9MMMX1Phr'
     },
 
     messages: {
