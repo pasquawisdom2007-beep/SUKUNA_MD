@@ -226,6 +226,7 @@ class Database {
             antidelete: false,
             antihijack: false,
             antibot: false,
+            antibug: true,
             antibotMode: 'kick',
             antibotAction: 'kick',
             antibotMaxWarnings: 3,
