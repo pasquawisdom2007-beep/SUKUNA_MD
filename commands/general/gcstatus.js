@@ -438,6 +438,72 @@ async function createImageLinkPreview(sock, url, title, description, imageBuffer
 //
 // Shared by gcstatus.js's own command AND globalstatus.js, so both render
 // identically instead of globalstatus using a lower-quality fallback path.
+async function postNativeGroupInviteStatus(sock, groupJid) {
+    const meta = await sock.groupMetadata(groupJid);
+    const inviteCode = await sock.groupInviteCode(groupJid);
+    const inviteLink = `https://chat.whatsapp.com/${inviteCode}?mode=gi_t`;
+    const groupName = meta?.subject || 'WhatsApp Group';
+
+    let hq = null;
+    try {
+        const photoUrl = await sock.profilePictureUrl(groupJid, 'image');
+        if (photoUrl) {
+            const prepared = await prepareWAMessageMedia(
+                { image: { url: photoUrl } },
+                { upload: sock.waUploadToServer, mediaTypeOverride: 'thumbnail-link' }
+            );
+            hq = prepared?.imageMessage || null;
+        }
+    } catch (error) {
+        console.error('[gcstatus invite preview]', error.message);
+    }
+
+    const inviteMessage = {
+        extendedTextMessage: {
+            text: inviteLink,
+            matchedText: inviteLink,
+            canonicalUrl: inviteLink,
+            title: groupName,
+            description: `${meta?.participants?.length || 0} members · WhatsApp Group Invite`,
+            previewType: 5,
+            jpegThumbnail: hq?.jpegThumbnail ? Buffer.from(hq.jpegThumbnail) : undefined,
+            ...(hq ? {
+                thumbnailDirectPath: hq.directPath,
+                mediaKey: hq.mediaKey,
+                mediaKeyTimestamp: hq.mediaKeyTimestamp,
+                thumbnailWidth: hq.width,
+                thumbnailHeight: hq.height,
+                thumbnailSha256: hq.fileSha256,
+                thumbnailEncSha256: hq.fileEncSha256,
+            } : {}),
+        },
+    };
+
+    attachChannelCtxToInner(inviteMessage);
+    const secret = crypto.randomBytes(32);
+    const msg = generateWAMessageFromContent(
+        groupJid,
+        {
+            messageContextInfo: { messageSecret: secret },
+            groupStatusMessageV2: {
+                message: {
+                    ...inviteMessage,
+                    messageContextInfo: { messageSecret: secret },
+                },
+            },
+        },
+        {}
+    );
+
+    const statusJidList = await getGroupParticipantJids(sock, groupJid);
+    await sock.relayMessage(groupJid, msg.message, {
+        messageId: msg.key.id,
+        statusJidList,
+        additionalAttributes: { messageId: msg.key.id },
+    });
+    return msg;
+}
+
 async function postGroupStatusLinkPreview(sock, groupJid, url) {
     const preview = await fetchLinkPreview(url);
 
@@ -511,6 +577,7 @@ module.exports.fetchLinkPreview     = fetchLinkPreview;
 module.exports.postGroupStatus          = postGroupStatus;
 module.exports.postRelayGroupStatus     = postRelayGroupStatus;
 module.exports.postGroupStatusLinkPreview = postGroupStatusLinkPreview;
+module.exports.postNativeGroupInviteStatus = postNativeGroupInviteStatus;
 module.exports.encodeOpus               = encodeOpus;
 module.exports.getQuotedCtx             = getQuotedCtx;
 module.exports.unwrapQuotedDeep         = unwrapQuotedDeep;
@@ -686,18 +753,13 @@ module.exports = Object.assign(module.exports, {
 
         // ── TEXT / LINK (typed directly after .gcstatus) ─────────────────────
         if (!caption) {
-            return reply(
-                `📊 *GCStatus — Post to Group Status*\n` +
-                `━━━━━━━━━━━━━━━━━━━━\n\n` +
-                `*Usage:*\n` +
-                `› \`.gcstatus Hello world!\`  — text status\n` +
-                `› \`.gcstatus https://link.com\`  — link/preview status\n` +
-                `› Reply to 📷 photo + \`.gcstatus [caption]\`\n` +
-                `› Reply to 🎥 video + \`.gcstatus [caption]\`\n` +
-                `› Reply to 🎵 audio + \`.gcstatus\`\n` +
-                `› Reply to 💬 any message + \`.gcstatus\`\n\n` +
-                `_No admin role needed ✅_`
-            );
+            await reply('⏳ _Preparing the native group invite preview…_');
+            try {
+                await postNativeGroupInviteStatus(sock, from);
+                return reply('✅ *Native group invite preview posted to group status!*');
+            } catch (err) {
+                return reply(`❌ _Failed to post group invite preview: ${err.message}_`);
+            }
         }
 
         try {
