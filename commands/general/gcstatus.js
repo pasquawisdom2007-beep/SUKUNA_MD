@@ -113,7 +113,7 @@ async function downloadMedia(mediaMsg, type) {
  * previewImage and lets WhatsApp do its own (blurry) fetch.
  */
 async function fetchLinkPreview(url) {
-    const result = { title: null, description: null, imageBuffer: null };
+    const result = { title: null, description: null, imageBuffer: null, imageUrl: null };
     try {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 10_000);
@@ -149,6 +149,9 @@ async function fetchLinkPreview(url) {
 
         if (imgUrl) {
             const absImg = imgUrl.startsWith('http') ? imgUrl : new URL(imgUrl, url).href;
+            // Keep the original remote URL. WhatsApp's thumbnail-link upload can
+            // preserve better source metadata than a re-encoded low-res buffer.
+            result.imageUrl = absImg;
             try {
                 const imgCtrl = new AbortController();
                 const imgTimer = setTimeout(() => imgCtrl.abort(), 12_000);
@@ -373,13 +376,18 @@ function unwrapQuotedDeep(qm) {
 }
 
 // Build non-blue link preview with image thumbnail
-async function createImageLinkPreview(sock, url, title, description, imageBuffer) {
+async function createImageLinkPreview(sock, url, title, description, imageBuffer, imageUrl) {
     try {
         let thumbnail = null;
-        if (imageBuffer) {
+        // Prefer the original image URL, matching the sharper group-invite path.
+        // Use the downloaded/normalised buffer only if direct URL preparation fails.
+        const sources = [];
+        if (imageUrl) sources.push({ image: { url: imageUrl } });
+        if (imageBuffer) sources.push({ image: imageBuffer });
+        for (const source of sources) {
             try {
                 const prepared = await prepareWAMessageMedia(
-                    { image: imageBuffer },
+                    source,
                     { upload: sock.waUploadToServer, mediaTypeOverride: 'thumbnail-link' }
                 );
                 const hq = prepared.imageMessage;
@@ -393,6 +401,7 @@ async function createImageLinkPreview(sock, url, title, description, imageBuffer
                     thumbnailEncSha256: hq?.fileEncSha256,
                     jpegThumbnail: hq?.jpegThumbnail ? Buffer.from(hq.jpegThumbnail) : undefined,
                 };
+                if (thumbnail.thumbnailDirectPath || thumbnail.jpegThumbnail) break;
             } catch (err) {
                 console.error('[thumbnail prepare]', err.message);
             }
@@ -437,7 +446,8 @@ async function postGroupStatusLinkPreview(sock, groupJid, url) {
         url,
         preview.title || 'Link',
         preview.description || url,
-        preview.imageBuffer
+        preview.imageBuffer,
+        preview.imageUrl
     );
 
     if (!imagePrev) {
