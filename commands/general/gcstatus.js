@@ -441,6 +441,20 @@ async function createImageLinkPreview(sock, url, title, description, imageBuffer
 async function postGroupStatusLinkPreview(sock, groupJid, url) {
     const preview = await fetchLinkPreview(url);
 
+    // A native link preview is always rendered from a thumbnail by WhatsApp.
+    // When an OG image is available, send that image as the actual group-status
+    // media instead. This is the only reliable way to keep the photo sharp on
+    // recipients' devices; the URL and page metadata remain in the caption.
+    if (preview.imageBuffer) {
+        const lines = [preview.title || 'Link', preview.description || '', url]
+            .map(value => String(value || '').trim())
+            .filter(Boolean);
+        return postGroupStatus(sock, groupJid, {
+            image: preview.imageBuffer,
+            caption: lines.join('\\n\\n'),
+        });
+    }
+
     const imagePrev = await createImageLinkPreview(
         sock,
         url,
