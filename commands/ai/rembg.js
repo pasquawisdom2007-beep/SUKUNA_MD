@@ -50,7 +50,13 @@ function getQuotedMedia(msg) {
     return { contextInfo, quotedMessage, mediaType: null, mediaMessage: null };
 }
 
-async function downloadQuotedImage(sock, from, msg, contextInfo, quotedMessage) {
+async function downloadQuotedImage(sock, from, msg, contextInfo, quotedMessage, serializedQuoted) {
+    // BILLIE_MD serializes quoted media with a `.download()` helper. Support
+    // that shape when available, while keeping SUKUNA_MD’s raw-message path.
+    if (serializedQuoted && typeof serializedQuoted.download === 'function') {
+        return serializedQuoted.download();
+    }
+
     const targetMessage = {
         key: {
             remoteJid: from,
@@ -111,9 +117,10 @@ module.exports = {
     category: 'media',
     usage: '.rembg (reply to an image) or .rembg <image URL>',
 
-    async execute({ sock, msg, from, reply, args = [], prefix }) {
+    async execute({ sock, msg, from, reply, args = [], prefix, quoted }) {
         const px = prefix || '.';
         const { contextInfo, quotedMessage, mediaType, mediaMessage } = getQuotedMedia(msg);
+        const serializedQuoted = quoted && typeof quoted.download === 'function' ? quoted : null;
         const sourceUrl = args[0] && isUrl(args[0]) ? args[0] : null;
 
         if (!mediaMessage && !sourceUrl) {
@@ -140,7 +147,7 @@ module.exports = {
             let filename = 'image.png';
 
             if (mediaMessage) {
-                imageBuffer = await downloadQuotedImage(sock, from, msg, contextInfo, quotedMessage);
+                imageBuffer = await downloadQuotedImage(sock, from, msg, contextInfo, quotedMessage, serializedQuoted);
                 filename = mediaMessage.fileName || 'image.png';
             } else {
                 const response = await axios.get(sourceUrl, {
