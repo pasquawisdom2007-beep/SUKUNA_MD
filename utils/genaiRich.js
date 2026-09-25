@@ -254,7 +254,33 @@ async function sendRichHtml({ sock, jid, quoted, html, canvasText, title, captio
     return wrapped;
 }
 async function sendRichHtmlMessage({ sock, jid, quoted, title, html, url, trustedSources = [] }) {
-    const content = buildRichContent(html, quoted, { title, url, trustedSources });
+    const data = Buffer.from(JSON.stringify({
+        sections: [{
+            view_model: {
+                primitive: {
+                    __typename: 'FOAHtmlPrimitiveDemoDONOTUSE',
+                    payload: String(html),
+                    title: String(title || ''),
+                    url: String(url || ''),
+                    trusted_sources: Array.isArray(trustedSources) ? trustedSources : [],
+                },
+                __typename: 'GenAISingleLayoutViewModel',
+            },
+            __typename: 'GenAIUnifiedResponseSection',
+        }],
+    })).toString('base64');
+    const content = proto.Message.fromObject({
+        botForwardedMessage: {
+            message: {
+                richResponseMessage: {
+                    messageType: 1,
+                    submessages: [],
+                    unifiedResponse: { data },
+                    contextInfo: richContext(quoted),
+                },
+            },
+        },
+    });
     const safeQuoted = quoted?.message ? quoted : undefined;
     const wrapped = generateWAMessageFromContent(jid, content, { userJid: sock.user?.id, quoted: safeQuoted });
     await sock.relayMessage(jid, wrapped.message, { messageId: wrapped.key.id });
