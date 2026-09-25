@@ -31,16 +31,12 @@ module.exports = {
     async execute({ sock, msg, from, reply }) {
         const html = dangerDashHtml();
         try {
-            // Prefer the fork's rich mini-app card. Its Details action opens
-            // this HTML in the live preview surface instead of sending a
-            // second message into the chat.
+            // This is the custom mini-app path: WhatsApp renders the native
+            // open/details card first, and the Details action opens this HTML
+            // game inside the live preview surface.
             if (await sendNativeRichHtml({ sock, jid: from, html })) return;
-            // Some deployments expose only the inbuilt mini-app helper. Keep
-            // it as a compatibility path before the repository renderer.
-            if (typeof sock.sendMiniApp === 'function') {
-                await sock.sendMiniApp(from, { title: 'Danger Dash' });
-                return;
-            }
+            // Older deployments do not expose sendRichHtmlMessage; preserve
+            // the existing renderer as a compatibility fallback.
             await sendRichHtml({ sock, jid: from, quoted: msg, html, title: 'Danger Dash' });
         } catch (error) {
             console.error('[DANGER DASH]', error.message);
