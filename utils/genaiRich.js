@@ -29,17 +29,20 @@ function richContext(quoted) {
     };
 }
 
-function buildRichContent(html, quoted) {
+function buildRichContent(html, quoted, { title = '', url = '', trustedSources = [] } = {}) {
     const data = Buffer.from(JSON.stringify({
         __typename: 'GenAIUnifiedResponse',
         response_id: crypto.randomUUID(),
+        ...(title ? { title: String(title) } : {}),
         sections: [{
             __typename: 'GenAIUnifiedResponseSection',
             view_model: {
                 __typename: 'GenAISingleLayoutViewModel',
                 primitive: {
                     __typename: 'FOAHtmlPrimitiveDemoDONOTUSE',
-                    trusted_sources: [],
+                    ...(title ? { title: String(title) } : {}),
+                    trusted_sources: Array.isArray(trustedSources) ? trustedSources : [],
+                    ...(url ? { url: String(url) } : {}),
                     payload: String(html),
                 },
             },
@@ -250,6 +253,13 @@ async function sendRichHtml({ sock, jid, quoted, html, canvasText, title, captio
     await sock.relayMessage(jid, wrapped.message, { messageId: wrapped.key.id });
     return wrapped;
 }
+async function sendRichHtmlMessage({ sock, jid, quoted, title, html, url, trustedSources = [] }) {
+    const content = buildRichContent(html, quoted, { title, url, trustedSources });
+    const safeQuoted = quoted?.message ? quoted : undefined;
+    const wrapped = generateWAMessageFromContent(jid, content, { userJid: sock.user?.id, quoted: safeQuoted });
+    await sock.relayMessage(jid, wrapped.message, { messageId: wrapped.key.id });
+    return wrapped;
+}
 
 async function sendRichText({ sock, jid, quoted, text, title }) {
     return sendRichHtml({ sock, jid, quoted, html: textHtml(text, title) });
@@ -275,4 +285,4 @@ function createEconomyGenAISock(sock, { title = 'ECONOMY' } = {}) {
     });
 }
 
-module.exports = { escapeHtml, buildRichContent, htmlToPlainText, sendCanvasFallback, sendSukunaTTTCanvas, sendSukunaBanCanvas, sendSukunaPianoCanvas, sendRichHtml, sendRichText, createEconomyGenAISock };
+module.exports = { escapeHtml, buildRichContent, htmlToPlainText, sendCanvasFallback, sendSukunaTTTCanvas, sendSukunaBanCanvas, sendSukunaPianoCanvas, sendRichHtml, sendRichHtmlMessage, sendRichText, createEconomyGenAISock };

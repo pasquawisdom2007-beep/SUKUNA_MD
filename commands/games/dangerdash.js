@@ -1,6 +1,6 @@
 'use strict';
 
-const { sendRichHtml } = require('../../utils/genaiRich');
+const { sendRichHtmlMessage } = require('../../utils/genaiRich');
 
 const GAME_URL = 'https://pair.crysnovax.link';
 const TRUSTED_SOURCES = ['crysnovax.link'];
@@ -12,9 +12,7 @@ function dangerDashHtml() {
 }
 
 async function sendNativeRichHtml({ sock, jid, html }) {
-    if (typeof sock.sendRichHtmlMessage !== 'function') return false;
-    await sock.sendRichHtmlMessage(jid, {
-        title: 'Danger Dash',
+    await sendRichHtmlMessage({ sock, jid, title: 'Danger Dash',
         html,
         url: GAME_URL,
         trustedSources: TRUSTED_SOURCES,
@@ -31,13 +29,9 @@ module.exports = {
     async execute({ sock, msg, from, reply }) {
         const html = dangerDashHtml();
         try {
-            // This is the custom mini-app path: WhatsApp renders the native
-            // open/details card first, and the Details action opens this HTML
-            // game inside the live preview surface.
-            if (await sendNativeRichHtml({ sock, jid: from, html })) return;
-            // Older deployments do not expose sendRichHtmlMessage; preserve
-            // the existing renderer as a compatibility fallback.
-            await sendRichHtml({ sock, jid: from, quoted: msg, html, title: 'Danger Dash' });
+            // Native mini-app path: WhatsApp renders the open/details card
+            // first, and Details opens this HTML game in the live surface.
+            return await sendNativeRichHtml({ sock, jid: from, html });
         } catch (error) {
             console.error('[DANGER DASH]', error.message);
             return reply('Danger Dash could not open on this client. Please update WhatsApp or try again.');
