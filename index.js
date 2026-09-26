@@ -27,6 +27,30 @@ const healthPort = Number(process.env.PORT || 3000);
 const webPairRequests = new Set();
 const healthServer = http.createServer((req, res) => {
     const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    if (requestUrl.pathname === '/rich/ping') {
+        if (req.method === 'OPTIONS') {
+            res.writeHead(204, {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type',
+            });
+            return res.end();
+        }
+        if (req.method !== 'GET') {
+            res.writeHead(405, {
+                'Content-Type': 'application/json; charset=utf-8',
+                'Access-Control-Allow-Origin': '*',
+                Allow: 'GET, OPTIONS',
+            });
+            return res.end(JSON.stringify({ error: 'Method not allowed' }));
+        }
+        res.writeHead(200, {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Access-Control-Allow-Origin': '*',
+        });
+        console.log('🔥 RICH MESSAGE PING RECEIVED');
+        return res.end(JSON.stringify({ status: 'received', time: Date.now() }));
+    }
     if (requestUrl.pathname === '/pair' && (req.method === 'GET' || req.method === 'POST')) {
         const number = String(requestUrl.searchParams.get('number') || '').replace(/\D/g, '');
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
