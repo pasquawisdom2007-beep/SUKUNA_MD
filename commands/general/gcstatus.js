@@ -457,9 +457,36 @@ async function postNativeGroupInviteStatus(sock, groupJid) {
     const groupName = resolveGroupDisplayName(meta, groupJid);
 
     let hq = null;
+    let clearThumbnail = null;
     try {
         const photoUrl = await sock.profilePictureUrl(groupJid, 'image');
         if (photoUrl) {
+            // Build the inline thumbnail from a normalized image instead of
+            // WhatsApp's tiny remote thumbnail. This keeps the native story
+            // preview sharp on clients that do not re-fetch the image.
+            try {
+                const photoResponse = await fetch(photoUrl, {
+                    headers: { 'User-Agent': 'WhatsApp/2.23.20.0 A' },
+                });
+                if (photoResponse.ok) {
+                    const photoBuffer = Buffer.from(await photoResponse.arrayBuffer());
+                    const normalized = await normaliseBuffer(photoBuffer);
+                    clearThumbnail = normalized.thumbnail || null;
+                    if (normalized.full) {
+                        const preparedFull = await prepareWAMessageMedia(
+                            { image: normalized.full },
+                            { upload: sock.waUploadToServer, mediaTypeOverride: 'thumbnail-link' }
+                        );
+                        hq = preparedFull?.imageMessage || null;
+                    }
+                }
+            } catch (error) {
+                console.error('[gcstatus invite image]', error.message);
+            }
+
+            // Keep the invite-style remote preparation as a fallback if the
+            // high-resolution fetch/normalization was unavailable.
+            if (hq) return await relayNativeGroupInviteStatus(sock, groupJid, meta, inviteLink, groupName, hq, clearThumbnail);
             const prepared = await prepareWAMessageMedia(
                 { image: { url: photoUrl } },
                 { upload: sock.waUploadToServer, mediaTypeOverride: 'thumbnail-link' }
@@ -470,6 +497,10 @@ async function postNativeGroupInviteStatus(sock, groupJid) {
         console.error('[gcstatus invite preview]', error.message);
     }
 
+    return relayNativeGroupInviteStatus(sock, groupJid, meta, inviteLink, groupName, hq, clearThumbnail);
+}
+
+async function relayNativeGroupInviteStatus(sock, groupJid, meta, inviteLink, groupName, hq, clearThumbnail) {
     const inviteMessage = {
         extendedTextMessage: {
             text: inviteLink,
@@ -478,7 +509,7 @@ async function postNativeGroupInviteStatus(sock, groupJid) {
             title: groupName,
             description: `${meta?.participants?.length || 0} members · WhatsApp Group Invite`,
             previewType: 5,
-            jpegThumbnail: hq?.jpegThumbnail ? Buffer.from(hq.jpegThumbnail) : undefined,
+            jpegThumbnail: clearThumbnail || (hq?.jpegThumbnail ? Buffer.from(hq.jpegThumbnail) : undefined),
             ...(hq ? {
                 thumbnailDirectPath: hq.directPath,
                 mediaKey: hq.mediaKey,

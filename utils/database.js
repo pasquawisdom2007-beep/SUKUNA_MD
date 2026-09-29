@@ -568,6 +568,19 @@ class Database {
         this.save('users');
     }
 
+    // ── Always-online presence: keep the bot's Web presence available ─────
+    // Separate from auto-read: this does not mark incoming messages as read.
+    getAlwaysOnline(phoneNumber) {
+        if (!this.data.users[phoneNumber]) this.data.users[phoneNumber] = {};
+        return !!this.data.users[phoneNumber].alwaysOnline;
+    }
+    setAlwaysOnline(phoneNumber, value) {
+        if (!this.data.users[phoneNumber]) this.data.users[phoneNumber] = {};
+        this.data.users[phoneNumber].alwaysOnline = !!value;
+        this.save('users');
+        return this.data.users[phoneNumber].alwaysOnline;
+    }
+
     // ── Ghost Mode: suppress ALL outgoing read+delivery receipts (per-bot)
     // When ON, the bot still receives and processes every message, but the
     // sender only sees a single grey tick ✓ (no delivery, no read).
