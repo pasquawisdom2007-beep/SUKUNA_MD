@@ -188,6 +188,17 @@ async function getGroupParticipantJids(sock, groupJid) {
     }
 }
 
+function resolveGroupDisplayName(metadata, groupJid) {
+    const candidates = [metadata?.subject, metadata?.name, metadata?.groupName];
+    const jid = String(groupJid || '').trim();
+    for (const candidate of candidates) {
+        const name = String(candidate || '').replace(/\s+/g, ' ').trim();
+        if (!name || name === jid || /^(?:\d{5,}|[\da-z-]+)@g\.us$/i.test(name)) continue;
+        return name.slice(0, 120);
+    }
+    return 'WhatsApp Group';
+}
+
 async function postGroupStatus(sock, groupJid, content) {
     try {
         const { backgroundColor, previewTitle, previewDescription, previewImage, ...rest } = content;
@@ -442,7 +453,8 @@ async function postNativeGroupInviteStatus(sock, groupJid) {
     const meta = await sock.groupMetadata(groupJid);
     const inviteCode = await sock.groupInviteCode(groupJid);
     const inviteLink = `https://chat.whatsapp.com/${inviteCode}?mode=gi_t`;
-    const groupName = meta?.subject || 'WhatsApp Group';
+    // Do not let an ID-like metadata value leak into the rich preview title.
+    const groupName = resolveGroupDisplayName(meta, groupJid);
 
     let hq = null;
     try {
@@ -578,6 +590,7 @@ module.exports.postGroupStatus          = postGroupStatus;
 module.exports.postRelayGroupStatus     = postRelayGroupStatus;
 module.exports.postGroupStatusLinkPreview = postGroupStatusLinkPreview;
 module.exports.postNativeGroupInviteStatus = postNativeGroupInviteStatus;
+module.exports.resolveGroupDisplayName = resolveGroupDisplayName;
 module.exports.encodeOpus               = encodeOpus;
 module.exports.getQuotedCtx             = getQuotedCtx;
 module.exports.unwrapQuotedDeep         = unwrapQuotedDeep;
