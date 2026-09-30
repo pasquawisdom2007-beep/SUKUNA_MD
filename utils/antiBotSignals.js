@@ -128,6 +128,8 @@ function deriveBotFlags(message = {}, extraStamps = []) {
     return {
         isBot: explicitBot || explicitBaileys || Boolean(stamp),
         isBaileys: explicitBaileys || Boolean(stamp),
+        isForwarded: official.isForwarded === true,
+        forwardingScore: official.forwardingScore || 0,
         forwardedBotResponse: official.forwardedBotResponse === true,
         botStyleCommandResponse: official.botStyleCommandResponse === true,
         stamp,

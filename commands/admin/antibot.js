@@ -7,6 +7,7 @@ const {
     sameIdentity,
     shortJid,
 } = require('../../utils/antiBotSignals');
+const { invalidateGroupSettings } = require('../../utils/antiBotEngine');
 
 function botJids(sock) {
     return [sock.user?.id, sock.user?.lid, sock.user?.jid, sock.user?.phoneNumber].filter(Boolean);
@@ -59,12 +60,13 @@ module.exports = {
                 `Active: ${group.antibot ? '✅ Yes' : '❌ No'}\n` +
                 `Action: *${currentAction.toUpperCase()}*\n` +
                 `Warning limit: *${maxWarnings}*\n\n` +
-                '_Detection uses explicit bot metadata and known library message-ID signatures. No member challenge is used._'
+                '_Detection includes nested Baileys markers, forwarded bot-style command replies, and bot metadata. Warn mode counts each distinct detected message._'
             );
         }
 
         if (action === 'off') {
             database.setGroup(from, 'antibot', false);
+            invalidateGroupSettings(from);
             return reply('❌ *AntiBot disabled for this group.*');
         }
 
@@ -81,6 +83,7 @@ module.exports = {
             database.setGroup(from, 'antibotAction', selected);
             database.setGroup(from, 'antibotMode', selected === 'warn' ? 'warn' : 'kick');
             if (selected === 'warn') database.setGroup(from, 'antibotMaxWarnings', selectedMax);
+            invalidateGroupSettings(from);
             return reply(
                 '✅ *AntiBot enabled*\n\n' +
                 `Action: *${selected.toUpperCase()}*` +

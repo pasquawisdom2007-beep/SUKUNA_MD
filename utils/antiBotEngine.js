@@ -86,11 +86,11 @@ function markMessageProcessed(message) {
     return false;
 }
 
-function actionAlreadyRunning(groupId, jid) {
+function actionAlreadyRunning(groupId, jid, respectCooldown = true) {
     const key = `${groupId}:${normalizeJid(jid)}`;
     const now = Date.now();
     const last = actionCooldowns.get(key);
-    if (inFlightActions.has(key) || (last && now - last < ACTION_COOLDOWN_MS)) return true;
+    if (inFlightActions.has(key) || (respectCooldown && last && now - last < ACTION_COOLDOWN_MS)) return true;
     actionCooldowns.set(key, now);
     inFlightActions.add(key);
     evictOldest(actionCooldowns);
@@ -147,11 +147,14 @@ async function removeMember(sock, groupId, jid, reason, canRemove) {
 }
 
 async function enforceDetected(sock, groupId, jid, config, reason, message = null, forcedAction = null) {
-    if (actionAlreadyRunning(groupId, jid)) return { action: 'cooldown', removed: false };
+    const action = forcedAction || antibotAction(config);
+    // Warning mode must count each distinct detected message. Message-level
+    // deduplication already prevents duplicate event deliveries, so the
+    // kick/delete cooldown must not suppress warning increments.
+    if (actionAlreadyRunning(groupId, jid, action !== 'warn')) return { action: 'cooldown', removed: false };
     try {
     const meta = await sock.groupMetadata(groupId).catch(() => null);
     const canRemove = botIsAdmin(meta, sock);
-    const action = forcedAction || antibotAction(config);
 
     if (action === 'delete') {
         const deleted = await deleteMessage(sock, groupId, message);
@@ -258,8 +261,13 @@ function setupAntiBot(sock) {
     });
 }
 
+function invalidateGroupSettings(groupId) {
+    if (groupId) groupSettingsCache.delete(groupId);
+}
+
 module.exports = {
     setupAntiBot,
     handleJoin,
     handleMessage,
+    invalidateGroupSettings,
 };

@@ -42,6 +42,26 @@ function hasKnownBotContent(value, depth = 0, seen = new Set()) {
     return false;
 }
 
+function forwardingEvidence(value, depth = 0, seen = new Set()) {
+    if (!value || typeof value !== 'object' || depth > MAX_MARKER_DEPTH || seen.has(value)) return null;
+    seen.add(value);
+    const score = Number(value.forwardingScore || 0);
+    if (value.isForwarded === true || score > 0 || value.forwardedNewsletterMessageInfo) {
+        return { isForwarded: true, forwardingScore: Number.isFinite(score) ? score : 0 };
+    }
+    for (const child of Object.values(value)) {
+        const result = child && typeof child === 'object'
+            ? forwardingEvidence(child, depth + 1, seen)
+            : null;
+        if (result) return result;
+    }
+    return null;
+}
+
+function isForwardedMessage(message = {}) {
+    return Boolean(forwardingEvidence(message?.message || message));
+}
+
 function commandText(value, depth = 0, seen = new Set()) {
     if (!value || depth > MAX_MARKER_DEPTH || seen.has(value)) return '';
     if (typeof value === 'string') return value;
@@ -102,8 +122,10 @@ function normalizeForAntiBot(message = {}) {
     const stamp = matchedStamp(messageId);
     const context = content.messageContextInfo || content.contextInfo || {};
     const officialBotJid = isJidBot(sender);
+    const forwarding = forwardingEvidence(rawContent) || forwardingEvidence(content) || { isForwarded: false, forwardingScore: 0 };
     const forwardedBotResponse = hasForwardedBotResponse(rawContent) || hasForwardedBotResponse(content);
     const botStyleCommandResponse = hasBotStyleCommandResponse(rawContent) || hasBotStyleCommandResponse(content);
+    const botResponse = forwardedBotResponse || (forwarding.isForwarded && botStyleCommandResponse);
     const knownBotContent = BOT_CONTENT_TYPES.has(contentType)
         || hasKnownBotContent(rawContent)
         || hasKnownBotContent(content)
@@ -117,12 +139,14 @@ function normalizeForAntiBot(message = {}) {
         contentType,
         sender,
         messageId,
-        isBot: officialBotJid || knownBotContent || forwardedBotResponse || botStyleCommandResponse || Boolean(stamp),
+        isBot: officialBotJid || knownBotContent || botResponse || botStyleCommandResponse || Boolean(stamp),
         isBaileys: officialBotJid || knownBotContent || Boolean(stamp),
-        forwardedBotResponse,
+        isForwarded: forwarding.isForwarded,
+        forwardingScore: forwarding.forwardingScore,
+        forwardedBotResponse: botResponse,
         botStyleCommandResponse,
         source: 'pasqua-baileys',
     };
 }
 
-module.exports = { normalizeForAntiBot };
+module.exports = { normalizeForAntiBot, forwardingEvidence, isForwardedMessage };

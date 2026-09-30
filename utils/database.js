@@ -205,6 +205,7 @@ class Database {
             antilink: false,
             antilinkAllow: [],
             antichannel: false,
+            antiforward: false,
             antilinkAction: 'delete',
             antimention: false,
             antimentionMode: 'normal',
