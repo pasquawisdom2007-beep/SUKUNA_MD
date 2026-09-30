@@ -172,6 +172,7 @@ module.exports = {
         const ownerName    = (config.owner && config.owner.name) || 'PASQUA';
         const prefix       = config.prefix || '.';
         const mode         = (global.botMode || config.mode || 'private').toLowerCase();
+        const chatType     = String(from || '').endsWith('@g.us') ? 'Group chat' : 'Private chat';
         const version      = config.version || '3.0.0';
 
         const uptime = fmtUptime(process.uptime());
@@ -214,6 +215,7 @@ module.exports = {
             userTag:  `@${senderNumber}`,
             creator:  ownerName,
             mode,
+            chatType,
             total:    cmdCount,
             uptime,
             prefix,

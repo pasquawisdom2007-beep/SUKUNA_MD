@@ -1215,7 +1215,7 @@ function designKord(ctx) {
 // crysnovax's tighter rhythm: one metadata rail, fewer blank rows, and
 // compact category blocks.
 function designDefault(ctx) {
-    const { userTag, prefix, total, uptime, version, status,
+    const { userTag, prefix, total, uptime, version, status, date, time, mode, chatType,
             sortedCategories, byCategory, CATEGORY_LABELS } = ctx;
     const botName = ctx.botName || 'PASQUA AI';
     const menuCommandPrefix = '.';
@@ -1234,6 +1234,10 @@ function designDefault(ctx) {
     c += `❏◦ Prefix      ⇆  ${prefix}\n`;
     c += `❏◦ Cmds        ⇆  ${total}\n`;
     c += `❏◦ Uptime      ⇆  ${uptime}\n`;
+    c += `❏◦ Date        ⇆  ${date}\n`;
+    c += `❏◦ Time        ⇆  ${time}\n`;
+    c += `❏◦ Mode        ⇆  ${String(mode || 'private').toLowerCase()}\n`;
+    c += `❏◦ Chat type   ⇆  ${chatType || 'Private chat'}\n`;
     c += `❏◦ Status      ⇆  ${String(status || 'Online').replace(/\s*✅/g, '')} ⟡\n`;
     c += `❏◦ Version     ⇆  ${version}\n`;
     // menu.js replaces this invisible anchor with WhatsApp's read-more
