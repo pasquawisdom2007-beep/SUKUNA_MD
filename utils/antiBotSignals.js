@@ -128,6 +128,7 @@ function deriveBotFlags(message = {}, extraStamps = []) {
     return {
         isBot: explicitBot || explicitBaileys || Boolean(stamp),
         isBaileys: explicitBaileys || Boolean(stamp),
+        forwardedBotResponse: official.forwardedBotResponse === true,
         stamp,
     };
 }
@@ -145,7 +146,8 @@ function detectBotSignals({ jid, participant, messageId, message, groupId, extra
     const flags = deriveBotFlags(message, extraStamps);
     const stamp = flags.stamp || matchedStamp(messageId, extraStamps);
     if (stamp) signals.push({ type: 'message-id-stamp', value: stamp, confidence: 'high' });
-    if (flags.isBaileys) signals.push({ type: 'baileys-message-marker', confidence: 'high' });
+    if (flags.forwardedBotResponse) signals.push({ type: 'forwarded-bot-response', confidence: 'high' });
+    else if (flags.isBaileys) signals.push({ type: 'baileys-message-marker', confidence: 'high' });
     else if (flags.isBot) signals.push({ type: 'explicit-bot-marker', confidence: 'high' });
     if (hasExplicitBotFlag(participant)) signals.push({ type: 'explicit-bot-flag', confidence: 'high' });
     if (hasMessageBotFlag(message)) signals.push({ type: 'explicit-message-bot-flag', confidence: 'high' });
