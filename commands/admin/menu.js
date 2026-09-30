@@ -265,14 +265,19 @@ module.exports = {
         // still happens right here), but it renders as nothing, so there's
         // no visible blank gap before "Read more" like a plain space causes.
         const READ_MORE = String.fromCharCode(8206) + '\u200B'.repeat(4000);
-        const anchorLine = caption.match(/^.*latform.*$/im) || caption.match(/^.*status.*$/im);
-        if (designKey !== 'relay' && anchorLine) {
+        const DEFAULT_READ_MORE_ANCHOR = '\u2063';
+        if (designKey === 'default' && caption.includes(DEFAULT_READ_MORE_ANCHOR)) {
+            caption = caption.replace(DEFAULT_READ_MORE_ANCHOR, READ_MORE);
+        } else {
+            const anchorLine = caption.match(/^.*latform.*$/im) || caption.match(/^.*status.*$/im);
+            if (designKey !== 'relay' && anchorLine) {
             const cutAt = caption.indexOf(anchorLine[0]) + anchorLine[0].length;
             caption = caption.slice(0, cutAt) + '\n' + READ_MORE + caption.slice(cutAt);
-        } else {
-            // No recognizable anchor (custom/unknown design) — fall back
-            // to the old behavior rather than breaking the menu.
-            caption = caption + READ_MORE;
+            } else {
+                // No recognizable anchor (custom/unknown design) — fall back
+                // to the old behavior rather than breaking the menu.
+                caption = caption + READ_MORE;
+            }
         }
 
         // ===== Apply active font to ALL text in the caption =====

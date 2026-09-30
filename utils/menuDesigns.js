@@ -1233,7 +1233,9 @@ function designDefault(ctx) {
     c += `❏◦ Uptime      ⇆  ${uptime}\n`;
     c += `❏◦ Status      ⇆  ${String(status || 'Online').replace(/\s*✅/g, '')} ⟡\n`;
     c += `❏◦ Version     ⇆  ${version}\n\n`;
-    c += `  ⟢ ── 亗 ── ⟡ ── 亗 ── ⟢\n\n`;
+    // menu.js replaces this invisible anchor with WhatsApp's read-more
+    // payload, placing the break before the first category like crysnovax.
+    c += `  ⟢ ── 亗 ── ⟡ ── 亗 ── ⟢\n\u2063\n`;
 
     for (const cat of sortedCategories) {
         const names = byCategory[cat];
