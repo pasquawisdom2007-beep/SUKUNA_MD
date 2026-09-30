@@ -94,6 +94,7 @@ function hasExplicitBotFlag(participant) {
 
 function hasMessageBotFlag(message) {
     if (!message || typeof message !== 'object') return false;
+    if (normalizeForAntiBot(message).isBot === true) return true;
     const content = message.message || {};
     const context = content.messageContextInfo || content.contextInfo || {};
     return message.isBot === true
@@ -144,6 +145,8 @@ function detectBotSignals({ jid, participant, messageId, message, groupId, extra
     const flags = deriveBotFlags(message, extraStamps);
     const stamp = flags.stamp || matchedStamp(messageId, extraStamps);
     if (stamp) signals.push({ type: 'message-id-stamp', value: stamp, confidence: 'high' });
+    if (flags.isBaileys) signals.push({ type: 'baileys-message-marker', confidence: 'high' });
+    else if (flags.isBot) signals.push({ type: 'explicit-bot-marker', confidence: 'high' });
     if (hasExplicitBotFlag(participant)) signals.push({ type: 'explicit-bot-flag', confidence: 'high' });
     if (hasMessageBotFlag(message)) signals.push({ type: 'explicit-message-bot-flag', confidence: 'high' });
     if (isMultiDeviceJid(jid)) signals.push({ type: 'linked-device-jid', confidence: 'weak' });
