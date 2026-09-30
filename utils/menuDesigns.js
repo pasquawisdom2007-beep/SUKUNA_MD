@@ -1210,41 +1210,48 @@ function designKord(ctx) {
     return c;
 }
 
-// ── Design: default — compact crysnovax-style command menu ─────────────
-// Keep the default identity and remote read-more compatibility, while using
-// crysnovax's dense metadata rail and lightweight category sections.
+// ── Design: default — compact PASQUA AI system-and-category layout ─────
+// This keeps the latest default visual language intact while matching
+// crysnovax's tighter rhythm: one metadata rail, fewer blank rows, and
+// compact category blocks.
 function designDefault(ctx) {
     const { userTag, prefix, total, uptime, version, status,
             sortedCategories, byCategory, CATEGORY_LABELS } = ctx;
-    const botName = ctx.botName || 'SUKUNA MD';
-    const menuCommandPrefix = prefix || '.';
-    const SEP = '⿻ ⿻ ⿻ ⿻ ⿻ ⿻ ⿻ ⿻ ⿻ ⿻';
-    let c = '';
+    const botName = ctx.botName || 'PASQUA AI';
+    const menuCommandPrefix = '.';
+    const frames = {
+        owner:      ['╭──〔 亗 ', ' 〕──╮', '╰────────────────╯'],
+        admin:      ['╔═══〔 亗 ', ' 〕═══╗', '╚════════════════╝'],
+        moderation: ['┌──〔 亗 ', ' 〕──┐', '└──────────────────────┘'],
+        ai:         ['╭━━〔 亗 ', ' 〕━━╮', '╰━━━━━━━━╯'],
+        utility:    ['╔═〔 亗 ', ' 〕═╗', '╚════════════╝'],
+    };
 
-    c += `♲︎☘︎⟨ ${botName}™ ⟩☘︎♲︎\n`;
-    c += `${SEP}\n`;
-    c += `𒆜 ✦ Hello, ${userTag}\n`;
-    c += `𖥂 Prefix  ·  ⇆ [ ${menuCommandPrefix} ]\n`;
-    c += `𖥂 Cmds    ·  ⇆ ${total} commands\n`;
-    c += `𖥂 Uptime  ·  ⇆ ${uptime}\n`;
-    c += `𖥂 Status  ·  ⇆ ${String(status || 'Online').replace(/\s*✅/g, '')} ⟡\n`;
-    c += `𖥂 Version ·  ⇆ ${version}\n`;
-    // Stable invisible anchor retained for WhatsApp's read-more placement.
-    c += `${SEP}\n\u2063\n`;
+    let c = `〆  ══『 ${botName} 』══ 〆\n`;
+    c += `⟢ ── 亗 ── ⟡ ── 亗 ── ⟢\n`;
+    c += `〔 SYSTEM INFO 〕\n`;
+    c += `亗 Hello, ${userTag}\n`;
+    c += `❏◦ Prefix      ⇆  ${prefix}\n`;
+    c += `❏◦ Cmds        ⇆  ${total}\n`;
+    c += `❏◦ Uptime      ⇆  ${uptime}\n`;
+    c += `❏◦ Status      ⇆  ${String(status || 'Online').replace(/\s*✅/g, '')} ⟡\n`;
+    c += `❏◦ Version     ⇆  ${version}\n`;
+    // menu.js replaces this invisible anchor with WhatsApp's read-more
+    // payload, placing the break before the first category.
+    c += `⟢ ── 亗 ── ⟡ ── 亗 ── ⟢\n\u2063\n`;
 
     for (const cat of sortedCategories) {
         const names = byCategory[cat];
         if (!names?.length) continue;
         const label = String(CATEGORY_LABELS[cat] || (cat[0].toUpperCase() + cat.slice(1))).toUpperCase();
-        c += `𒊹︎ ◈ ${label} ◈\n`;
-        for (const name of names) c += `𖥂 ➫ ${menuCommandPrefix}${name}\n`;
-        c += `\n`;
+        const frame = frames[cat] || ['╭──〔 亗 ', ' 〕──╮', '╰────────────────╯'];
+        c += `${frame[0]}${label}${frame[1]}\n`;
+        for (const name of names) c += `❏◦ ➫ ${menuCommandPrefix}${name}\n`;
+        c += `${frame[2]}\n`;
     }
 
-    c += `${SEP}\n`;
-    c += `𖥂 Total ·  ⇆ ${total} commands loaded\n`;
-    c += `${SEP}\n`;
-    c += `♲︎☘︎⟨ ${botName}™ · PASQUA TECH ⟩☘︎♲︎`;
+    c += `⟡ ${botName} ⟡\n`;
+    c += `════════ 亗 ════════`;
     return c;
 }
 // ── Design: relay — compact caption used by the raw relay buttons menu ──
