@@ -1215,38 +1215,38 @@ function designDefault(ctx) {
     const { userTag, prefix, total, uptime, version, status,
             sortedCategories, byCategory, CATEGORY_LABELS } = ctx;
     const botName = ctx.botName || 'PASQUA AI';
-    const divider = '  ⟢ ── 亗 ── ⟡ ── 亗 ── ⟢';
+    const divider = '────────────────────────';
     const frames = {
-        owner:      ['╭──〔 亗 ', ' 〕──╮', '╰────────────────╯'],
-        admin:      ['╔═══〔 亗 ', ' 〕═══╗', '╚════════════════╝'],
-        moderation: ['┌──〔 亗 ', ' 〕──┐', '└──────────────────────┘'],
-        ai:         ['╭━━〔 亗 ', ' 〕━━╮', '╰━━━━━━━━╯'],
-        utility:    ['╔═〔 亗 ', ' 〕═╗', '╚════════════╝'],
+        owner:      ['╭──〔 亗 ', ' 〕──╮', '╰────────────────────╯'],
+        admin:      ['╭──〔 亗 ', ' 〕──╮', '╰────────────────────╯'],
+        moderation: ['╭──〔 亗 ', ' 〕──╮', '╰────────────────────╯'],
+        ai:         ['╭──〔 亗 ', ' 〕──╮', '╰────────────────────╯'],
+        utility:    ['╭──〔 亗 ', ' 〕──╮', '╰────────────────────╯'],
     };
 
-    let c = `        〆  ══『 ${botName} 』══ 〆\n\n`;
-    c += `${divider}\n\n`;
+    let c = `〆  ══『 ${botName} 』══ 〆\n\n`;
+    c += `⟢ ── 亗 ── ⟡ ── 亗 ── ⟢\n\n`;
     c += `〔 SYSTEM INFO 〕\n\n`;
     c += `亗 Hello, ${userTag}\n\n`;
-    c += `❏◦ Prefix      ⇆  ${prefix}\n`;
-    c += `❏◦ Cmds        ⇆  ${total}\n`;
-    c += `❏◦ Uptime      ⇆  ${uptime}\n`;
-    c += `❏◦ Status      ⇆  ${status || 'Online'} ⟡\n`;
-    c += `❏◦ Version     ⇆  ${version}\n\n`;
-    c += `${divider}\n\n`;
+    c += `❏◦ Prefix   ⇆  ${prefix}\n`;
+    c += `❏◦ Cmds     ⇆  ${total}\n`;
+    c += `❏◦ Uptime   ⇆  ${uptime}\n`;
+    c += `❏◦ Status   ⇆  ${status || 'Online'} ⟡\n`;
+    c += `❏◦ Version  ⇆  ${version}\n\n`;
+    c += `⟢ ── 亗 ── ⟡ ── 亗 ── ⟢\n\n`;
 
     for (const cat of sortedCategories) {
         const names = byCategory[cat];
         if (!names?.length) continue;
         const label = String(CATEGORY_LABELS[cat] || (cat[0].toUpperCase() + cat.slice(1))).toUpperCase();
-        const frame = frames[cat] || ['╭──〔 亗 ', ' 〕──╮', '╰────────────────╯'];
-        c += `${frame[0]}${label}${frame[1]}\n\n`;
-        for (const name of names) c += `❏◦ ➫ ${prefix}${name}\n`;
-        c += `\n${frame[2]}\n\n`;
+        const frame = frames[cat] || ['╭──〔 亗 ', ' 〕──╮', '╰────────────────────╯'];
+        c += `${frame[0]}${label}${frame[1]}\n`;
+        for (const name of names) c += `│ ❏◦ ➫ ${name}\n`;
+        c += `${frame[2]}\n\n`;
     }
 
-    c += `        ⟡ ${botName} ⟡\n`;
-    c += `     ════════ 亗 ════════`;
+    c += `⟡ ${botName} ⟡\n`;
+    c += `════════ 亗 ════════`;
     return c;
 }
 
