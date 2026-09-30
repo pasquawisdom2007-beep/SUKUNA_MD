@@ -19,7 +19,10 @@ module.exports = {
     aliases:     ['stickercmd', 'bindcmd'],
     description: 'Bind a bot command to a sticker or emoji',
     usage:       '.setcmd <command>  (reply to a sticker or emoji)',
-    category:    'general',
+    // The dispatcher treats owner-category commands as owner/mod-only. This
+    // protects the global binding registry while still allowing authorized
+    // moderators to create bindings for the bot.
+    category:    'owner',
 
     async execute({ sock, msg, from, reply, args }) {
         const commandName = args[0]?.toLowerCase().trim();

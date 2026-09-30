@@ -1210,38 +1210,43 @@ function designKord(ctx) {
     return c;
 }
 
-// ── Design: default — the attached SUKUNA MD boxed command menu ────────
+// ── Design: default — PASQUA AI system-and-category layout ─────────────
 function designDefault(ctx) {
-    const { userTag, prefix, total, uptime, time, date, mode, version,
-            status, platform, sortedCategories, byCategory, CATEGORY_LABELS } = ctx;
-    let c = '';
+    const { userTag, prefix, total, uptime, version, status,
+            sortedCategories, byCategory, CATEGORY_LABELS } = ctx;
+    const botName = ctx.botName || 'PASQUA AI';
+    const divider = '  ⟢ ── 亗 ── ⟡ ── 亗 ── ⟢';
+    const frames = {
+        owner:      ['╭──〔 亗 ', ' 〕──╮', '╰────────────────╯'],
+        admin:      ['╔═══〔 亗 ', ' 〕═══╗', '╚════════════════╝'],
+        moderation: ['┌──〔 亗 ', ' 〕──┐', '└──────────────────────┘'],
+        ai:         ['╭━━〔 亗 ', ' 〕━━╮', '╰━━━━━━━━╯'],
+        utility:    ['╔═〔 亗 ', ' 〕═╗', '╚════════════╝'],
+    };
 
-    c += `♲︎☘︎⟨ SUKUNA MD™ ⟩☘︎♲︎\n\n`;
-    c += ` ┌──〔 SYSTEM INFO 〕──┐\n`;
-    c += ` 𖥂 User    : ${userTag}\n`;
-    c += ` 𖥂 Prefix  : ${prefix}\n`;
-    c += ` 𖥂 Cmds    : ${total} commands\n`;
-    c += ` 𖥂 Uptime  : ${uptime}\n`;
-    c += ` 𖥂 Time    : ${time}\n`;
-    c += ` 𖥂 Date    : ${date}\n`;
-    c += ` 𖥂 Mode    : ${mode}\n`;
-    c += ` 𖥂 Version : ${version}\n`;
-    c += ` 𖥂 Status  : ${status}\n`;
-    c += ` 𖥂 Platform: ${platform}\n`;
-    c += ` └────────────────────┘\n\n`;
+    let c = `        〆  ══『 ${botName} 』══ 〆\n\n`;
+    c += `${divider}\n\n`;
+    c += `〔 SYSTEM INFO 〕\n\n`;
+    c += `亗 Hello, ${userTag}\n\n`;
+    c += `❏◦ Prefix      ⇆  ${prefix}\n`;
+    c += `❏◦ Cmds        ⇆  ${total}\n`;
+    c += `❏◦ Uptime      ⇆  ${uptime}\n`;
+    c += `❏◦ Status      ⇆  ${status || 'Online'} ⟡\n`;
+    c += `❏◦ Version     ⇆  ${version}\n\n`;
+    c += `${divider}\n\n`;
 
     for (const cat of sortedCategories) {
         const names = byCategory[cat];
         if (!names?.length) continue;
-        const label = CATEGORY_LABELS[cat] || (cat[0].toUpperCase() + cat.slice(1));
-        c += `╔═════════════════════╗\n`;
-        c += `       𒊹︎  ${label.toUpperCase()}\n`;
-        c += `╚═════════════════════╝\n`;
-        for (const name of names) c += ` ║ 𖥂 ${prefix}${name}\n`;
-        c += `\n`;
+        const label = String(CATEGORY_LABELS[cat] || (cat[0].toUpperCase() + cat.slice(1))).toUpperCase();
+        const frame = frames[cat] || ['╭──〔 亗 ', ' 〕──╮', '╰────────────────╯'];
+        c += `${frame[0]}${label}${frame[1]}\n\n`;
+        for (const name of names) c += `❏◦ ➫ ${prefix}${name}\n`;
+        c += `\n${frame[2]}\n\n`;
     }
 
-    c += `♲︎☘︎⟨ SUKUNA MD™ · ${total} COMMANDS ⟩☘︎♲︎`;
+    c += `        ⟡ ${botName} ⟡\n`;
+    c += `     ════════ 亗 ════════`;
     return c;
 }
 
