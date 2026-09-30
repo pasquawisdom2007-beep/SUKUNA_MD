@@ -82,7 +82,9 @@ function hasBotStyleCommandResponse(value, depth = 0, seen = new Set()) {
     const responseText = typeof value.text === 'string'
         ? value.text
         : typeof value.conversation === 'string' ? value.conversation : '';
-    const botStyleText = /\b(?:bot|md|speed|fast|latency|response)\b|\b\d+(?:\.\d+)?\s*ms\b/i.test(responseText);
+    const botBrand = /\b[A-Za-z][A-Za-z0-9_-]{2,}[ _-](?:bot|md)\b/i.test(responseText);
+    const latency = /\b(?:speed|fast|latency|response)\s*[:=]?[\s\-]*\d+(?:\.\d+)?\s*ms\b|\b\d+(?:\.\d+)?\s*ms\b/i.test(responseText);
+    const botStyleText = botBrand || latency;
     if (/^\s*[.!/#]\w+\b/i.test(quotedText) && botStyleText) return true;
     return Object.values(value).some(child =>
         child && typeof child === 'object' && hasBotStyleCommandResponse(child, depth + 1, seen)
