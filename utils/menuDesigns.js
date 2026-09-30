@@ -1227,8 +1227,8 @@ function designDefault(ctx) {
         utility:    ['╔═〔 亗 ', ' 〕═╗', '╚════════════╝'],
     };
 
-    let c = `〆  ══『 ${botName} 』══ 〆\n`;
-    c += `⟢ ── 亗 ── ⟡ ── 亗 ── ⟢\n`;
+    let c = `══『 ${botName} 』══\n`;
+    c += `⿻ ⿻ ⿻ ⿻ ⿻ ⿻ ⿻ ⿻ ⿻ ⿻\n`;
     c += `〔 SYSTEM INFO 〕\n`;
     c += `亗 Hello, ${userTag}\n`;
     c += `❏◦ Prefix      ⇆  ${prefix}\n`;
