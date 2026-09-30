@@ -1224,8 +1224,8 @@ function designDefault(ctx) {
         utility:    ['╔═〔 亗 ', ' 〕═╗', '╚════════════╝'],
     };
 
-    let c = `        〆  ══『 ${botName} 』══ 〆\n\n`;
-    c += `  ⟢ ── 亗 ── ⟡ ── 亗 ── ⟢\n\n`;
+    let c = `〆  ══『 ${botName} 』══ 〆\n`;
+    c += `⟢ ── 亗 ── ⟡ ── 亗 ── ⟢\n\n`;
     c += `〔 SYSTEM INFO 〕\n\n`;
     c += `亗 Hello, ${userTag}\n\n`;
     c += `❏◦ Prefix      ⇆  ${prefix}\n`;
@@ -1235,7 +1235,7 @@ function designDefault(ctx) {
     c += `❏◦ Version     ⇆  ${version}\n\n`;
     // menu.js replaces this invisible anchor with WhatsApp's read-more
     // payload, placing the break before the first category like crysnovax.
-    c += `  ⟢ ── 亗 ── ⟡ ── 亗 ── ⟢\n\u2063\n`;
+    c += `⟢ ── 亗 ── ⟡ ── 亗 ── ⟢\n\u2063\n`;
 
     for (const cat of sortedCategories) {
         const names = byCategory[cat];
@@ -1249,8 +1249,8 @@ function designDefault(ctx) {
         c += `${frame[2]}\n\n`;
     }
 
-    c += `        ⟡ ${botName} ⟡\n`;
-    c += `     ════════ 亗 ════════`;
+    c += `⟡ ${botName} ⟡\n`;
+    c += `════════ 亗 ════════`;
     return c;
 }
 
