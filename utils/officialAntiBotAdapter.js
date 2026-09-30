@@ -74,6 +74,21 @@ function hasForwardedBotResponse(value, depth = 0, seen = new Set()) {
     );
 }
 
+function hasBotStyleCommandResponse(value, depth = 0, seen = new Set()) {
+    if (!value || typeof value !== 'object' || depth > MAX_MARKER_DEPTH || seen.has(value)) return false;
+    seen.add(value);
+    const context = value.contextInfo || value.messageContextInfo || {};
+    const quotedText = commandText(context.quotedMessage);
+    const responseText = typeof value.text === 'string'
+        ? value.text
+        : typeof value.conversation === 'string' ? value.conversation : '';
+    const botStyleText = /\b(?:bot|md|speed|fast|latency|response)\b|\b\d+(?:\.\d+)?\s*ms\b/i.test(responseText);
+    if (/^\s*[.!/#]\w+\b/i.test(quotedText) && botStyleText) return true;
+    return Object.values(value).some(child =>
+        child && typeof child === 'object' && hasBotStyleCommandResponse(child, depth + 1, seen)
+    );
+}
+
 function normalizeForAntiBot(message = {}) {
     const rawContent = message?.message && typeof message.message === 'object'
         ? message.message
@@ -86,6 +101,7 @@ function normalizeForAntiBot(message = {}) {
     const context = content.messageContextInfo || content.contextInfo || {};
     const officialBotJid = isJidBot(sender);
     const forwardedBotResponse = hasForwardedBotResponse(rawContent) || hasForwardedBotResponse(content);
+    const botStyleCommandResponse = hasBotStyleCommandResponse(rawContent) || hasBotStyleCommandResponse(content);
     const knownBotContent = BOT_CONTENT_TYPES.has(contentType)
         || hasKnownBotContent(rawContent)
         || hasKnownBotContent(content)
@@ -99,9 +115,10 @@ function normalizeForAntiBot(message = {}) {
         contentType,
         sender,
         messageId,
-        isBot: officialBotJid || knownBotContent || forwardedBotResponse || Boolean(stamp),
+        isBot: officialBotJid || knownBotContent || forwardedBotResponse || botStyleCommandResponse || Boolean(stamp),
         isBaileys: officialBotJid || knownBotContent || Boolean(stamp),
         forwardedBotResponse,
+        botStyleCommandResponse,
         source: 'pasqua-baileys',
     };
 }
