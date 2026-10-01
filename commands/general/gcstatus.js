@@ -24,6 +24,10 @@ const { normaliseBuffer } = require('../../lib/groupPhoto');
 let _baileys;
 let _baileysSource = 'unknown';
 const BAILEYS_CANDIDATES = ['@pasqua-baileys/baileys'];
+// gcstatus is isolated from the rest of the bot and prefers the upstream
+// WhiskeySockets implementation. Keep the existing fork as a deployment-safe
+// fallback until all panels have installed the optional package.
+BAILEYS_CANDIDATES.unshift('@whiskeysockets/baileys');
 for (const pkg of BAILEYS_CANDIDATES) {
     try {
         _baileys = require(pkg);
