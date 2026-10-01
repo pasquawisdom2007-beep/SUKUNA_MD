@@ -10,4 +10,4 @@ test('gcstatus uses the existing Pasqua Baileys implementation', () => {
     assert.equal(typeof gcstatus.postGroupStatusLinkPreview, 'function');
 });
 
-console.log('gcstatus WhiskeySockets regression passed');
+console.log('gcstatus Pasqua Baileys regression passed');
