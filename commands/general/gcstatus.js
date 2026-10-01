@@ -24,10 +24,6 @@ const { normaliseBuffer } = require('../../lib/groupPhoto');
 let _baileys;
 let _baileysSource = 'unknown';
 const BAILEYS_CANDIDATES = ['@pasqua-baileys/baileys'];
-// gcstatus is isolated from the rest of the bot and prefers the upstream
-// WhiskeySockets implementation. Keep the existing fork as a deployment-safe
-// fallback until all panels have installed the optional package.
-BAILEYS_CANDIDATES.unshift('@whiskeysockets/baileys');
 for (const pkg of BAILEYS_CANDIDATES) {
     try {
         _baileys = require(pkg);
@@ -169,8 +165,11 @@ async function fetchLinkPreview(url) {
                     // Only use if it's a real image (check first bytes)
                     if (buf.length > 1000) {
                     try {
-                        const { full, thumbnail } = await normaliseBuffer(buf);
-                        result.imageBuffer = full || buf;
+                        const { thumbnail } = await normaliseBuffer(buf);
+                        // Keep the original OG bytes for the actual status image.
+                        // Resizing the source to 1080px before upload was the main
+                        // cause of soft/blurred previews on high-resolution links.
+                        result.imageBuffer = buf;
                         result.thumbnailBuffer = thumbnail || result.imageBuffer;
                     } catch {
                         result.imageBuffer = buf;
