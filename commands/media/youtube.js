@@ -30,10 +30,18 @@ function pickVideoUrl(d) {
         d.result?.video, d.result?.url, d.result?.download_url, d.result?.downloadUrl, d.result?.mp4,
         d.data?.video, d.data?.url, d.data?.download_url, d.data?.downloadUrl, d.data?.mp4,
         d.data?.videoUrl,
+        d.result?.download_url, d.result?.downloadUrl,
+        d.data?.result?.download_url, d.data?.result?.downloadUrl,
     ];
     for (const c of cands) {
         if (typeof c === 'string' && /^https?:\/\//.test(c)) return c;
         if (Array.isArray(c) && c.length && typeof c[0] === 'string' && /^https?:\/\//.test(c[0])) return c[0];
+    }
+    const nestedLinks = d.download_links || d.downloads || d.result?.download_links || d.data?.download_links || d.data?.downloads;
+    if (Array.isArray(nestedLinks)) {
+        const preferred = nestedLinks.find(item => /720|1080|hd/i.test(item?.quality || item?.label || '')) || nestedLinks[0];
+        if (typeof preferred === 'string' && /^https?:\/\//.test(preferred)) return preferred;
+        if (preferred && typeof preferred.url === 'string' && /^https?:\/\//.test(preferred.url)) return preferred.url;
     }
     // formats array
     const fmts = d.formats || d.result?.formats || d.data?.formats;

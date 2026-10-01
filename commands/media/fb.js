@@ -6,6 +6,24 @@
 
 const axios = require("axios");
 
+function pickFacebookVideoUrl(payload) {
+    if (!payload) return null;
+    const roots = [payload, payload.data, payload.result, payload.data?.result].filter(Boolean);
+    for (const root of roots) {
+        const links = root.download_links || root.downloads || root.links;
+        if (Array.isArray(links)) {
+            const preferred = links.find(item => /720|1080|hd/i.test(item?.quality || item?.label || '')) || links[0];
+            const url = typeof preferred === 'string' ? preferred : preferred?.url;
+            if (/^https?:\/\//i.test(url || '')) return url;
+        }
+        for (const key of ['video', 'videoUrl', 'video_url', 'download_url', 'downloadUrl', 'url', 'hd', 'sd', 'mp4']) {
+            const value = root[key];
+            if (typeof value === 'string' && /^https?:\/\//i.test(value)) return value;
+        }
+    }
+    return null;
+}
+
 module.exports = {
     name: "facebook",
     aliases: ["fb", "fbdl", "fbvideo"],
@@ -14,8 +32,8 @@ module.exports = {
     async execute({ sock, msg, from, reply, args }) {
         console.log(`[fb] Command received for URL: ${args[0]}`); // Added for debugging responsiveness
 
-        const url = args[0];
-        if (!url || (!url.includes("facebook.com") && !url.includes("fb.watch"))) {
+        const url = args.join(' ').trim();
+        if (!url || (!/facebook\.com/i.test(url) && !/fb\.watch/i.test(url))) {
             return reply("🎬 *FACEBOOK DOWNLOADER*\n\nPlease provide a valid Facebook video or reel URL.\nExample: .fb https://www.facebook.com/reel/123456789/");
         }
 
@@ -30,8 +48,8 @@ module.exports = {
             try {
                 console.log("[fb] Trying User-Provided Prexzy API (facebook)...");
                 const res = await axios.get(`https://prexzyapis.com/download/facebook?url=${encodeURIComponent(url)}`, { timeout: 25000 });
-                if (res.data.status && (res.data.result || res.data.url)) {
-                    videoUrl = res.data.result || res.data.url;
+                if (res.data.status) {
+                    videoUrl = pickFacebookVideoUrl(res.data);
                     if (videoUrl) usedEngine = "User-Provided Prexzy Engine (facebook)";
                 }
             } catch (e) {
@@ -43,8 +61,8 @@ module.exports = {
                 try {
                     console.log("[fb] Trying User-Provided Prexzy API (facebookv2)...");
                     const res = await axios.get(`https://prexzyapis.com/download/facebookv2?url=${encodeURIComponent(url)}`, { timeout: 25000 });
-                    if (res.data.status && (res.data.result || res.data.url)) {
-                        videoUrl = res.data.result || res.data.url;
+                    if (res.data.status) {
+                        videoUrl = pickFacebookVideoUrl(res.data);
                         if (videoUrl) usedEngine = "User-Provided Prexzy Engine (facebookv2)";
                     }
                 } catch (e) {
@@ -57,8 +75,8 @@ module.exports = {
                 try {
                     console.log("[fb] Trying Maher AI API...");
                     const res = await axios.get(`https://api.maher-zubair.tech/download/facebook?url=${encodeURIComponent(url)}`, { timeout: 20000 });
-                    if (res.data.status && res.data.result) {
-                        videoUrl = res.data.result.hd || res.data.result.sd || res.data.result.url;
+                    if (res.data.status) {
+                        videoUrl = pickFacebookVideoUrl(res.data);
                         if (videoUrl) usedEngine = "Maher AI Engine";
                     }
                 } catch (e) {
@@ -72,7 +90,7 @@ module.exports = {
                     console.log("[fb] Trying Prexzy API (Alternative)...");
                     const res = await axios.get(`https://prexzyapis.com/media/facebook?url=${encodeURIComponent(url)}`, { timeout: 20000 });
                     if (res.data.status) {
-                        videoUrl = res.data.result || res.data.url || (res.data.data && res.data.data.url);
+                        videoUrl = pickFacebookVideoUrl(res.data);
                         if (videoUrl) usedEngine = "Prexzy Engine (Alternative)";
                     }
                 } catch (e) {
@@ -86,7 +104,7 @@ module.exports = {
                     console.log("[fb] Trying Siputzx API...");
                     const res = await axios.get(`https://api.siputzx.my.id/api/d/facebook?url=${encodeURIComponent(url)}`, { timeout: 20000 });
                     if (res.data.status && res.data.data) {
-                        videoUrl = res.data.data.url || res.data.data.hd || res.data.data.sd;
+                        videoUrl = pickFacebookVideoUrl(res.data);
                         if (videoUrl) usedEngine = "Siputzx Engine";
                     }
                 } catch (e) {
@@ -99,8 +117,8 @@ module.exports = {
                 try {
                     console.log("[fb] Trying All-in-One Downloader...");
                     const res = await axios.get(`https://api.vreden.my.id/api/facebook?url=${encodeURIComponent(url)}`, { timeout: 20000 });
-                    if (res.data.status && res.data.result) {
-                        videoUrl = res.data.result.hd || res.data.result.sd || res.data.result.url;
+                    if (res.data.status) {
+                        videoUrl = pickFacebookVideoUrl(res.data);
                         if (videoUrl) usedEngine = "Vreden Engine";
                     }
                 } catch (e) {
@@ -115,7 +133,8 @@ module.exports = {
             }
 
             // Clean up the URL if it's an object or has extra characters
-            const finalUrl = typeof videoUrl === "string" ? videoUrl : (videoUrl.hd || videoUrl.sd || videoUrl[0]);
+            const finalUrl = typeof videoUrl === "string" ? videoUrl : pickFacebookVideoUrl(videoUrl);
+            if (!finalUrl) return reply("❌ Could not extract a playable Facebook video.");
 
             await sock.sendMessage(from, {
                 video: { url: finalUrl },
