@@ -62,6 +62,24 @@ function pickMeta(d, fallbackTitle) {
     };
 }
 
+function pickAudioUrl(d) {
+    if (!d) return null;
+    const roots = [d, d.data, d.result, d.data?.result].filter(Boolean);
+    for (const root of roots) {
+        for (const key of ['audio', 'audioUrl', 'audio_url', 'download_url', 'downloadUrl', 'url', 'link', 'mp3']) {
+            const value = root[key];
+            if (typeof value === 'string' && /^https?:\/\//i.test(value)) return value;
+        }
+        const links = root.download_links || root.downloads || root.formats;
+        if (Array.isArray(links)) {
+            const preferred = links.find(item => /mp3|audio|320|128/i.test(item?.format || item?.quality || item?.type || '')) || links[0];
+            const value = typeof preferred === 'string' ? preferred : preferred?.url;
+            if (/^https?:\/\//i.test(value || '')) return value;
+        }
+    }
+    return null;
+}
+
 // Verifies a resolved "video" URL is actually a live, playable video before
 // we ever send it to WhatsApp. This is what catches providers that silently
 // return a broken link, an HTML error page, or an unrelated cached/demo file
@@ -167,6 +185,17 @@ const strategies = [
     },
 ];
 
+async function downloadYtAudio(url) {
+    const { data } = await axios.get(
+        `https://eliteprotech-apis.zone.id/download/ytdown?format=mp3&url=${encodeURIComponent(url)}`,
+        { timeout: 45000, headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' } }
+    );
+    if (data?.success === false) throw new Error(data.error || 'EliteProTech returned no MP3');
+    const audio = pickAudioUrl(data);
+    if (!audio) throw new Error('EliteProTech returned no MP3 URL');
+    return { audio, ...pickMeta(data) };
+}
+
 async function downloadYt(url) {
     let lastErr;
     for (const strategy of strategies) {
@@ -219,6 +248,18 @@ module.exports = {
             const cleanUrl = videoId ? `https://www.youtube.com/watch?v=${videoId}` : input;
             try {
                 await sock.sendMessage(from, { react: { text: '⏳', key: msg.key } });
+                try {
+                    const audioResult = await downloadYtAudio(cleanUrl);
+                    await sock.sendMessage(from, {
+                        audio: { url: audioResult.audio },
+                        mimetype: 'audio/mpeg',
+                        fileName: `${audioResult.title || 'youtube-audio'}.mp3`,
+                    }, { quoted: msg });
+                    await sock.sendMessage(from, { react: { text: '✅', key: msg.key } });
+                    return;
+                } catch (audioError) {
+                    console.error('[yt] EliteProTech MP3 failed:', audioError.message);
+                }
                 const r = await downloadYt(cleanUrl);
                 if (!r?.video) {
                     await sock.sendMessage(from, { react: { text: '❌', key: msg.key } });
