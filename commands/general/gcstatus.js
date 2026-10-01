@@ -550,20 +550,9 @@ async function relayNativeGroupInviteStatus(sock, groupJid, meta, inviteLink, gr
 async function postGroupStatusLinkPreview(sock, groupJid, url) {
     const preview = await fetchLinkPreview(url);
 
-    // A native link preview is always rendered from a thumbnail by WhatsApp.
-    // When an OG image is available, send that image as the actual group-status
-    // media instead. This is the only reliable way to keep the photo sharp on
-    // recipients' devices; the URL and page metadata remain in the caption.
-    if (preview.imageBuffer) {
-        const lines = [preview.title || 'Link', preview.description || '', url]
-            .map(value => String(value || '').trim())
-            .filter(Boolean);
-        return postGroupStatus(sock, groupJid, {
-            image: preview.imageBuffer,
-            caption: lines.join('\\n\\n'),
-        });
-    }
-
+    // Keep the URL as a native rich-preview status. The OG image is used as
+    // the card thumbnail, not posted as a separate image status. This keeps
+    // the URL, title, description, and clear preview together in the card.
     const imagePrev = await createImageLinkPreview(
         sock,
         url,
@@ -745,6 +734,8 @@ module.exports = Object.assign(module.exports, {
                     const relayMsg  = extractRelaySourceMessage(quoted);
                     const relayCtx  = extractRelaySourceContextInfo(msg);
                     await postRelayGroupStatus(sock, from, relayMsg, relayCtx, msg);
+                } else if (isUrl) {
+                    await postGroupStatusLinkPreview(sock, from, quotedText.trim());
                 } else {
                     await postGroupStatus(sock, from, {
                         text:            quotedText,
