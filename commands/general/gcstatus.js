@@ -113,7 +113,7 @@ async function downloadMedia(mediaMsg, type) {
  * previewImage and lets WhatsApp do its own (blurry) fetch.
  */
 async function fetchLinkPreview(url) {
-    const result = { title: null, description: null, imageBuffer: null, imageUrl: null };
+    const result = { title: null, description: null, imageBuffer: null, thumbnailBuffer: null, imageUrl: null };
     try {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 10_000);
@@ -165,10 +165,12 @@ async function fetchLinkPreview(url) {
                     // Only use if it's a real image (check first bytes)
                     if (buf.length > 1000) {
                     try {
-                        const { full } = await normaliseBuffer(buf);
+                        const { full, thumbnail } = await normaliseBuffer(buf);
                         result.imageBuffer = full || buf;
+                        result.thumbnailBuffer = thumbnail || result.imageBuffer;
                     } catch {
                         result.imageBuffer = buf;
+                        result.thumbnailBuffer = buf;
                     }
                 }
                 }
@@ -387,7 +389,7 @@ function unwrapQuotedDeep(qm) {
 }
 
 // Build non-blue link preview with image thumbnail
-async function createImageLinkPreview(sock, url, title, description, imageBuffer, imageUrl) {
+async function createImageLinkPreview(sock, url, title, description, imageBuffer, imageUrl, thumbnailBuffer) {
     try {
         let thumbnail = null;
         // Prefer the original image URL, matching the sharper group-invite path.
@@ -431,7 +433,7 @@ async function createImageLinkPreview(sock, url, title, description, imageBuffer
                 backgroundArgb: STATUS_BG_ARGB,
                 textArgb: STATUS_FG_ARGB,
                 font: 0,
-                ...(thumbnail || { jpegThumbnail: undefined }),
+                ...(thumbnailBuffer ? { jpegThumbnail: thumbnailBuffer } : thumbnail || { jpegThumbnail: undefined }),
             }
         };
     } catch (err) {
@@ -570,7 +572,8 @@ async function postGroupStatusLinkPreview(sock, groupJid, url) {
         preview.title || 'Link',
         preview.description || url,
         preview.imageBuffer,
-        preview.imageUrl
+        preview.imageUrl,
+        preview.thumbnailBuffer
     );
 
     if (!imagePrev) {
