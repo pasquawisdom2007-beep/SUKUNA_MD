@@ -44,8 +44,23 @@ module.exports = {
             let videoUrl = null;
             let usedEngine = "";
 
-            // --- STAGE 1: USER-PROVIDED PREXZY API (Primary) ---
+            // --- STAGE 1: ELITEPROTECH API (Primary) ---
             try {
+                console.log("[fb] Trying EliteProTech Facebook API...");
+                const res = await axios.get(`https://eliteprotech-apis.zone.id/download/facebook?url=${encodeURIComponent(url)}`, {
+                    timeout: 30000,
+                    headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' },
+                });
+                if (res.data?.success !== false) {
+                    videoUrl = pickFacebookVideoUrl(res.data);
+                    if (videoUrl) usedEngine = "EliteProTech Facebook Engine";
+                }
+            } catch (e) {
+                console.error("[fb] EliteProTech Facebook API failed:", e.response?.data?.error || e.message);
+            }
+
+            // --- STAGE 2: USER-PROVIDED PREXZY API ---
+            if (!videoUrl) try {
                 console.log("[fb] Trying User-Provided Prexzy API (facebook)...");
                 const res = await axios.get(`https://prexzyapis.com/download/facebook?url=${encodeURIComponent(url)}`, { timeout: 25000 });
                 if (res.data.status) {
@@ -56,7 +71,7 @@ module.exports = {
                 console.error("[fb] User-Provided Prexzy API (facebook) failed:", e.message);
             }
 
-            // --- STAGE 2: USER-PROVIDED PREXZY API (facebookv2) ---
+            // --- STAGE 3: USER-PROVIDED PREXZY API (facebookv2) ---
             if (!videoUrl) {
                 try {
                     console.log("[fb] Trying User-Provided Prexzy API (facebookv2)...");
@@ -70,7 +85,7 @@ module.exports = {
                 }
             }
 
-            // --- STAGE 3: MAHER AI API (Fallback) ---
+            // --- STAGE 4: MAHER AI API (Fallback) ---
             if (!videoUrl) {
                 try {
                     console.log("[fb] Trying Maher AI API...");
@@ -84,7 +99,7 @@ module.exports = {
                 }
             }
 
-            // --- STAGE 4: PREXZY API (Fallback) ---
+            // --- STAGE 5: PREXZY API (Fallback) ---
             if (!videoUrl) {
                 try {
                     console.log("[fb] Trying Prexzy API (Alternative)...");
@@ -98,7 +113,7 @@ module.exports = {
                 }
             }
 
-            // --- STAGE 5: SIPUTZX API (Fallback) ---
+            // --- STAGE 6: SIPUTZX API (Fallback) ---
             if (!videoUrl) {
                 try {
                     console.log("[fb] Trying Siputzx API...");
@@ -112,7 +127,7 @@ module.exports = {
                 }
             }
 
-            // --- STAGE 6: ALL-IN-ONE DOWNLOADER (Last Resort) ---
+            // --- STAGE 7: ALL-IN-ONE DOWNLOADER (Last Resort) ---
             if (!videoUrl) {
                 try {
                     console.log("[fb] Trying All-in-One Downloader...");
