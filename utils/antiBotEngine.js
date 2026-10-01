@@ -40,7 +40,8 @@ function botIsAdmin(meta, sock) {
 }
 
 function isAdmin(meta, jid) {
-    return Boolean(findParticipant(meta, jid)?.admin);
+    const identities = Array.isArray(jid) ? jid : [jid];
+    return identities.some(identity => Boolean(findParticipant(meta, identity)?.admin));
 }
 
 function getState(sock) {
@@ -198,7 +199,16 @@ async function handleJoin(sock, event) {
 }
 
 function messageSender(message) {
-    return message?.key?.participant || message?.key?.participantAlt || message?.participant || message?.key?.remoteJid || '';
+    const candidates = messageSenderCandidates(message);
+    return candidates.find(jid => /@s\.whatsapp\.net$/i.test(jid)) || candidates[0] || '';
+}
+
+function messageSenderCandidates(message) {
+    return [...new Set([
+        message?.key?.participantAlt,
+        message?.key?.participant,
+        message?.participant,
+    ].filter(Boolean).map(String))];
 }
 
 async function handleMessage(sock, message) {
@@ -212,10 +222,11 @@ async function handleMessage(sock, message) {
     if (!groupId || !groupId.endsWith('@g.us') || message?.key?.fromMe) return;
     const config = await getGroupSettings(groupId);
     if (!config.antibot) return;
+    const senderIdentities = messageSenderCandidates(message);
     const jid = messageSender(message);
-    if (!jid || isBotSelf(sock, jid)) return;
+    if (!jid || senderIdentities.some(identity => isBotSelf(sock, identity))) return;
     const meta = await withTimeout(sock.groupMetadata(groupId).catch(() => null), 8_000, `groupMetadata(${groupId})`).catch(() => null);
-    if (isAdmin(meta, jid)) return;
+    if (isAdmin(meta, senderIdentities)) return;
 
     const detection = detectBotSignals({
         jid,
