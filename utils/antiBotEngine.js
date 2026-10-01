@@ -130,18 +130,16 @@ async function deleteMessage(sock, groupId, message) {
 
 async function removeMember(sock, groupId, jid, reason, canRemove) {
     if (!canRemove) {
-        await sendNotice(sock, groupId, jid,
-            `⚠️ *AntiBot:* @${shortJid(jid)} matched a bot signature, but I need group-admin rights to remove it.\n_${reason}_`
-        );
+        await sendNotice(sock, groupId, jid, `⚠️ *AntiBot:* @${shortJid(jid)} could not be removed.`);
         return false;
     }
     try {
         await sock.groupParticipantsUpdate(groupId, [jid], 'remove');
-        await sendNotice(sock, groupId, jid, `🤖 *AntiBot:* @${shortJid(jid)} was removed.\n_${reason}_`);
+        await sendNotice(sock, groupId, jid, `🤖 *AntiBot:* @${shortJid(jid)} removed.`);
         return true;
     } catch (error) {
         console.error('[ANTIBOT] removal failed:', error.message);
-        await sendNotice(sock, groupId, jid, `⚠️ *AntiBot:* removal of @${shortJid(jid)} failed. Make me a group admin and try again.`);
+        await sendNotice(sock, groupId, jid, `⚠️ *AntiBot:* @${shortJid(jid)} could not be removed.`);
         return false;
     }
 }
@@ -158,9 +156,7 @@ async function enforceDetected(sock, groupId, jid, config, reason, message = nul
 
     if (action === 'delete') {
         const deleted = await deleteMessage(sock, groupId, message);
-        await sendNotice(sock, groupId, jid, deleted
-            ? `🗑️ *AntiBot:* bot message from @${shortJid(jid)} was deleted.\n_${reason}_`
-            : `⚠️ *AntiBot:* @${shortJid(jid)} matched a bot signature, but its message could not be deleted.\n_${reason}_`);
+        if (!deleted) await sendNotice(sock, groupId, jid, `⚠️ *AntiBot:* message from @${shortJid(jid)} could not be deleted.`);
         return { action, deleted, removed: false };
     }
 
@@ -173,9 +169,7 @@ async function enforceDetected(sock, groupId, jid, config, reason, message = nul
             if (removed) database.resetWarnings(groupId, jid);
             return { action, count, max, removed };
         }
-        await sendNotice(sock, groupId, jid,
-            `⚠️ *AntiBot warning ${count}/${max}:* @${shortJid(jid)} matched a bot signature.\n_${reason}_` +
-            (canRemove ? '' : '\n_The bot needs admin rights before it can remove members._'));
+        await sendNotice(sock, groupId, jid, `⚠️ *AntiBot warning ${count}/${max}:* @${shortJid(jid)}`);
         return { action, count, max, removed: false };
     }
 
