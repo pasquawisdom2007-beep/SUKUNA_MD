@@ -41,9 +41,9 @@ module.exports = {
                     if (!jid) return null;
 
                     const record = activity[jid];
-                    const messageCount = typeof record === 'number'
-                        ? 0
-                        : Number(record?.msgCount || 0);
+                    const messageCount = typeof database?.getMessageCount === 'function'
+                        ? Number(database.getMessageCount(chatId, jid) || 0)
+                        : (typeof record === 'number' ? 0 : Number(record?.msgCount || 0));
                     if (!Number.isFinite(messageCount) || messageCount <= 0) return null;
 
                     const displayName = participant.notify ||

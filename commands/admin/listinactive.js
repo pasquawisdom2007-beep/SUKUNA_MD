@@ -38,9 +38,9 @@ module.exports = {
                     const lastSeen = typeof record === 'number'
                         ? record
                         : Number(record?.lastSeen || 0);
-                    const messageCount = typeof record === 'object'
-                        ? Number(record?.msgCount || 0)
-                        : 0;
+                    const messageCount = typeof database?.getMessageCount === 'function'
+                        ? Number(database.getMessageCount(chatId, jid) || 0)
+                        : (typeof record === 'object' ? Number(record?.msgCount || 0) : 0);
                     const age = lastSeen ? now - lastSeen : Infinity;
                     if (age <= INACTIVE_AFTER) return null;
 
