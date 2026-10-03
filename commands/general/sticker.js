@@ -12,6 +12,7 @@
 
 const { downloadContentFromMessage } = require('@pasqua-baileys/baileys');
 const fs = require('fs');
+const sharp = require('sharp');
 const { runFfmpeg, FFMPEG } = require('../../utils/mediaCommand');
 
 const TIMEOUT_MS = 30000;
@@ -75,23 +76,45 @@ async function videoToWebp(inputBuffer) {
     // Pipe the source and output through FFmpeg instead of using shell paths.
     // The explicit fps/pad/pixel-format chain prevents torn/split animated
     // WebP frames on WhatsApp, especially for portrait and odd-sized videos.
-    return runFfmpeg([
+    const commonArgs = [
         '-i', 'pipe:0',
         '-t', String(VIDEO_STICKER_MAX_SECONDS),
         '-vf', VIDEO_STICKER_FILTER,
         '-an',
-        '-c:v', 'libwebp_anim',
         '-lossless', '0',
         '-q:v', '55',
         '-compression_level', '6',
         '-loop', '0',
         '-f', 'webp',
         'pipe:1',
-    ], inputBuffer, {
-        timeout: TIMEOUT_MS,
-        maxOutputBytes: 8 * 1024 * 1024,
-        binary: STICKER_FFMPEG,
-    });
+    ];
+    let lastError;
+    // libwebp is present in substantially more panel/static FFmpeg builds;
+    // libwebp_anim remains a fallback for builds that expose that encoder only.
+    for (const encoder of ['libwebp', 'libwebp_anim']) {
+        try {
+            return await runFfmpeg([
+                ...commonArgs.slice(0, 6),
+                '-c:v', encoder,
+                ...commonArgs.slice(6),
+            ], inputBuffer, {
+                timeout: TIMEOUT_MS,
+                maxOutputBytes: 8 * 1024 * 1024,
+                binary: STICKER_FFMPEG,
+            }).then(async output => {
+                // Some FFmpeg builds return exit code 0 while emitting a
+                // malformed animated WebP. Parse it before accepting it.
+                const metadata = await sharp(output, { animated: true }).metadata();
+                if (metadata.format !== 'webp' || metadata.width !== 512 || metadata.pageHeight !== 512) {
+                    throw new Error(`encoder ${encoder} produced invalid WebP output`);
+                }
+                return output;
+            });
+        } catch (error) {
+            lastError = error;
+        }
+    }
+    throw lastError || new Error('no compatible WebP encoder available');
 }
 
 function getQuoted(msg) {
