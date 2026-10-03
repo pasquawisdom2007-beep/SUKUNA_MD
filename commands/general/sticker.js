@@ -11,12 +11,25 @@
  */
 
 const { downloadContentFromMessage } = require('@pasqua-baileys/baileys');
-const { exec } = require('child_process');
 const fs = require('fs');
-const os = require('os');
-const path = require('path');
+const { runFfmpeg, FFMPEG } = require('../../utils/mediaCommand');
 
 const TIMEOUT_MS = 30000;
+const VIDEO_STICKER_MAX_SECONDS = 6;
+// The bundled ffmpeg-static binary can fail on animated WebP output on some
+// Linux hosts. Prefer the system FFmpeg, while retaining ffmpeg-static as a
+// fallback for local deployments.
+const STICKER_FFMPEG = process.env.FFMPEG_PATH
+    || (fs.existsSync('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : FFMPEG);
+const VIDEO_STICKER_FILTER = [
+    'fps=15',
+    'scale=512:512:force_original_aspect_ratio=decrease:force_divisible_by=2',
+    // Use an opaque, even-sized canvas. The alpha WebP path in some FFmpeg
+    // builds creates malformed animation chunks that WhatsApp displays as
+    // horizontal split lines.
+    'pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black',
+    'format=yuv420p',
+].join(',');
 
 async function downloadMedia(mediaMsg, type) {
     return new Promise(async (resolve, reject) => {
@@ -54,16 +67,30 @@ function toWebpWithSharp(buffer) {
     });
 }
 
-function videoToWebp(inputPath, outputPath) {
-    return new Promise((resolve, reject) => {
-        // Convert first 6 seconds of video to animated WebP
-        exec(
-            `ffmpeg -y -i "${inputPath}" -vf "scale=512:512:force_original_aspect_ratio=decrease,fps=15" ` +
-            `-t 6 -vcodec libwebp -lossless 0 -compression_level 6 -q:v 50 ` +
-            `-loop 0 -preset default -an -vsync 0 "${outputPath}"`,
-            { timeout: 30000 },
-            (err) => (err ? reject(err) : resolve())
-        );
+async function videoToWebp(inputBuffer) {
+    if (!Buffer.isBuffer(inputBuffer) || !inputBuffer.length) {
+        throw new Error('empty video input');
+    }
+
+    // Pipe the source and output through FFmpeg instead of using shell paths.
+    // The explicit fps/pad/pixel-format chain prevents torn/split animated
+    // WebP frames on WhatsApp, especially for portrait and odd-sized videos.
+    return runFfmpeg([
+        '-i', 'pipe:0',
+        '-t', String(VIDEO_STICKER_MAX_SECONDS),
+        '-vf', VIDEO_STICKER_FILTER,
+        '-an',
+        '-c:v', 'libwebp_anim',
+        '-lossless', '0',
+        '-q:v', '55',
+        '-compression_level', '6',
+        '-loop', '0',
+        '-f', 'webp',
+        'pipe:1',
+    ], inputBuffer, {
+        timeout: TIMEOUT_MS,
+        maxOutputBytes: 8 * 1024 * 1024,
+        binary: STICKER_FFMPEG,
     });
 }
 
@@ -115,32 +142,13 @@ module.exports = {
         // ── Video sticker ─────────────────────────────────────────────────────
         if (quoted?.videoMessage) {
             await reply('⏳ _Creating animated sticker (this may take a moment)..._');
-
-            const tmpIn  = path.join(os.tmpdir(), `stk_in_${Date.now()}.mp4`);
-            const tmpOut = path.join(os.tmpdir(), `stk_out_${Date.now()}.webp`);
-
             try {
                 const rawBuf = await downloadMedia(quoted.videoMessage, 'video');
-                fs.writeFileSync(tmpIn, rawBuf);
-
-                // Try ffmpeg conversion first
-                let stickerBuf;
-                try {
-                    await videoToWebp(tmpIn, tmpOut);
-                    stickerBuf = fs.readFileSync(tmpOut);
-                } catch (_) {
-                    // ffmpeg not available — send raw video buffer directly
-                    stickerBuf = rawBuf;
-                }
-
+                const stickerBuf = await videoToWebp(rawBuf);
                 await sock.sendMessage(from, { sticker: stickerBuf }, { quoted: msg });
                 return;
             } catch (err) {
-                return reply(`❌ Failed to create video sticker: ${err.message}`);
-            } finally {
-                for (const f of [tmpIn, tmpOut]) {
-                    try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch (_) {}
-                }
+                return reply(`❌ Failed to create video sticker: ${err.message || 'FFmpeg conversion failed'}`);
             }
         }
 
@@ -152,7 +160,10 @@ module.exports = {
             `• Reply to any image + \`.sticker\`\n` +
             `• Reply to any video + \`.sticker\` (animated)\n` +
             `• Reply to existing sticker + \`.sticker\` to forward it\n\n` +
-            `_Video stickers require ffmpeg on the server_`
+            `_Animated video stickers require FFmpeg on the server_`
         );
     }
 };
+
+module.exports.videoToWebp = videoToWebp;
+module.exports.VIDEO_STICKER_FILTER = VIDEO_STICKER_FILTER;

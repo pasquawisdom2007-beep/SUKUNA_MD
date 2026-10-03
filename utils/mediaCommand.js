@@ -114,9 +114,9 @@ async function fetchUrlBuffer(url, maxBytes = MAX_MEDIA_BYTES) {
     return { buffer, contentType: response.headers.get('content-type') || 'application/octet-stream', finalUrl: current };
 }
 
-function runFfmpeg(args, input, { timeout = TIMEOUT_MS, maxOutputBytes = MAX_MEDIA_BYTES } = {}) {
+function runFfmpeg(args, input, { timeout = TIMEOUT_MS, maxOutputBytes = MAX_MEDIA_BYTES, binary = FFMPEG } = {}) {
     return new Promise((resolve, reject) => {
-        const child = spawn(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-y', ...args]);
+        const child = spawn(binary, ['-hide_banner', '-loglevel', 'error', '-y', ...args]);
         const output = [];
         const errors = [];
         let outputBytes = 0;
