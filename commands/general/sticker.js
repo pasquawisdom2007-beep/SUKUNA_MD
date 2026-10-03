@@ -12,11 +12,16 @@
 
 const { downloadContentFromMessage } = require('@pasqua-baileys/baileys');
 const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { spawn } = require('child_process');
 const sharp = require('sharp');
-const { runFfmpeg, FFMPEG } = require('../../utils/mediaCommand');
+const { FFMPEG } = require('../../utils/mediaCommand');
 
 const TIMEOUT_MS = 30000;
+const CONVERSION_TIMEOUT_MS = 90000;
 const VIDEO_STICKER_MAX_SECONDS = 6;
+const VIDEO_STICKER_MAX_FRAMES = 90;
 // The bundled ffmpeg-static binary can fail on animated WebP output on some
 // Linux hosts. Prefer the system FFmpeg, while retaining ffmpeg-static as a
 // fallback for local deployments.
@@ -68,40 +73,65 @@ function toWebpWithSharp(buffer) {
     });
 }
 
+function encodeVideoSticker(inputPath, outputPath, encoder) {
+    return new Promise((resolve, reject) => {
+        const child = spawn(STICKER_FFMPEG, [
+            '-hide_banner', '-loglevel', 'error', '-y',
+            '-ss', '0',
+            '-i', inputPath,
+            '-t', String(VIDEO_STICKER_MAX_SECONDS),
+            '-frames:v', String(VIDEO_STICKER_MAX_FRAMES),
+            '-vf', VIDEO_STICKER_FILTER,
+            '-an',
+            '-c:v', encoder,
+            '-lossless', '0',
+            '-q:v', '55',
+            '-compression_level', '6',
+            '-loop', '0',
+            '-f', 'webp',
+            outputPath,
+        ]);
+        const errors = [];
+        let settled = false;
+        const finish = (error) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            error ? reject(error) : resolve();
+        };
+        const timer = setTimeout(() => {
+            try { child.kill('SIGKILL'); } catch (_) {}
+            finish(new Error('FFmpeg timed out while encoding the sticker'));
+        }, CONVERSION_TIMEOUT_MS);
+        child.stderr.on('data', chunk => errors.push(chunk));
+        child.on('error', finish);
+        child.on('close', code => {
+            if (code !== 0) {
+                finish(new Error(Buffer.concat(errors).toString().trim() || `FFmpeg exited with code ${code}`));
+            } else {
+                finish();
+            }
+        });
+    });
+}
+
 async function videoToWebp(inputBuffer) {
     if (!Buffer.isBuffer(inputBuffer) || !inputBuffer.length) {
         throw new Error('empty video input');
     }
 
-    // Pipe the source and output through FFmpeg instead of using shell paths.
-    // The explicit fps/pad/pixel-format chain prevents torn/split animated
-    // WebP frames on WhatsApp, especially for portrait and odd-sized videos.
-    const commonArgs = [
-        '-i', 'pipe:0',
-        '-t', String(VIDEO_STICKER_MAX_SECONDS),
-        '-vf', VIDEO_STICKER_FILTER,
-        '-an',
-        '-lossless', '0',
-        '-q:v', '55',
-        '-compression_level', '6',
-        '-loop', '0',
-        '-f', 'webp',
-        'pipe:1',
-    ];
+    const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sukuna-sticker-'));
+    const inputPath = path.join(workDir, 'input.media');
+    fs.writeFileSync(inputPath, inputBuffer);
     let lastError;
-    // libwebp is present in substantially more panel/static FFmpeg builds;
-    // libwebp_anim remains a fallback for builds that expose that encoder only.
-    for (const encoder of ['libwebp', 'libwebp_anim']) {
-        try {
-            return await runFfmpeg([
-                ...commonArgs.slice(0, 6),
-                '-c:v', encoder,
-                ...commonArgs.slice(6),
-            ], inputBuffer, {
-                timeout: TIMEOUT_MS,
-                maxOutputBytes: 8 * 1024 * 1024,
-                binary: STICKER_FFMPEG,
-            }).then(async output => {
+    try {
+        // libwebp is present in substantially more panel/static FFmpeg builds;
+        // libwebp_anim remains a fallback for builds that expose that encoder only.
+        for (const encoder of ['libwebp', 'libwebp_anim']) {
+            const outputPath = path.join(workDir, `${encoder}.webp`);
+            try {
+                await encodeVideoSticker(inputPath, outputPath, encoder);
+                const output = fs.readFileSync(outputPath);
                 // Some FFmpeg builds return exit code 0 while emitting a
                 // malformed animated WebP. Parse it before accepting it.
                 const metadata = await sharp(output, { animated: true }).metadata();
@@ -109,12 +139,14 @@ async function videoToWebp(inputBuffer) {
                     throw new Error(`encoder ${encoder} produced invalid WebP output`);
                 }
                 return output;
-            });
-        } catch (error) {
-            lastError = error;
+            } catch (error) {
+                lastError = error;
+            }
         }
+        throw lastError || new Error('no compatible WebP encoder available');
+    } finally {
+        try { fs.rmSync(workDir, { recursive: true, force: true }); } catch (_) {}
     }
-    throw lastError || new Error('no compatible WebP encoder available');
 }
 
 function getQuoted(msg) {
