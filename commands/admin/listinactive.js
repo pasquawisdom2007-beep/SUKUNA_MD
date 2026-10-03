@@ -74,7 +74,7 @@ module.exports = {
                     const lastSeenText = user.lastSeen
                         ? new Date(user.lastSeen).toISOString().slice(0, 10)
                         : 'never tracked';
-                    lines.push(`• @${user.jid.split('@')[0]} - last active: ${lastSeenText}`);
+                    lines.push(`• @${user.jid.split('@')[0]} - ${user.messageCount} message${user.messageCount === 1 ? '' : 's'} - last active: ${lastSeenText}`);
                 }
                 if (inactive.length > 30) {
                     lines.push('', `…and ${inactive.length - 30} more inactive member${inactive.length - 30 === 1 ? '' : 's'}.`);

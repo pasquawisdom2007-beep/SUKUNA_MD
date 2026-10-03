@@ -109,7 +109,19 @@ class Database {
     markSeen(groupId, userJid) {
         if (!groupId || !userJid) return;
         if (!this.data.lastSeen[groupId]) this.data.lastSeen[groupId] = {};
-        this.data.lastSeen[groupId][userJid] = Date.now();
+        const current = this.data.lastSeen[groupId][userJid];
+        if (current && typeof current === 'object') {
+            // Keep msgCount intact; this method is called before the counter
+            // increment in the message handler.
+            current.lastSeen = Date.now();
+        } else {
+            // Migrate the old timestamp-only format without losing the
+            // activity record needed by listactive/listinactive.
+            this.data.lastSeen[groupId][userJid] = {
+                lastSeen: Date.now(),
+                msgCount: 0,
+            };
+        }
         // Throttle disk writes to once every 30s — activity logging is hot.
         const now = Date.now();
         if (now - this._lastSeenSaveAt > 30000) {
