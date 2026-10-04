@@ -71,6 +71,23 @@ class Database {
         return this.data.settings.aiBadge;
     }
 
+    // ── Personal AntiBug — keyed by the paired bot session ────────────────
+    // Personal protection is intentionally separate from group settings so
+    // `.antibug p on` protects only the selected bot account's DM surface.
+    getAntiBugPersonal(phoneNumber) {
+        const key = String(phoneNumber || '').replace(/\D/g, '');
+        return this.data.settings.antibugPersonal?.[key] === true;
+    }
+
+    setAntiBugPersonal(phoneNumber, enabled) {
+        const key = String(phoneNumber || '').replace(/\D/g, '');
+        if (!key) return false;
+        if (!this.data.settings.antibugPersonal) this.data.settings.antibugPersonal = {};
+        this.data.settings.antibugPersonal[key] = enabled === true;
+        this.save('settings');
+        return this.data.settings.antibugPersonal[key];
+    }
+
     // ── AntiBot custom message-ID stamps (bot-wide) ───────────────────────
     // These are detection fingerprints only; they do not alter identities,
     // sessions, client metadata, or enforcement-evasion behavior.

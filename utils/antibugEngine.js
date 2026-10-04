@@ -11,8 +11,10 @@ const MAX_BINARY_BYTES = 8 * 1024 * 1024;
 const RATE_WINDOW_MS = 10_000;
 const RATE_LIMIT = 35;
 const NOTICE_COOLDOWN_MS = 60_000;
+const REPORT_COOLDOWN_MS = 60_000;
 const rateBuckets = new Map();
 const notices = new Map();
+const reports = new Map();
 
 function byteLength(value) {
     return Buffer.byteLength(String(value), 'utf8');
@@ -30,6 +32,11 @@ function inspectValue(value, state, path = '$', depth = 0) {
 
     if (typeof value === 'string') {
         if (byteLength(value) > MAX_STRING_BYTES) return `oversized string at ${path}`;
+        if (/<\s*(?:script|iframe|object|embed|svg)\b|javascript\s*:|data\s*:\s*text\/html|\bon(?:error|load|click)\s*=/i.test(value)) {
+            return `active HTML/script marker at ${path}`;
+        }
+        const invisibleCount = (value.match(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g) || []).length;
+        if (invisibleCount > 64) return `excessive invisible/control characters at ${path}`;
         return null;
     }
 
@@ -77,9 +84,9 @@ function sourceFor(message) {
     return message?.key?.participant || message?.key?.participantAlt || message?.participant || message?.key?.remoteJid || 'unknown';
 }
 
-function rateCheck(groupId, sender) {
+function rateCheck(chatId, sender) {
     const now = Date.now();
-    const key = `${groupId}:${sender}`;
+    const key = `${chatId}:${sender}`;
     let bucket = rateBuckets.get(key);
     if (!bucket || now - bucket.startedAt > RATE_WINDOW_MS) {
         bucket = { startedAt: now, count: 0 };
@@ -90,67 +97,182 @@ function rateCheck(groupId, sender) {
     return bucket.count > RATE_LIMIT;
 }
 
-function canNotify(groupId) {
+function canNotify(chatId) {
     const now = Date.now();
-    const previous = notices.get(groupId) || 0;
+    const previous = notices.get(chatId) || 0;
     if (now - previous < NOTICE_COOLDOWN_MS) return false;
-    notices.set(groupId, now);
+    notices.set(chatId, now);
     while (notices.size > 1000) notices.delete(notices.keys().next().value);
     return true;
 }
 
-async function deleteIncoming(sock, message) {
+function canReport(key) {
+    const now = Date.now();
+    const previous = reports.get(key) || 0;
+    if (now - previous < REPORT_COOLDOWN_MS) return false;
+    reports.set(key, now);
+    while (reports.size > 2000) reports.delete(reports.keys().next().value);
+    return true;
+}
+
+function timestampNumber(value) {
+    if (value == null) return Math.floor(Date.now() / 1000);
+    if (typeof value?.toNumber === 'function') return value.toNumber();
+    if (typeof value === 'object' && value.low != null) return Number(value.low);
+    const number = Number(value);
+    return Number.isFinite(number) ? number : Math.floor(Date.now() / 1000);
+}
+
+/**
+ * Remove the message from this bot's local chat view only. This deliberately
+ * does not send a revoke/delete-for-everyone protocol message.
+ */
+async function deleteForBotOnly(sock, message) {
     const key = message?.key;
-    if (!key?.id || !key.remoteJid?.endsWith('@g.us')) return false;
+    if (!key?.id || !key.remoteJid || typeof sock?.chatModify !== 'function') return false;
     try {
-        await sock.sendMessage(key.remoteJid, {
-            delete: {
-                remoteJid: key.remoteJid,
-                fromMe: Boolean(key.fromMe),
-                id: key.id,
-                participant: key.participant || key.participantAlt,
+        await sock.chatModify({
+            deleteForMe: {
+                key: {
+                    remoteJid: key.remoteJid,
+                    fromMe: Boolean(key.fromMe),
+                    id: key.id,
+                    ...(key.participant ? { participant: key.participant } : {}),
+                    ...(key.participantAlt ? { participantAlt: key.participantAlt } : {}),
+                },
+                timestamp: timestampNumber(message.messageTimestamp),
+                deleteMedia: true,
             },
-        });
+        }, key.remoteJid);
         return true;
     } catch (error) {
-        console.warn('[ANTIBUG] could not delete suspicious message:', error.message);
+        console.warn('[ANTIBUG] could not remove suspicious message from bot view:', error.message);
         return false;
     }
 }
 
-async function screenIncoming(sock, message) {
+async function clearChatForBotOnly(sock, message) {
+    const key = message?.key;
+    if (!key?.id || !key.remoteJid || typeof sock?.chatModify !== 'function') return false;
+    try {
+        await sock.chatModify({
+            clear: {
+                lastMessages: [{
+                    key: {
+                        remoteJid: key.remoteJid,
+                        fromMe: Boolean(key.fromMe),
+                        id: key.id,
+                        ...(key.participant ? { participant: key.participant } : {}),
+                    },
+                    messageTimestamp: timestampNumber(message.messageTimestamp),
+                }],
+            },
+        }, key.remoteJid);
+        return true;
+    } catch (error) {
+        console.warn('[ANTIBUG] could not clear the bot-local chat view:', error.message);
+        return false;
+    }
+}
+
+async function reportToOwner(sock, ownerJid, phoneNumber, message, reason, flooded, localDeleted, chatCleared) {
+    if (!ownerJid || typeof sock?.sendMessage !== 'function') return false;
+    const chat = message?.key?.remoteJid || 'unknown';
+    const reportKey = `${phoneNumber || ownerJid}:${chat}`;
+    if (!canReport(reportKey)) return false;
+    const scope = chat.endsWith('@g.us') ? 'group' : 'personal DM';
+    const sender = sourceFor(message);
+    const text = [
+        '🛡️ *AntiBug security report*',
+        '',
+        `Scope: *${scope}*`,
+        `Chat: ${chat}`,
+        `Sender: ${sender}`,
+        `Reason: ${reason}`,
+        `Flood detected: ${flooded ? 'yes' : 'no'}`,
+        `Removed from bot view: ${localDeleted ? 'yes' : 'no'}`,
+        `Chat cleared locally: ${chatCleared ? 'yes' : 'no'}`,
+        '',
+        '_Payload content was not copied, executed, decoded, or forwarded._',
+    ].join('\n');
+    try {
+        await sock.sendMessage(ownerJid, { text });
+        return true;
+    } catch (error) {
+        console.warn('[ANTIBUG] owner report failed:', error.message);
+        return false;
+    }
+}
+
+async function screenIncoming(sock, message, options = {}) {
     const from = message?.key?.remoteJid || '';
     if (!from || message?.key?.fromMe) return { blocked: false };
 
     const structural = inspectMessage(message);
     const isGroup = from.endsWith('@g.us');
     const sender = sourceFor(message);
-    const flooded = isGroup && rateCheck(from, sender);
+    const flooded = rateCheck(from, sender);
     const suspicious = structural.suspicious || flooded;
     if (!suspicious) return { blocked: false, structural };
 
     const group = isGroup ? database.getGroup(from) : {};
-    const enabled = isGroup ? group.antibug !== false : true;
+    const enabled = isGroup
+        ? group.antibug !== false
+        : options.personalEnabled === true;
     if (!enabled) return { blocked: false, suspicious: true, structural, flooded, disabled: true };
 
     const reason = flooded ? 'message rate exceeded' : structural.reason || 'malformed message structure';
-    const deleted = isGroup ? await deleteIncoming(sock, message) : false;
+    const deletedForMe = await deleteForBotOnly(sock, message);
+    // On a burst, clear the local chat range as a second containment step.
+    // This never sends a delete-for-everyone/revoke operation.
+    const chatCleared = flooded ? await clearChatForBotOnly(sock, message) : false;
+    const reported = await reportToOwner(
+        sock,
+        options.ownerJid,
+        options.phoneNumber,
+        message,
+        reason,
+        flooded,
+        deletedForMe,
+        chatCleared
+    );
+
     if (isGroup && canNotify(from)) {
         await sock.sendMessage(from, {
-            text: `🛡️ *AntiBug blocked a suspicious message.*${deleted ? ' It was deleted.' : ''}\nReason: ${reason}\n\nThis protection screens malformed structure and message floods; it does not inspect or execute payload content.`,
+            text: `🛡️ *AntiBug blocked a suspicious message.*${deletedForMe ? ' It was removed from the bot view only.' : ''}\nReason: ${reason}\n\nThis protection does not delete messages for other group members or inspect/execute payload content.`,
         }).catch(() => {});
     }
-    return { blocked: true, suspicious: true, structural, flooded, deleted, reason };
+    return {
+        blocked: true,
+        suspicious: true,
+        structural,
+        flooded,
+        deleted: deletedForMe,
+        deletedForMe,
+        chatCleared,
+        reported,
+        reason,
+    };
 }
 
 function clearRuntimeState() {
     rateBuckets.clear();
     notices.clear();
+    reports.clear();
 }
 
 module.exports = {
     inspectMessage,
     screenIncoming,
     clearRuntimeState,
-    limits: { MAX_DEPTH, MAX_NODES, MAX_KEYS_PER_OBJECT, MAX_ARRAY_ITEMS, MAX_STRING_BYTES, MAX_BINARY_BYTES, RATE_WINDOW_MS, RATE_LIMIT },
+    limits: {
+        MAX_DEPTH,
+        MAX_NODES,
+        MAX_KEYS_PER_OBJECT,
+        MAX_ARRAY_ITEMS,
+        MAX_STRING_BYTES,
+        MAX_BINARY_BYTES,
+        RATE_WINDOW_MS,
+        RATE_LIMIT,
+    },
 };
