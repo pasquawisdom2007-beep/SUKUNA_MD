@@ -106,12 +106,13 @@ function rateCheck(chatId, sender) {
     const key = `${chatId}:${sender}`;
     let bucket = rateBuckets.get(key);
     if (!bucket || now - bucket.startedAt > RATE_WINDOW_MS) bucket = { startedAt: now, count: 0 };
+    const wasQuarantined = (quarantines.get(key) || 0) > now;
     bucket.count += 1;
     rateBuckets.set(key, bucket);
     trimMap(rateBuckets, 4000);
     if (bucket.count > RATE_LIMIT) quarantines.set(key, now + QUARANTINE_MS);
     trimMap(quarantines, 4000);
-    return { exceeded: bucket.count > RATE_LIMIT, count: bucket.count, quarantinedUntil: quarantines.get(key) || 0 };
+    return { exceeded: bucket.count > RATE_LIMIT, count: bucket.count, newlyQuarantined: !wasQuarantined && bucket.count > RATE_LIMIT, quarantinedUntil: quarantines.get(key) || 0 };
 }
 function isQuarantined(chatId, sender) { return (quarantines.get(`${chatId}:${sender}`) || 0) > Date.now(); }
 function canNotify(chatId) { const now = Date.now(); const previous = notices.get(chatId) || 0; if (now - previous < NOTICE_COOLDOWN_MS) return false; notices.set(chatId, now); trimMap(notices, 1000); return true; }
@@ -176,6 +177,10 @@ async function screenIncoming(sock, message, options = {}) {
     const enabled = isGroup ? group.antibug !== false : options.personalEnabled === true;
     if (!enabled) return { blocked: false, suspicious: true, structural, flooded, disabled: true };
     const reason = flooded ? (rate.exceeded ? 'message rate exceeded' : 'sender/chat quarantine active') : structural.reason || 'malformed message structure';
+    // Once the circuit is open, discard additional flood items without
+    // launching another delete/report task for every packet.
+    const repeatFlood = flooded && !structural.suspicious && !rate.newlyQuarantined;
+    if (repeatFlood) return { blocked: true, suspicious: true, structural, flooded, quarantined: true, reason, containmentScheduled: false };
     // Critical availability property: the event loop is never held hostage by
     // chatModify/sendMessage. Production receive processing uses this mode.
     if (options.nonBlocking) {
