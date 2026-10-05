@@ -13,6 +13,12 @@ const MAX_BINARY_BYTES = 8 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 12 * 1024 * 1024;
 const MAX_MESSAGE_TYPES = 24;
 const MAX_JID_BYTES = 160;
+const MAX_MENTIONS = 64;
+const MAX_NATIVE_FLOW_BUTTONS = 20;
+const MAX_STICKER_PACK_ITEMS = 100;
+const MAX_EMBEDDED_JSON_BYTES = 64 * 1024;
+const MAX_MEDIA_DECLARED_BYTES = 128 * 1024 * 1024;
+const MAX_MEDIA_SECONDS = 24 * 60 * 60;
 const RATE_WINDOW_MS = 10_000;
 const RATE_LIMIT = 35;
 const QUARANTINE_MS = 30_000;
@@ -21,10 +27,25 @@ const REPORT_COOLDOWN_MS = 60_000;
 const rateBuckets = new Map();
 const quarantines = new Map();
 const reports = new Map();
+let activeContainments = 0;
+const MAX_ACTIVE_CONTAINMENTS = 16;
 
 function byteLength(value) { return Buffer.byteLength(String(value), 'utf8'); }
 function isBinary(value) { return Buffer.isBuffer(value) || value instanceof Uint8Array; }
 function trimMap(map, max) { while (map.size > max) map.delete(map.keys().next().value); }
+
+function safeEmbeddedJson(value, path) {
+    if (typeof value !== 'string') return null;
+    if (byteLength(value) > MAX_EMBEDDED_JSON_BYTES) return `oversized embedded JSON at ${path}`;
+    const trimmed = value.trim();
+    if (!trimmed || !/^[\[{]/.test(trimmed)) return null;
+    try {
+        JSON.parse(trimmed);
+    } catch (_) {
+        return `malformed embedded JSON at ${path}`;
+    }
+    return null;
+}
 
 function inspectValue(value, state, path = '$', depth = 0) {
     if (state.nodes++ > MAX_NODES) return `message structure exceeds ${MAX_NODES} nodes`;
@@ -46,6 +67,10 @@ function inspectValue(value, state, path = '$', depth = 0) {
         if (/paramsJson|buttons|nativeFlow|interactive|caption|text/i.test(path) && value.length > 96 * 1024) {
             return `oversized rich-message field at ${path}`;
         }
+        if (/paramsJson$/i.test(path)) {
+            const issue = safeEmbeddedJson(value, path);
+            if (issue) return issue;
+        }
         return null;
     }
 
@@ -62,6 +87,9 @@ function inspectValue(value, state, path = '$', depth = 0) {
 
     if (Array.isArray(value)) {
         if (value.length > MAX_ARRAY_ITEMS) return `oversized array at ${path}`;
+        if (/mentionedJid/i.test(path) && value.length > MAX_MENTIONS) return `too many mentions at ${path}`;
+        if (/nativeFlowMessage\.buttons|buttons$/i.test(path) && value.length > MAX_NATIVE_FLOW_BUTTONS) return `too many interactive buttons at ${path}`;
+        if (/sticker(s)?$/i.test(path) && value.length > MAX_STICKER_PACK_ITEMS) return `too many stickers at ${path}`;
         for (let i = 0; i < value.length; i += 1) {
             const issue = inspectValue(value[i], state, `${path}[${i}]`, depth + 1);
             if (issue) return issue;
@@ -74,7 +102,19 @@ function inspectValue(value, state, path = '$', depth = 0) {
     if (keys.length > MAX_KEYS_PER_OBJECT) return `oversized object at ${path}`;
     for (const key of keys) {
         if (key === '__proto__' || key === 'prototype' || key === 'constructor') return `unsafe object key at ${path}`;
-        const issue = inspectValue(value[key], state, `${path}.${key}`, depth + 1);
+        const childPath = `${path}.${key}`;
+        const child = value[key];
+        if (/degreesLatitude/i.test(key) && (typeof child !== 'number' || !Number.isFinite(child) || child < -90 || child > 90)) return `invalid latitude at ${childPath}`;
+        if (/degreesLongitude/i.test(key) && (typeof child !== 'number' || !Number.isFinite(child) || child < -180 || child > 180)) return `invalid longitude at ${childPath}`;
+        if (/^(fileLength|stickerPackSize)$/i.test(key)) {
+            const declared = Number(child);
+            if (!Number.isFinite(declared) || declared < 0 || declared > MAX_MEDIA_DECLARED_BYTES) return `invalid declared media size at ${childPath}`;
+        }
+        if (/^(seconds|duration)$/i.test(key)) {
+            const duration = Number(child);
+            if (!Number.isFinite(duration) || duration < 0 || duration > MAX_MEDIA_SECONDS) return `invalid media duration at ${childPath}`;
+        }
+        const issue = inspectValue(child, state, childPath, depth + 1);
         if (issue) return issue;
     }
     return null;
@@ -170,10 +210,18 @@ async function reportToOwner(sock, ownerJid, phoneNumber, message, reason, flood
 }
 
 async function contain(sock, message, options, reason, flooded) {
+    if (activeContainments >= MAX_ACTIVE_CONTAINMENTS) {
+        return { deletedForMe: false, chatCleared: false, reported: false, overloaded: true };
+    }
+    activeContainments += 1;
+    try {
     const deletedForMe = await deleteForBotOnly(sock, message);
     const chatCleared = flooded ? await clearChatForBotOnly(sock, message) : false;
     const reported = await reportToOwner(sock, options.ownerJid, options.phoneNumber, message, reason, flooded, deletedForMe, chatCleared);
     return { deletedForMe, chatCleared, reported };
+    } finally {
+        activeContainments -= 1;
+    }
 }
 
 async function screenIncoming(sock, message, options = {}) {
@@ -206,10 +254,10 @@ async function screenIncoming(sock, message, options = {}) {
     return { blocked: true, suspicious: true, structural, flooded, quarantined: circuitOpen || rate.exceeded, reason, ...containment, deleted: containment.deletedForMe };
 }
 
-function clearRuntimeState() { rateBuckets.clear(); quarantines.clear(); reports.clear(); }
+function clearRuntimeState() { rateBuckets.clear(); quarantines.clear(); reports.clear(); activeContainments = 0; }
 module.exports = {
     inspectMessage,
     screenIncoming,
     clearRuntimeState,
-    limits: { MAX_DEPTH, MAX_NODES, MAX_KEYS_PER_OBJECT, MAX_ARRAY_ITEMS, MAX_STRING_BYTES, MAX_BINARY_BYTES, MAX_TOTAL_BYTES, MAX_MESSAGE_TYPES, RATE_WINDOW_MS, RATE_LIMIT, QUARANTINE_MS, CONTAINMENT_TIMEOUT_MS },
+    limits: { MAX_DEPTH, MAX_NODES, MAX_KEYS_PER_OBJECT, MAX_ARRAY_ITEMS, MAX_STRING_BYTES, MAX_BINARY_BYTES, MAX_TOTAL_BYTES, MAX_MESSAGE_TYPES, MAX_MENTIONS, MAX_NATIVE_FLOW_BUTTONS, MAX_STICKER_PACK_ITEMS, MAX_EMBEDDED_JSON_BYTES, MAX_MEDIA_DECLARED_BYTES, MAX_MEDIA_SECONDS, RATE_WINDOW_MS, RATE_LIMIT, QUARANTINE_MS, CONTAINMENT_TIMEOUT_MS, MAX_ACTIVE_CONTAINMENTS },
 };

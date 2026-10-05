@@ -24,6 +24,21 @@ assert.equal(antibug.inspectMessage(invisiblePayload).suspicious, true);
 const richPayload = { key: { id: 'rich-1', remoteJid: '123@g.us' }, message: { interactiveMessage: { nativeFlowMessage: { messageParamsJson: 'x'.repeat(100 * 1024) } } } };
 assert.equal(antibug.inspectMessage(richPayload).suspicious, true);
 
+const malformedFlow = { key: { id: 'flow-1', remoteJid: '123@g.us' }, message: { interactiveResponseMessage: { nativeFlowResponseMessage: { paramsJson: '{not-valid-json' } } } };
+assert.equal(antibug.inspectMessage(malformedFlow).suspicious, true);
+
+const mentionFlood = { key: { id: 'mentions-1', remoteJid: '123@g.us' }, message: { extendedTextMessage: { text: 'hello', contextInfo: { mentionedJid: Array.from({ length: 65 }, (_, i) => `${i}@s.whatsapp.net`) } } } };
+assert.equal(antibug.inspectMessage(mentionFlood).suspicious, true);
+
+const stickerFlood = { key: { id: 'stickers-1', remoteJid: '123@g.us' }, message: { stickerPackMessage: { stickers: Array.from({ length: 101 }, () => ({ fileName: 'x.webp' })) } } };
+assert.equal(antibug.inspectMessage(stickerFlood).suspicious, true);
+
+const invalidLocation = { key: { id: 'location-1', remoteJid: '123@g.us' }, message: { locationMessage: { degreesLatitude: 999, degreesLongitude: 0 } } };
+assert.equal(antibug.inspectMessage(invalidLocation).suspicious, true);
+
+const impossibleMedia = { key: { id: 'media-1', remoteJid: '123@g.us' }, message: { audioMessage: { fileLength: '999999999999', seconds: 999999 } } };
+assert.equal(antibug.inspectMessage(impossibleMedia).suspicious, true);
+
 const tooManyTypes = { key: { id: 'types-1', remoteJid: '123@g.us' }, message: Object.fromEntries(Array.from({ length: 25 }, (_, i) => [`type${i}`, {}])) };
 assert.equal(antibug.inspectMessage(tooManyTypes).suspicious, true);
 
