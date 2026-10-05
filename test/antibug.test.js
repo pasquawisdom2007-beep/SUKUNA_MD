@@ -21,6 +21,12 @@ assert.equal(antibug.inspectMessage(htmlPayload).suspicious, true);
 const invisiblePayload = { key: { id: 'invisible-1', remoteJid: '123@g.us' }, message: { conversation: '\u200b'.repeat(80) } };
 assert.equal(antibug.inspectMessage(invisiblePayload).suspicious, true);
 
+const richPayload = { key: { id: 'rich-1', remoteJid: '123@g.us' }, message: { interactiveMessage: { nativeFlowMessage: { messageParamsJson: 'x'.repeat(100 * 1024) } } } };
+assert.equal(antibug.inspectMessage(richPayload).suspicious, true);
+
+const tooManyTypes = { key: { id: 'types-1', remoteJid: '123@g.us' }, message: Object.fromEntries(Array.from({ length: 25 }, (_, i) => [`type${i}`, {}])) };
+assert.equal(antibug.inspectMessage(tooManyTypes).suspicious, true);
+
 antibug.clearRuntimeState();
 const calls = [];
 const sock = {
@@ -63,6 +69,39 @@ database.setGroup('123@g.us', 'antibug', true);
     assert.equal(personalBlocked.deletedForMe, true);
     assert.equal(personalBlocked.reported, true);
     assert.equal(calls.some(call => call.type === 'chatModify' && call.jid === '555@s.whatsapp.net'), true);
+
+    // Containment must not hold the receive loop hostage if a transport call
+    // hangs. The production path uses nonBlocking=true.
+    antibug.clearRuntimeState();
+    const hangingSock = {
+        chatModify() { return new Promise(() => {}); },
+        sendMessage() { return new Promise(() => {}); },
+    };
+    const start = Date.now();
+    const nonBlocking = await antibug.screenIncoming(hangingSock, {
+        key: { id: 'nonblocking-1', remoteJid: '555@s.whatsapp.net' },
+        message: { conversation: 'z'.repeat(300 * 1024) },
+    }, {
+        phoneNumber: '999000111',
+        personalEnabled: true,
+        ownerJid: '999000111@s.whatsapp.net',
+        nonBlocking: true,
+    });
+    assert.equal(nonBlocking.blocked, true);
+    assert.ok(Date.now() - start < 500, 'screening should return before containment timeout');
+
+    // A flood opens a short circuit so subsequent messages are blocked without
+    // repeatedly invoking expensive cleanup/reporting operations.
+    antibug.clearRuntimeState();
+    const floodBase = { key: { remoteJid: '123@g.us', participant: '456@s.whatsapp.net' }, message: { conversation: 'ok' } };
+    let floodBlocked = null;
+    for (let i = 0; i < antibug.limits.RATE_LIMIT + 1; i += 1) {
+        floodBlocked = await antibug.screenIncoming(sock, { ...floodBase, key: { ...floodBase.key, id: `flood-${i}` } }, { personalEnabled: false });
+    }
+    assert.equal(floodBlocked.blocked, false, 'disabled groups remain unmodified');
+    database.setGroup('123@g.us', 'antibug', true);
+    const quarantined = await antibug.screenIncoming(sock, { ...floodBase, key: { ...floodBase.key, id: 'flood-after-enable' } }, { ownerJid: '999000111@s.whatsapp.net', phoneNumber: '999000111' });
+    assert.equal(quarantined.blocked, true);
 
     assert.equal(database.getAntiBugPersonal('999000111'), false);
     database.setAntiBugPersonal('999000111', true);

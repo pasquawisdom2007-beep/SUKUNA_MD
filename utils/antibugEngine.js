@@ -2,46 +2,59 @@
 
 const database = require('./database');
 
+// These are deliberately conservative parser/resource ceilings. The goal is to
+// reject pathological input before media, rich-message, or command code sees it.
 const MAX_DEPTH = 18;
 const MAX_NODES = 6000;
 const MAX_KEYS_PER_OBJECT = 160;
 const MAX_ARRAY_ITEMS = 1200;
 const MAX_STRING_BYTES = 256 * 1024;
 const MAX_BINARY_BYTES = 8 * 1024 * 1024;
+const MAX_TOTAL_BYTES = 12 * 1024 * 1024;
+const MAX_MESSAGE_TYPES = 24;
+const MAX_JID_BYTES = 160;
 const RATE_WINDOW_MS = 10_000;
 const RATE_LIMIT = 35;
+const QUARANTINE_MS = 30_000;
+const CONTAINMENT_TIMEOUT_MS = 2500;
 const NOTICE_COOLDOWN_MS = 60_000;
 const REPORT_COOLDOWN_MS = 60_000;
 const rateBuckets = new Map();
+const quarantines = new Map();
 const notices = new Map();
 const reports = new Map();
 
-function byteLength(value) {
-    return Buffer.byteLength(String(value), 'utf8');
-}
-
-function isBinary(value) {
-    return Buffer.isBuffer(value) || value instanceof Uint8Array;
-}
+function byteLength(value) { return Buffer.byteLength(String(value), 'utf8'); }
+function isBinary(value) { return Buffer.isBuffer(value) || value instanceof Uint8Array; }
+function trimMap(map, max) { while (map.size > max) map.delete(map.keys().next().value); }
 
 function inspectValue(value, state, path = '$', depth = 0) {
     if (state.nodes++ > MAX_NODES) return `message structure exceeds ${MAX_NODES} nodes`;
     if (depth > MAX_DEPTH) return `message nesting exceeds ${MAX_DEPTH} levels`;
-    if (value == null || typeof value === 'boolean' || typeof value === 'number') return null;
-    if (typeof value === 'bigint') return null;
+    if (value == null || typeof value === 'boolean' || typeof value === 'number' || typeof value === 'bigint') return null;
 
     if (typeof value === 'string') {
-        if (byteLength(value) > MAX_STRING_BYTES) return `oversized string at ${path}`;
-        if (/<\s*(?:script|iframe|object|embed|svg)\b|javascript\s*:|data\s*:\s*text\/html|\bon(?:error|load|click)\s*=/i.test(value)) {
+        const bytes = byteLength(value);
+        state.bytes += bytes;
+        if (bytes > MAX_STRING_BYTES) return `oversized string at ${path}`;
+        if (state.bytes > MAX_TOTAL_BYTES) return `message exceeds ${MAX_TOTAL_BYTES} bytes`;
+        if (/<\s*(?:script|iframe|object|embed|svg|style)\b|javascript\s*:|vbscript\s*:|data\s*:\s*text\/html|\bon(?:error|load|click|mouseover)\s*=/i.test(value)) {
             return `active HTML/script marker at ${path}`;
         }
         const invisibleCount = (value.match(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g) || []).length;
         if (invisibleCount > 64) return `excessive invisible/control characters at ${path}`;
+        // Rich-message JSON is parsed only by the command layer; reject it when
+        // it is unreasonably large or contains another active payload marker.
+        if (/paramsJson|buttons|nativeFlow|interactive|caption|text/i.test(path) && value.length > 96 * 1024) {
+            return `oversized rich-message field at ${path}`;
+        }
         return null;
     }
 
     if (isBinary(value)) {
+        state.bytes += value.byteLength;
         if (value.byteLength > MAX_BINARY_BYTES) return `oversized binary field at ${path}`;
+        if (state.bytes > MAX_TOTAL_BYTES) return `message exceeds ${MAX_TOTAL_BYTES} bytes`;
         return null;
     }
 
@@ -62,9 +75,7 @@ function inspectValue(value, state, path = '$', depth = 0) {
     try { keys = Object.keys(value); } catch (_) { return `unreadable object at ${path}`; }
     if (keys.length > MAX_KEYS_PER_OBJECT) return `oversized object at ${path}`;
     for (const key of keys) {
-        if (key === '__proto__' || key === 'prototype' || key === 'constructor') {
-            return `unsafe object key at ${path}`;
-        }
+        if (key === '__proto__' || key === 'prototype' || key === 'constructor') return `unsafe object key at ${path}`;
         const issue = inspectValue(value[key], state, `${path}.${key}`, depth + 1);
         if (issue) return issue;
     }
@@ -73,48 +84,38 @@ function inspectValue(value, state, path = '$', depth = 0) {
 
 function inspectMessage(message) {
     if (!message || typeof message !== 'object') return { suspicious: true, reason: 'message is not an object' };
-    if (!message.key || typeof message.key !== 'object') return { suspicious: true, reason: 'message key is missing' };
-    if (!message.message || typeof message.message !== 'object') return { suspicious: false, reason: null };
-    const state = { nodes: 0, seen: new WeakSet() };
+    const key = message.key;
+    if (!key || typeof key !== 'object') return { suspicious: true, reason: 'message key is missing' };
+    for (const field of ['remoteJid', 'id', 'participant', 'participantAlt']) {
+        if (key[field] != null && byteLength(key[field]) > MAX_JID_BYTES) return { suspicious: true, reason: `oversized message key field: ${field}` };
+    }
+    if (!message.message || typeof message.message !== 'object') return { suspicious: false, reason: null, nodes: 0, bytes: 0 };
+    const types = Object.keys(message.message);
+    if (types.length > MAX_MESSAGE_TYPES) return { suspicious: true, reason: `too many message types (${types.length})`, nodes: 0, bytes: 0 };
+    const state = { nodes: 0, bytes: 0, seen: new WeakSet() };
     const reason = inspectValue(message.message, state, '$.message');
-    return { suspicious: Boolean(reason), reason, nodes: state.nodes };
+    return { suspicious: Boolean(reason), reason, nodes: state.nodes, bytes: state.bytes };
 }
 
 function sourceFor(message) {
     return message?.key?.participant || message?.key?.participantAlt || message?.participant || message?.key?.remoteJid || 'unknown';
 }
-
+function sourceKey(message) { return `${message?.key?.remoteJid || 'unknown'}:${sourceFor(message)}`; }
 function rateCheck(chatId, sender) {
     const now = Date.now();
     const key = `${chatId}:${sender}`;
     let bucket = rateBuckets.get(key);
-    if (!bucket || now - bucket.startedAt > RATE_WINDOW_MS) {
-        bucket = { startedAt: now, count: 0 };
-        rateBuckets.set(key, bucket);
-    }
+    if (!bucket || now - bucket.startedAt > RATE_WINDOW_MS) bucket = { startedAt: now, count: 0 };
     bucket.count += 1;
-    while (rateBuckets.size > 4000) rateBuckets.delete(rateBuckets.keys().next().value);
-    return bucket.count > RATE_LIMIT;
+    rateBuckets.set(key, bucket);
+    trimMap(rateBuckets, 4000);
+    if (bucket.count > RATE_LIMIT) quarantines.set(key, now + QUARANTINE_MS);
+    trimMap(quarantines, 4000);
+    return { exceeded: bucket.count > RATE_LIMIT, count: bucket.count, quarantinedUntil: quarantines.get(key) || 0 };
 }
-
-function canNotify(chatId) {
-    const now = Date.now();
-    const previous = notices.get(chatId) || 0;
-    if (now - previous < NOTICE_COOLDOWN_MS) return false;
-    notices.set(chatId, now);
-    while (notices.size > 1000) notices.delete(notices.keys().next().value);
-    return true;
-}
-
-function canReport(key) {
-    const now = Date.now();
-    const previous = reports.get(key) || 0;
-    if (now - previous < REPORT_COOLDOWN_MS) return false;
-    reports.set(key, now);
-    while (reports.size > 2000) reports.delete(reports.keys().next().value);
-    return true;
-}
-
+function isQuarantined(chatId, sender) { return (quarantines.get(`${chatId}:${sender}`) || 0) > Date.now(); }
+function canNotify(chatId) { const now = Date.now(); const previous = notices.get(chatId) || 0; if (now - previous < NOTICE_COOLDOWN_MS) return false; notices.set(chatId, now); trimMap(notices, 1000); return true; }
+function canReport(key) { const now = Date.now(); const previous = reports.get(key) || 0; if (now - previous < REPORT_COOLDOWN_MS) return false; reports.set(key, now); trimMap(reports, 2000); return true; }
 function timestampNumber(value) {
     if (value == null) return Math.floor(Date.now() / 1000);
     if (typeof value?.toNumber === 'function') return value.toNumber();
@@ -123,156 +124,72 @@ function timestampNumber(value) {
     return Number.isFinite(number) ? number : Math.floor(Date.now() / 1000);
 }
 
-/**
- * Remove the message from this bot's local chat view only. This deliberately
- * does not send a revoke/delete-for-everyone protocol message.
- */
+function withTimeout(promise, ms) {
+    return Promise.race([
+        Promise.resolve(promise).then(() => true),
+        new Promise(resolve => setTimeout(() => resolve(false), ms)),
+    ]).catch(() => false);
+}
 async function deleteForBotOnly(sock, message) {
     const key = message?.key;
     if (!key?.id || !key.remoteJid || typeof sock?.chatModify !== 'function') return false;
-    try {
-        await sock.chatModify({
-            deleteForMe: {
-                key: {
-                    remoteJid: key.remoteJid,
-                    fromMe: Boolean(key.fromMe),
-                    id: key.id,
-                    ...(key.participant ? { participant: key.participant } : {}),
-                    ...(key.participantAlt ? { participantAlt: key.participantAlt } : {}),
-                },
-                timestamp: timestampNumber(message.messageTimestamp),
-                deleteMedia: true,
-            },
-        }, key.remoteJid);
-        return true;
-    } catch (error) {
-        console.warn('[ANTIBUG] could not remove suspicious message from bot view:', error.message);
-        return false;
-    }
+    return withTimeout(sock.chatModify({ deleteForMe: { key: { remoteJid: key.remoteJid, fromMe: Boolean(key.fromMe), id: key.id, ...(key.participant ? { participant: key.participant } : {}), ...(key.participantAlt ? { participantAlt: key.participantAlt } : {}) }, timestamp: timestampNumber(message.messageTimestamp), deleteMedia: true } }, key.remoteJid), CONTAINMENT_TIMEOUT_MS);
 }
-
 async function clearChatForBotOnly(sock, message) {
     const key = message?.key;
     if (!key?.id || !key.remoteJid || typeof sock?.chatModify !== 'function') return false;
-    try {
-        await sock.chatModify({
-            clear: {
-                lastMessages: [{
-                    key: {
-                        remoteJid: key.remoteJid,
-                        fromMe: Boolean(key.fromMe),
-                        id: key.id,
-                        ...(key.participant ? { participant: key.participant } : {}),
-                    },
-                    messageTimestamp: timestampNumber(message.messageTimestamp),
-                }],
-            },
-        }, key.remoteJid);
-        return true;
-    } catch (error) {
-        console.warn('[ANTIBUG] could not clear the bot-local chat view:', error.message);
-        return false;
-    }
+    return withTimeout(sock.chatModify({ clear: { lastMessages: [{ key: { remoteJid: key.remoteJid, fromMe: Boolean(key.fromMe), id: key.id, ...(key.participant ? { participant: key.participant } : {}) }, messageTimestamp: timestampNumber(message.messageTimestamp) }] } }, key.remoteJid), CONTAINMENT_TIMEOUT_MS);
 }
-
 async function reportToOwner(sock, ownerJid, phoneNumber, message, reason, flooded, localDeleted, chatCleared) {
     if (!ownerJid || typeof sock?.sendMessage !== 'function') return false;
     const chat = message?.key?.remoteJid || 'unknown';
-    const reportKey = `${phoneNumber || ownerJid}:${chat}`;
-    if (!canReport(reportKey)) return false;
+    if (!canReport(`${phoneNumber || ownerJid}:${chat}`)) return false;
     const scope = chat.endsWith('@g.us') ? 'group' : 'personal DM';
-    const sender = sourceFor(message);
-    const text = [
-        '🛡️ *AntiBug security report*',
-        '',
-        `Scope: *${scope}*`,
-        `Chat: ${chat}`,
-        `Sender: ${sender}`,
-        `Reason: ${reason}`,
-        `Flood detected: ${flooded ? 'yes' : 'no'}`,
-        `Removed from bot view: ${localDeleted ? 'yes' : 'no'}`,
-        `Chat cleared locally: ${chatCleared ? 'yes' : 'no'}`,
-        '',
-        '_Payload content was not copied, executed, decoded, or forwarded._',
-    ].join('\n');
-    try {
-        await sock.sendMessage(ownerJid, { text });
-        return true;
-    } catch (error) {
-        console.warn('[ANTIBUG] owner report failed:', error.message);
-        return false;
+    const text = ['🛡️ *AntiBug security report*', '', `Scope: *${scope}*`, `Chat: ${chat}`, `Sender: ${sourceFor(message)}`, `Reason: ${reason}`, `Flood/circuit breaker: ${flooded ? 'yes' : 'no'}`, `Removed locally: ${localDeleted ? 'yes' : 'no'}`, `Chat cleared locally: ${chatCleared ? 'yes' : 'no'}`, '', '_Payload content was not copied, executed, decoded, or forwarded._'].join('\n');
+    return withTimeout(sock.sendMessage(ownerJid, { text }), CONTAINMENT_TIMEOUT_MS);
+}
+
+async function contain(sock, message, options, reason, flooded) {
+    const from = message?.key?.remoteJid || '';
+    const deletedForMe = await deleteForBotOnly(sock, message);
+    const chatCleared = flooded ? await clearChatForBotOnly(sock, message) : false;
+    const reported = await reportToOwner(sock, options.ownerJid, options.phoneNumber, message, reason, flooded, deletedForMe, chatCleared);
+    if (from.endsWith('@g.us') && canNotify(from) && typeof sock?.sendMessage === 'function') {
+        await withTimeout(sock.sendMessage(from, { text: `🛡️ *AntiBug blocked a suspicious message.*${deletedForMe ? ' It was removed from the bot view only.' : ''}\nReason: ${reason}\n\nThis protection never deletes messages for other members and never forwards payload content.` }), CONTAINMENT_TIMEOUT_MS);
     }
+    return { deletedForMe, chatCleared, reported };
 }
 
 async function screenIncoming(sock, message, options = {}) {
     const from = message?.key?.remoteJid || '';
     if (!from || message?.key?.fromMe) return { blocked: false };
-
-    const structural = inspectMessage(message);
-    const isGroup = from.endsWith('@g.us');
+    let structural;
+    try { structural = inspectMessage(message); } catch (_) { structural = { suspicious: true, reason: 'inspection failed safely' }; }
     const sender = sourceFor(message);
-    const flooded = rateCheck(from, sender);
+    const rate = rateCheck(from, sender);
+    const circuitOpen = isQuarantined(from, sender);
+    const flooded = rate.exceeded || circuitOpen;
     const suspicious = structural.suspicious || flooded;
-    if (!suspicious) return { blocked: false, structural };
-
+    if (!suspicious) return { blocked: false, structural, rate };
+    const isGroup = from.endsWith('@g.us');
     const group = isGroup ? database.getGroup(from) : {};
-    const enabled = isGroup
-        ? group.antibug !== false
-        : options.personalEnabled === true;
+    const enabled = isGroup ? group.antibug !== false : options.personalEnabled === true;
     if (!enabled) return { blocked: false, suspicious: true, structural, flooded, disabled: true };
-
-    const reason = flooded ? 'message rate exceeded' : structural.reason || 'malformed message structure';
-    const deletedForMe = await deleteForBotOnly(sock, message);
-    // On a burst, clear the local chat range as a second containment step.
-    // This never sends a delete-for-everyone/revoke operation.
-    const chatCleared = flooded ? await clearChatForBotOnly(sock, message) : false;
-    const reported = await reportToOwner(
-        sock,
-        options.ownerJid,
-        options.phoneNumber,
-        message,
-        reason,
-        flooded,
-        deletedForMe,
-        chatCleared
-    );
-
-    if (isGroup && canNotify(from)) {
-        await sock.sendMessage(from, {
-            text: `🛡️ *AntiBug blocked a suspicious message.*${deletedForMe ? ' It was removed from the bot view only.' : ''}\nReason: ${reason}\n\nThis protection does not delete messages for other group members or inspect/execute payload content.`,
-        }).catch(() => {});
+    const reason = flooded ? (rate.exceeded ? 'message rate exceeded' : 'sender/chat quarantine active') : structural.reason || 'malformed message structure';
+    // Critical availability property: the event loop is never held hostage by
+    // chatModify/sendMessage. Production receive processing uses this mode.
+    if (options.nonBlocking) {
+        void contain(sock, message, options, reason, flooded).catch(() => {});
+        return { blocked: true, suspicious: true, structural, flooded, quarantined: circuitOpen || rate.exceeded, reason, containmentScheduled: true };
     }
-    return {
-        blocked: true,
-        suspicious: true,
-        structural,
-        flooded,
-        deleted: deletedForMe,
-        deletedForMe,
-        chatCleared,
-        reported,
-        reason,
-    };
+    const containment = await contain(sock, message, options, reason, flooded);
+    return { blocked: true, suspicious: true, structural, flooded, quarantined: circuitOpen || rate.exceeded, reason, ...containment, deleted: containment.deletedForMe };
 }
 
-function clearRuntimeState() {
-    rateBuckets.clear();
-    notices.clear();
-    reports.clear();
-}
-
+function clearRuntimeState() { rateBuckets.clear(); quarantines.clear(); notices.clear(); reports.clear(); }
 module.exports = {
     inspectMessage,
     screenIncoming,
     clearRuntimeState,
-    limits: {
-        MAX_DEPTH,
-        MAX_NODES,
-        MAX_KEYS_PER_OBJECT,
-        MAX_ARRAY_ITEMS,
-        MAX_STRING_BYTES,
-        MAX_BINARY_BYTES,
-        RATE_WINDOW_MS,
-        RATE_LIMIT,
-    },
+    limits: { MAX_DEPTH, MAX_NODES, MAX_KEYS_PER_OBJECT, MAX_ARRAY_ITEMS, MAX_STRING_BYTES, MAX_BINARY_BYTES, MAX_TOTAL_BYTES, MAX_MESSAGE_TYPES, RATE_WINDOW_MS, RATE_LIMIT, QUARANTINE_MS, CONTAINMENT_TIMEOUT_MS },
 };
