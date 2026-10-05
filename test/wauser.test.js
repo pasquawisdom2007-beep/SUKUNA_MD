@@ -21,45 +21,45 @@ test('wauser checks numbers and caps requests at 30 results', async () => {
         reply: async text => { response = text; },
     });
     assert.equal(requested.length, 30);
-    assert.match(response, /WhatsApp Number Search/);
+    assert.match(response, /Global WhatsApp Number Search/);
     assert.match(response, /30\/35 requested/);
 });
 
-test('wauser searches known contacts case-insensitively', async () => {
-    const sock = { __sukunaContacts: new Map([
-        ['2348012345678@s.whatsapp.net', { id: '2348012345678@s.whatsapp.net', name: 'Johnathan Doe' }],
-        ['2348012345679@s.whatsapp.net', { id: '2348012345679@s.whatsapp.net', notify: 'Jane' }],
-    ]) };
-    let response = '';
-    await command.execute({
-        sock,
-        args: ['john'],
-        isOwner: false,
-        isAdmin: true,
-        reply: async text => { response = text; },
-    });
-    assert.match(response, /Johnathan Doe/);
-    assert.match(response, /\+2348012345678/);
-});
-
-test('wauser falls back to exact WhatsApp username lookup', async () => {
+test('wauser performs global exact username lookup', async () => {
+    let requested = '';
     const sock = {
-        __sukunaContacts: new Map(),
         async findUserByUsername(username) {
-            assert.equal(username, 'john');
-            return { jid: '2348012345680@s.whatsapp.net', contact: true };
+            requested = username;
+            return { jid: '2348012345678@s.whatsapp.net', contact: true };
         },
     };
     let response = '';
     await command.execute({
         sock,
         args: ['@John'],
+        isOwner: false,
+        isAdmin: true,
+        reply: async text => { response = text; },
+    });
+    assert.equal(requested, 'john');
+    assert.match(response, /Global WhatsApp User Result/);
+    assert.match(response, /\+2348012345678/);
+});
+
+test('wauser does not use availability results as person results', async () => {
+    const sock = {
+        async findUserByUsername() { return null; },
+    };
+    let response = '';
+    await command.execute({
+        sock,
+        args: ['john'],
         isOwner: true,
         isAdmin: false,
         reply: async text => { response = text; },
     });
-    assert.match(response, /@john/);
-    assert.match(response, /\+2348012345680/);
+    assert.match(response, /No global WhatsApp account/);
+    assert.match(response, /availability/);
 });
 
 test('wauser rejects non-admin callers before revealing identifiers', async () => {
