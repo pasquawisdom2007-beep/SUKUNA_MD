@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="34" viewBox="0 0 900 34" role="img" aria-label="Glowing red divider">
+  <defs>
+    <filter id="glow" x="-20%" y="-200%" width="140%" height="500%">
+      <feGaussianBlur stdDeviation="3.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <linearGradient id="line" x1="0" x2="1">
+      <stop offset="0" stop-color="#3b050b" stop-opacity="0"/>
+      <stop offset="0.16" stop-color="#7f1d1d"/>
+      <stop offset="0.5" stop-color="#ff1f3d"/>
+      <stop offset="0.84" stop-color="#7f1d1d"/>
+      <stop offset="1" stop-color="#3b050b" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <path d="M35 17H865" stroke="#ef233c" stroke-width="2" opacity=".42" filter="url(#glow)"/>
+  <path d="M35 17H865" stroke="url(#line)" stroke-width="2.4" stroke-linecap="round" filter="url(#glow)"/>
+  <circle cx="35" cy="17" r="3" fill="#ff4960" filter="url(#glow)"/>
+  <circle cx="865" cy="17" r="3" fill="#ff4960" filter="url(#glow)"/>
+</svg>

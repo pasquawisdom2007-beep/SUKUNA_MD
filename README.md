@@ -1,25 +1,29 @@
 <p align="center">
-  <img src="./assets/branding/sukuna-md-title.svg" width="720" alt="SUKUNA MD by PASQUA">
+  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=700&size=34&duration=3000&pause=800&color=DC2626&center=true&vCenter=true&width=760&lines=SUKUNA+MD+%7C+SUKUNA+LIFE%3B+PASQUA+TECH+%7C+WHATSAPP+MD+BOT%3B+FAST+%C2%B7+STABLE+%C2%B7+SECURE%3B+UNLEASH+THE+TRUE+POWER" alt="Sukuna MD Sukuna Life typing animation" />
+</p>
+
+<p align="center">
+  <img src="./assets/branding/sukuna-red-glow-line.svg" width="760" alt="Glowing red divider">
 </p>
 
 <p align="center">
   <a href="https://github.com/pasquawisdom2007-beep/SUKUNA_MD">
-    <img src="./assets/branding/sukuna-md-visual.png" width="520" alt="Sukuna MD red-eye visual by PASQUA">
+    <img src="./assets/branding/sukuna-life.jpg" width="620" alt="Sukuna Life artwork for SUKUNA MD by PASQUA">
   </a>
 </p>
 
 <p align="center">
-  <em>The King of Curses — a panel-paired WhatsApp MD bot.</em>
+  <img src="./assets/branding/sukuna-red-glow-line.svg" width="760" alt="Glowing red divider">
 </p>
+
+<p align="center"><strong>╔══ SUKUNA LIFE // PASQUA TECH ══╗</strong><br><em>◈ CURSED ENERGY ONLINE · NATIVE POWER · NO BLUR ◈</em><br><strong>╚══ THE KING OF CURSES · WHATSAPP MD ══╝</strong></p>
 
 <p align="center">
-  <a href="https://github.com/pasquawisdom2007-beep/SUKUNA_MD/stargazers"><img src="https://img.shields.io/github/stars/pasquawisdom2007-beep/SUKUNA_MD?style=for-the-badge&color=8b5cf6" alt="GitHub stars"></a>
-  <a href="https://github.com/pasquawisdom2007-beep/SUKUNA_MD/network/members"><img src="https://img.shields.io/github/forks/pasquawisdom2007-beep/SUKUNA_MD?style=for-the-badge&color=06b6d4" alt="GitHub forks"></a>
-  <a href="https://github.com/pasquawisdom2007-beep/SUKUNA_MD/watchers"><img src="https://img.shields.io/github/watchers/pasquawisdom2007-beep/SUKUNA_MD?style=for-the-badge&color=f97316" alt="GitHub watchers"></a>
-  <a href="https://github.com/pasquawisdom2007-beep/SUKUNA_MD"><img src="https://img.shields.io/github/repo-size/pasquawisdom2007-beep/SUKUNA_MD?style=for-the-badge&color=22c55e" alt="Repository size"></a>
+  <a href="https://github.com/pasquawisdom2007-beep/SUKUNA_MD/stargazers"><img src="https://img.shields.io/github/stars/pasquawisdom2007-beep/SUKUNA_MD?style=for-the-badge&color=dc2626&labelColor=111111" alt="GitHub stars"></a>
+  <a href="https://github.com/pasquawisdom2007-beep/SUKUNA_MD/network/members"><img src="https://img.shields.io/github/forks/pasquawisdom2007-beep/SUKUNA_MD?style=for-the-badge&color=dc2626&labelColor=111111" alt="GitHub forks"></a>
+  <a href="https://github.com/pasquawisdom2007-beep/SUKUNA_MD/watchers"><img src="https://img.shields.io/github/watchers/pasquawisdom2007-beep/SUKUNA_MD?style=for-the-badge&color=dc2626&labelColor=111111" alt="GitHub watchers"></a>
+  <a href="https://github.com/pasquawisdom2007-beep/SUKUNA_MD"><img src="https://img.shields.io/github/repo-size/pasquawisdom2007-beep/SUKUNA_MD?style=for-the-badge&color=dc2626&labelColor=111111" alt="Repository size"></a>
 </p>
-
-<p align="center"><sub>Text animation first. Sukuna visual immediately after.</sub></p>
 
 <p align="center">
   <a href="https://pair-site-wmte.onrender.com" target="_blank">
@@ -35,7 +39,7 @@
 
 **SUKUNA MD** is a multi-user WhatsApp bot built around panel-friendly pairing, modular commands, group administration, utilities, media tools, and independent protection engines. The project is maintained by **PASQUA** and uses the Pasqua Baileys fork configured by the repository.
 
-The visual identity in this README uses a text-only animated title above the new red-eye Sukuna artwork. The title is rendered exactly as **SUKUNA MD** and **by PASQUA**, with a black-and-crimson presentation that remains lightweight and repository-friendly.
+The visual identity in this README uses a red typing animation, glowing crimson dividers, and Sukuna Life artwork. The presentation is kept lightweight and repository-friendly while matching the black-and-crimson PASQUA TECH style.
 
 ## Highlights
 
@@ -208,8 +212,10 @@ The README branding files are kept in [`assets/branding`](./assets/branding):
 
 | File | Purpose |
 |---|---|
-| [`sukuna-md-title.svg`](./assets/branding/sukuna-md-title.svg) | Text-only animated title shown before the hero image |
-| [`sukuna-md-visual.png`](./assets/branding/sukuna-md-visual.png) | New red-eye Sukuna visual used as the README hero image |
+| [`sukuna-red-glow-line.svg`](./assets/branding/sukuna-red-glow-line.svg) | Glowing crimson divider placed above and below the hero image |
+| [`sukuna-life.jpg`](./assets/branding/sukuna-life.jpg) | Sukuna Life artwork used as the README hero image |
+| [`sukuna-md-title.svg`](./assets/branding/sukuna-md-title.svg) | Legacy branding asset retained for compatibility |
+| [`sukuna-md-visual.png`](./assets/branding/sukuna-md-visual.png) | Legacy red-eye visual retained for compatibility |
 
 ## Credits
 
