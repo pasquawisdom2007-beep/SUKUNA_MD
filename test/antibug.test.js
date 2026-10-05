@@ -47,7 +47,10 @@ database.setGroup('123@g.us', 'antibug', true);
     assert.equal(blocked.reported, true);
     assert.equal(calls.some(call => call.type === 'chatModify' && call.content.deleteForMe), true);
     assert.equal(calls.some(call => call.type === 'sendMessage' && call.jid === '999000111@s.whatsapp.net'), true);
-    assert.equal(calls.some(call => call.type === 'sendMessage' && call.jid === '123@g.us'), true);
+    assert.equal(calls.some(call => call.type === 'sendMessage' && call.jid === '123@g.us'), false);
+    const firstOwnerReport = calls.find(call => call.type === 'sendMessage' && call.jid === '999000111@s.whatsapp.net');
+    assert.match(firstOwnerReport.content.text, /SECURITY INCIDENT/);
+    assert.match(firstOwnerReport.content.text, /sent privately to the owner/);
 
     antibug.clearRuntimeState();
     const disabled = { ...oversized, key: { ...oversized.key, id: 'disabled-1' } };

@@ -17,11 +17,9 @@ const RATE_WINDOW_MS = 10_000;
 const RATE_LIMIT = 35;
 const QUARANTINE_MS = 30_000;
 const CONTAINMENT_TIMEOUT_MS = 2500;
-const NOTICE_COOLDOWN_MS = 60_000;
 const REPORT_COOLDOWN_MS = 60_000;
 const rateBuckets = new Map();
 const quarantines = new Map();
-const notices = new Map();
 const reports = new Map();
 
 function byteLength(value) { return Buffer.byteLength(String(value), 'utf8'); }
@@ -115,7 +113,6 @@ function rateCheck(chatId, sender) {
     return { exceeded: bucket.count > RATE_LIMIT, count: bucket.count, newlyQuarantined: !wasQuarantined && bucket.count > RATE_LIMIT, quarantinedUntil: quarantines.get(key) || 0 };
 }
 function isQuarantined(chatId, sender) { return (quarantines.get(`${chatId}:${sender}`) || 0) > Date.now(); }
-function canNotify(chatId) { const now = Date.now(); const previous = notices.get(chatId) || 0; if (now - previous < NOTICE_COOLDOWN_MS) return false; notices.set(chatId, now); trimMap(notices, 1000); return true; }
 function canReport(key) { const now = Date.now(); const previous = reports.get(key) || 0; if (now - previous < REPORT_COOLDOWN_MS) return false; reports.set(key, now); trimMap(reports, 2000); return true; }
 function timestampNumber(value) {
     if (value == null) return Math.floor(Date.now() / 1000);
@@ -145,19 +142,37 @@ async function reportToOwner(sock, ownerJid, phoneNumber, message, reason, flood
     if (!ownerJid || typeof sock?.sendMessage !== 'function') return false;
     const chat = message?.key?.remoteJid || 'unknown';
     if (!canReport(`${phoneNumber || ownerJid}:${chat}`)) return false;
-    const scope = chat.endsWith('@g.us') ? 'group' : 'personal DM';
-    const text = ['🛡️ *AntiBug security report*', '', `Scope: *${scope}*`, `Chat: ${chat}`, `Sender: ${sourceFor(message)}`, `Reason: ${reason}`, `Flood/circuit breaker: ${flooded ? 'yes' : 'no'}`, `Removed locally: ${localDeleted ? 'yes' : 'no'}`, `Chat cleared locally: ${chatCleared ? 'yes' : 'no'}`, '', '_Payload content was not copied, executed, decoded, or forwarded._'].join('\n');
+    const scope = chat.endsWith('@g.us') ? 'Group' : 'Personal chat';
+    const reportTime = new Date().toISOString();
+    const text = [
+        '🛡️ *SUKUNA ANTIBUG — SECURITY INCIDENT*',
+        '━━━━━━━━━━━━━━━━━━━━',
+        '',
+        `*Status:* Contained`,
+        `*Time:* ${reportTime}`,
+        `*Scope:* ${scope}`,
+        `*Chat:* ${chat}`,
+        `*Source:* ${sourceFor(message)}`,
+        '',
+        '*Detection*',
+        `• ${reason}`,
+        `• Flood circuit: ${flooded ? 'activated' : 'not activated'}`,
+        '',
+        '*Actions taken*',
+        `• Local removal: ${localDeleted ? 'completed' : 'not completed'}`,
+        `• Local chat cleanup: ${chatCleared ? 'completed' : 'not required'}`,
+        '• Message processing: stopped before commands/media handling',
+        '',
+        '_The suspicious payload was not copied, executed, decoded, or forwarded._',
+        '_This report was sent privately to the owner._',
+    ].join('\n');
     return withTimeout(sock.sendMessage(ownerJid, { text }), CONTAINMENT_TIMEOUT_MS);
 }
 
 async function contain(sock, message, options, reason, flooded) {
-    const from = message?.key?.remoteJid || '';
     const deletedForMe = await deleteForBotOnly(sock, message);
     const chatCleared = flooded ? await clearChatForBotOnly(sock, message) : false;
     const reported = await reportToOwner(sock, options.ownerJid, options.phoneNumber, message, reason, flooded, deletedForMe, chatCleared);
-    if (from.endsWith('@g.us') && canNotify(from) && typeof sock?.sendMessage === 'function') {
-        await withTimeout(sock.sendMessage(from, { text: `🛡️ *AntiBug blocked a suspicious message.*${deletedForMe ? ' It was removed from the bot view only.' : ''}\nReason: ${reason}\n\nThis protection never deletes messages for other members and never forwards payload content.` }), CONTAINMENT_TIMEOUT_MS);
-    }
     return { deletedForMe, chatCleared, reported };
 }
 
@@ -191,7 +206,7 @@ async function screenIncoming(sock, message, options = {}) {
     return { blocked: true, suspicious: true, structural, flooded, quarantined: circuitOpen || rate.exceeded, reason, ...containment, deleted: containment.deletedForMe };
 }
 
-function clearRuntimeState() { rateBuckets.clear(); quarantines.clear(); notices.clear(); reports.clear(); }
+function clearRuntimeState() { rateBuckets.clear(); quarantines.clear(); reports.clear(); }
 module.exports = {
     inspectMessage,
     screenIncoming,
