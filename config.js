@@ -66,6 +66,10 @@ module.exports = {
     apiKeys: {
         openai: process.env.OPENAI_API_KEY || '',
         weather: process.env.WEATHER_API_KEY || '',
+        // Paste a Cartesia key here for a private deployment, or preferably
+        // set CARTESIA_API_KEY in the hosting panel. Never publish a real key
+        // in a public repository.
+        cartesia: process.env.CARTESIA_API_KEY || 'PASTE_CARTESIA_API_KEY_HERE',
         imgbb: process.env.IMGBB_API_KEY || 'dada6d77f27b31a3f28c30f61728cedf',
         klipy: process.env.KLIPY_API_KEY || 'x98VATj2HVtGsRNU3ca07NZFreZL22DUD5NMbXillsC4yTGuWR40E1H9SUJc5uS9',
         // BILLIE_MD uses remove.bg for this command. Override with

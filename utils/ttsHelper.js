@@ -10,6 +10,7 @@
 const fs = require('fs');
 const { spawn } = require('child_process');
 const axios = require('axios');
+const config = require('../config');
 
 const CARTESIA_URL = 'https://api.cartesia.ai/tts/bytes';
 const CARTESIA_VERSION = '2026-08-14';
@@ -57,11 +58,16 @@ function stripVoiceMarkers(text) {
 }
 
 function hasCartesiaKey() {
-    return Boolean(String(process.env.CARTESIA_API_KEY || '').trim());
+    return Boolean(getCartesiaKey());
+}
+
+function getCartesiaKey() {
+    const value = String(process.env.CARTESIA_API_KEY || config.apiKeys?.cartesia || '').trim();
+    return value && !/^PASTE_CARTESIA_API_KEY_HERE$/i.test(value) ? value : '';
 }
 
 async function fetchCartesiaMp3(text) {
-    const apiKey = String(process.env.CARTESIA_API_KEY || '').trim();
+    const apiKey = getCartesiaKey();
     if (!apiKey || !text) return null;
     const response = await fetch(CARTESIA_URL, {
         method: 'POST',

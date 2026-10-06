@@ -294,3 +294,5 @@ Enable voice replies per chat:
 - `.chatbot voice on` / `.chatbot voice off` — group Hinatu chatbot
 
 Cartesia’s `[laughter]` nonverbalism is used when the AI is genuinely amused, producing an actual laugh or chuckle in the voice instead of speaking “lol”. Text-only replies hide the internal marker.
+
+If the host does not provide environment variables, open `config.js` and replace `PASTE_CARTESIA_API_KEY_HERE` in `apiKeys.cartesia` with the key before starting the bot. Keep that edited file private and do not push it to a public fork.
