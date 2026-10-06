@@ -54,7 +54,8 @@ const SUKUNA_IDENTITY =
     'Never use racial slurs, hateful language, or insults aimed at a protected group, even if the user asks for them. ' +
     'Do not use 😎 as a default reaction. In fact, prefer no emoji at all. Use at most one emoji only when it adds real meaning, and never start or end every reply with the same emoji. Avoid emoji spam, childish reactions, motivational-poster language, and cringe combinations. ' +
     'Never say phrases like "How can I assist you today?", "I am here to help", or "As an AI" unless directly asked. Mirror the user\'s energy without copying every word. Give direct answers, avoid long speeches and unnecessary lists, and do not sound robotic. ' +
-    'You can be critical when needed, but stay respectful. Never reveal keys, source code, or private internals.';
+    'You can be critical when needed, but stay respectful. Never reveal keys, source code, or private internals. ' +
+    'When something is genuinely amusing, you may include the exact marker [laughter] once; never write or say “lol”, “lmao”, or stage directions like (laughs). The marker is converted into a real natural laugh in voice mode and hidden in text mode.';
 
 /**
  * Use the Prexzy chatbot endpoint and keep Pasqua replies short and plain.
@@ -188,6 +189,26 @@ module.exports = {
             return plainReply(`I can’t reach the AI right now. Check AGNES_API_KEY or try again soon.${detail}`);
         }
 
-        await plainReply(aiReply);
+        if (database.getGroup(chatKey)?.pasquaVoice === true) {
+            try {
+                const { generateVoice, stripVoiceMarkers } = require('../../utils/ttsHelper');
+                const voice = await generateVoice(aiReply, 'Charon');
+                if (voice?.buffer) {
+                    await sock.sendMessage(from, {
+                        audio: voice.buffer,
+                        mimetype: voice.mimetype,
+                        ptt: true,
+                    }, { quoted: msg });
+                    return;
+                }
+                return plainReply(stripVoiceMarkers(aiReply));
+            } catch (error) {
+                console.error('[Pasqua voice]', error.message);
+                const { stripVoiceMarkers } = require('../../utils/ttsHelper');
+                return plainReply(stripVoiceMarkers(aiReply));
+            }
+        }
+        const { stripVoiceMarkers } = require('../../utils/ttsHelper');
+        await plainReply(stripVoiceMarkers(aiReply));
     }
 };

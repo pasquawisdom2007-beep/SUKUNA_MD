@@ -274,3 +274,23 @@ Open [Spaceify Client](https://client.spaceify.eu), create a Node.js deployment 
 ### Short session IDs
 
 The pair site stores the complete auth bundle in Upstash and sends a short `Pasqua~...` value. `SUKUNA_MD` checks the primary pair site first, then the backup pair site if the primary is unavailable or does not contain the token, restores all auth files, and then starts the WhatsApp session. The Redis URL and token belong only in the pair-site host’s private environment; they must not be copied into downloaded bot scripts or committed to GitHub.
+
+
+## Pasqua AI voice replies
+
+Pasqua and Hinatu can reply as WhatsApp voice notes using Cartesia Sonic. Configure these variables in the hosting provider’s environment panel (never commit the API key):
+
+```env
+CARTESIA_API_KEY=sk_car_...
+CARTESIA_VOICE_ID=ef191366-f52f-447a-a398-ed8c0f2943a1
+CARTESIA_MODEL=sonic-3.6
+CARTESIA_LANGUAGE=en
+```
+
+Enable voice replies per chat:
+
+- `.pasqua voice on` / `.pasqua voice off` — Pasqua AI
+- `.chatbotdm voice on` / `.chatbotdm voice off` — private Hinatu chatbot
+- `.chatbot voice on` / `.chatbot voice off` — group Hinatu chatbot
+
+Cartesia’s `[laughter]` nonverbalism is used when the AI is genuinely amused, producing an actual laugh or chuckle in the voice instead of speaking “lol”. Text-only replies hide the internal marker.
