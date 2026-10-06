@@ -20,9 +20,36 @@ const RAPIDAPI_SPOTIFY_HOST = process.env.RAPIDAPI_SPOTIFY_HOST || RAPIDAPI_HOST
 const YOUTUBE_URL_RE = /(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/i;
 const SPOTIFY_URL_RE = /^https?:\/\/open\.spotify\.com\/track\/[A-Za-z0-9]+/i;
 let youtubeDl;
+let youtubeDlReady;
 
-function getYoutubeDl() {
+async function getYoutubeDl() {
     if (!youtubeDl) youtubeDl = require('youtube-dl-exec');
+    if (!youtubeDlReady) {
+        youtubeDlReady = (async () => {
+            const binaryPath = youtubeDl.constants?.YOUTUBE_DL_PATH
+                || path.join(path.dirname(require.resolve('youtube-dl-exec')), '..', 'bin', 'yt-dlp');
+            if (!fs.existsSync(binaryPath)) {
+                fs.mkdirSync(path.dirname(binaryPath), { recursive: true });
+                const response = await fetch('https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp', {
+                    redirect: 'follow',
+                    signal: AbortSignal.timeout(90_000),
+                    headers: { 'User-Agent': 'SUKUNA-MD/3.0' },
+                });
+                if (!response.ok) throw new Error(`yt-dlp bootstrap HTTP ${response.status}`);
+                const binary = Buffer.from(await response.arrayBuffer());
+                if (binary.length < 100_000 || binary.subarray(0, 2).toString() === '<!') {
+                    throw new Error('yt-dlp bootstrap returned an invalid binary');
+                }
+                fs.writeFileSync(binaryPath, binary, { mode: 0o755 });
+            }
+            try { fs.chmodSync(binaryPath, 0o755); } catch (_) {}
+            return youtubeDl;
+        })().catch(error => {
+            youtubeDlReady = null;
+            throw error;
+        });
+    }
+    await youtubeDlReady;
     return youtubeDl;
 }
 
@@ -107,7 +134,8 @@ async function resolveVideo(input) {
         catch (error) { console.warn('[play] Prexzy search failed:', error.message); }
     }
     const source = YOUTUBE_URL_RE.test(input) ? normalizeYoutubeUrl(input) : `ytsearch1:${input}`;
-    const raw = await getYoutubeDl()(source, {
+    const ytdlp = await getYoutubeDl();
+    const raw = await ytdlp(source, {
         dumpSingleJson: true,
         skipDownload: true,
         noWarnings: true,
@@ -173,7 +201,8 @@ async function getDirectUrl(url, formats, type) {
     }
     for (const format of formats) {
         try {
-            const result = await getYoutubeDl()(url, {
+            const ytdlp = await getYoutubeDl();
+            const result = await ytdlp(url, {
                 getUrl: true,
                 format,
                 noWarnings: true,
@@ -227,7 +256,8 @@ async function convertToMp3(inputBuffer) {
     fs.writeFileSync(input, inputBuffer, { mode: 0o600 });
     try {
         await new Promise((resolve, reject) => {
-            const child = spawn(ffmpegPath || 'ffmpeg', ['-y', '-i', input, '-vn', '-codec:a', 'libmp3lame', '-b:a', '128k', output], { stdio: ['ignore', 'ignore', 'pipe'] });
+            const encoder = ffmpegPath && fs.existsSync(ffmpegPath) ? ffmpegPath : 'ffmpeg';
+            const child = spawn(encoder, ['-y', '-i', input, '-vn', '-codec:a', 'libmp3lame', '-b:a', '128k', output], { stdio: ['ignore', 'ignore', 'pipe'] });
             let errorText = '';
             child.stderr.on('data', data => { errorText += data.toString().slice(-4000); });
             child.once('error', reject);
