@@ -289,10 +289,14 @@ CARTESIA_LANGUAGE=en
 
 Enable voice replies per chat:
 
+- `.pasqua on g` — owner-only global mode for every group
+- `.pasqua off g` — disable global mode
 - `.pasqua voice on` / `.pasqua voice off` — Pasqua AI
 - `.chatbotdm voice on` / `.chatbotdm voice off` — private Hinatu chatbot
 - `.chatbot voice on` / `.chatbot voice off` — group Hinatu chatbot
 
 Cartesia’s `[laughter]` nonverbalism is used when the AI is genuinely amused, producing an actual laugh or chuckle in the voice instead of speaking “lol”. Text-only replies hide the internal marker.
+
+When global mode is active, `.pasqua voice on` in a group enables voice for all globally enabled groups; `.pasqua voice off` switches those global replies back to text. Use `.pasqua voice on g` or `.pasqua voice off g` when you want to change global voice explicitly.
 
 If the host does not provide environment variables, open `config.js` and replace `PASTE_CARTESIA_API_KEY_HERE` in `apiKeys.cartesia` with the key before starting the bot. Keep that edited file private and do not push it to a public fork.

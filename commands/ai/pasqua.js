@@ -93,15 +93,15 @@ async function getPasquaAIReply(prompt, memKey = 'pasqua:global', options = {}) 
 module.exports = {
     name: 'pasqua',
     aliases: ['sukuna', 'pasquaai'],
-    description: 'Pasqua AI — Sukuna personality. Use .pasqua on/off to toggle auto-reply.',
-    usage: '.pasqua on | .pasqua off | .pasqua <your question>',
+    description: 'Pasqua AI — Sukuna personality with per-group and global group modes.',
+    usage: '.pasqua on | .pasqua on g | .pasqua off | .pasqua <your question>',
     category: 'ai',
 
     // Export for sessionManager
     getPasquaAIReply,
     renderMemoryContext,
 
-    async execute({ sock, msg, from, sender, args, isGroup, reply, database }) {
+    async execute({ sock, msg, from, sender, phoneNumber, args, isGroup, reply, database, isOwner }) {
         const plainReply = text => reply(text, { raw: true });
         const input = args.join(' ').trim();
         const sub   = input.toLowerCase();
@@ -119,15 +119,39 @@ module.exports = {
             return reply(sub.endsWith('on') ? '🧠 Pasqua memory is now ON for this chat.' : '🧠 Pasqua memory is now OFF. New chat content will not be stored or used.');
         }
 
+        // ── Global group mode: .pasqua on g / .pasqua off g ────────────────
+        if (sub === 'on g' || sub === 'off g') {
+            if (!isOwner) return plainReply('🛡️ Only the bot owner can change Pasqua global mode.');
+            const enabled = sub === 'on g';
+            database.setPasquaGlobal(phoneNumber, enabled);
+            if (!enabled) database.setPasquaGlobalVoice(phoneNumber, false);
+            return plainReply(enabled
+                ? '👹 *Pasqua global mode ENABLED.*\n\nI will now reply in every group. Use `.pasqua voice on` here to make all global group replies voice.'
+                : '👹 *Pasqua global mode DISABLED.*\n\nPer-group Pasqua settings remain unchanged.');
+        }
+
         // ── Voice sub-mode: .pasqua voice on|off ──────────────────────────
         if (sub.startsWith('voice')) {
-            const v = sub.split(/\s+/)[1];
+            const voiceParts = sub.split(/\s+/);
+            const v = voiceParts[1];
+            const globalVoice = voiceParts[2] === 'g' || (isGroup && database.getPasquaGlobal(phoneNumber));
             if (v !== 'on' && v !== 'off') {
-                const cur = database.getGroup(chatKey)?.pasquaVoice === true;
+                const cur = globalVoice
+                    ? database.getPasquaGlobalVoice(phoneNumber)
+                    : database.getGroup(chatKey)?.pasquaVoice === true;
                 return plainReply(`Voice replies are ${cur ? 'on' : 'off'}. Use .pasqua voice on or .pasqua voice off.`);
             }
+            if (voiceParts[2] === 'g' && !isOwner) {
+                return plainReply('🛡️ Only the bot owner can change global Pasqua voice mode.');
+            }
+            if (globalVoice) {
+                database.setPasquaGlobalVoice(phoneNumber, v === 'on');
+                return plainReply(v === 'on'
+                    ? '🎙️ *Global Pasqua voice ENABLED.* All global group replies will use voice.'
+                    : '🔇 *Global Pasqua voice DISABLED.* Global group replies will use text.');
+            }
             database.setGroup(chatKey, 'pasquaVoice', v === 'on');
-            return plainReply(v === 'on' ? 'Voice replies are on.' : 'Voice replies are off.');
+            return plainReply(v === 'on' ? '🎙️ Voice replies are on.' : '🔇 Voice replies are off.');
         }
 
         // ── Toggle on ──────────────────────────────────────────────────────

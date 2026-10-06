@@ -463,6 +463,29 @@ class Database {
         this.save('users');
     }
 
+    // ── Pasqua AI global group mode ───────────────────────────────────────
+    getPasquaGlobal(phoneNumber) {
+        if (!this.data.users[phoneNumber]) this.data.users[phoneNumber] = {};
+        return this.data.users[phoneNumber].pasquaGlobal === true;
+    }
+
+    setPasquaGlobal(phoneNumber, value) {
+        if (!this.data.users[phoneNumber]) this.data.users[phoneNumber] = {};
+        this.data.users[phoneNumber].pasquaGlobal = !!value;
+        this.save('users');
+    }
+
+    getPasquaGlobalVoice(phoneNumber) {
+        if (!this.data.users[phoneNumber]) this.data.users[phoneNumber] = {};
+        return this.data.users[phoneNumber].pasquaGlobalVoice === true;
+    }
+
+    setPasquaGlobalVoice(phoneNumber, value) {
+        if (!this.data.users[phoneNumber]) this.data.users[phoneNumber] = {};
+        this.data.users[phoneNumber].pasquaGlobalVoice = !!value;
+        this.save('users');
+    }
+
     // ── Group Chatbot (AI auto-reply for groups, tag-gated) ───────────────
     _ensureGroup(groupId) {
         if (!this.data.groups) this.data.groups = {};
