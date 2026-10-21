@@ -1,6 +1,7 @@
 'use strict';
 
 const WebP = require('node-webpmux');
+const crypto = require('crypto');
 
 const DEFAULT_PACK_NAME = 'SUKUNA MD';
 const DEFAULT_PUBLISHER = 'pasqua';
@@ -9,17 +10,13 @@ const DEFAULT_PACK_ID = 'com.sukuna.md';
 function buildStickerExif({
     packName = DEFAULT_PACK_NAME,
     publisher = DEFAULT_PUBLISHER,
-    packId = DEFAULT_PACK_ID,
+    packId = crypto.randomBytes(32).toString('hex'),
 } = {}) {
     const payload = Buffer.from(JSON.stringify({
         'sticker-pack-id': String(packId),
         'sticker-pack-name': String(packName),
         'sticker-pack-publisher': String(publisher),
-        'sticker-pack-version': '1.0.0',
-        'sticker-pack-thumbnail-url': '',
-        'android-app-store-link': '',
-        'ios-app-store-link': '',
-        emojis: ['🙂'],
+        emojis: [''],
     }), 'utf8');
 
     // WhatsApp sticker metadata is stored as a JSON payload in an EXIF chunk.

@@ -18,13 +18,12 @@ test('brands a WebP sticker with the native SUKUNA MD EXIF metadata', async () =
     const exifText = image.exif.toString('utf8');
     assert.match(exifText, /SUKUNA MD/);
     assert.match(exifText, /pasqua/);
-    assert.match(exifText, /sticker-pack-version/);
-    assert.match(exifText, /android-app-store-link/);
     const payloadLength = image.exif.readUInt32LE(14);
     assert.equal(payloadLength, image.exif.length - 22);
     const payload = JSON.parse(image.exif.subarray(22, 22 + payloadLength).toString('utf8'));
     assert.equal(payload['sticker-pack-name'], 'SUKUNA MD');
     assert.equal(payload['sticker-pack-publisher'], 'pasqua');
+    assert.match(payload['sticker-pack-id'], /^[a-f0-9]{64}$/);
     assert.ok(branded.length > 16);
 });
 
