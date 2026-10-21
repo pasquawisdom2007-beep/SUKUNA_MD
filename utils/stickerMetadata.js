@@ -15,7 +15,11 @@ function buildStickerExif({
         'sticker-pack-id': String(packId),
         'sticker-pack-name': String(packName),
         'sticker-pack-publisher': String(publisher),
-        emojis: [''],
+        'sticker-pack-version': '1.0.0',
+        'sticker-pack-thumbnail-url': '',
+        'android-app-store-link': '',
+        'ios-app-store-link': '',
+        emojis: ['🙂'],
     }), 'utf8');
 
     // WhatsApp sticker metadata is stored as a JSON payload in an EXIF chunk

@@ -62,7 +62,13 @@ module.exports = {
             await reply('⏳ _Taking sticker and applying SUKUNA MD branding..._');
             const original = await downloadSticker(sticker);
             const branded = await brandSticker(original);
-            await sock.sendMessage(from, { sticker: branded }, { quoted: msg });
+            await sock.sendMessage(from, {
+                sticker: branded,
+                // Keep native message metadata alongside the WebP EXIF payload
+                // for clients that inspect the outgoing message fields.
+                packname: DEFAULT_PACK_NAME,
+                author: DEFAULT_PUBLISHER,
+            }, { quoted: msg });
         } catch (error) {
             return reply(`❌ Failed to take sticker: ${error.message || 'invalid sticker data'}`);
         }

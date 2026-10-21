@@ -18,6 +18,8 @@ test('brands a WebP sticker with the native SUKUNA MD EXIF metadata', async () =
     const exifText = image.exif.toString('utf8');
     assert.match(exifText, /SUKUNA MD/);
     assert.match(exifText, /pasqua/);
+    assert.match(exifText, /sticker-pack-version/);
+    assert.match(exifText, /android-app-store-link/);
     assert.ok(branded.length > 16);
 });
 
