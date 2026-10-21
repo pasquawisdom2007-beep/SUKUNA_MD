@@ -22,14 +22,15 @@ function buildStickerExif({
         emojis: ['🙂'],
     }), 'utf8');
 
-    // WhatsApp sticker metadata is stored as a JSON payload in an EXIF chunk
-    // with this small TIFF header. node-webpmux preserves the image/animation
-    // data and replaces only the metadata chunk.
+    // WhatsApp sticker metadata is stored as a JSON payload in an EXIF chunk.
+    // The payload length is a four-byte little-endian value at offset 14;
+    // without it WhatsApp may send the sticker but cannot open its information.
     const exifHeader = Buffer.from([
         0x49, 0x49, 0x2A, 0x00, 0x08, 0x00, 0x00, 0x00,
         0x01, 0x00, 0x41, 0x57, 0x07, 0x00, 0x00, 0x00,
-        0x16, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x16, 0x00, 0x00, 0x00,
     ]);
+    exifHeader.writeUInt32LE(payload.length, 14);
     return Buffer.concat([exifHeader, payload]);
 }
 
