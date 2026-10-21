@@ -59,6 +59,28 @@ function runEncoder(inputPath, outputPath, encoder) {
 
 async function normalizeSticker(input) {
     if (!Buffer.isBuffer(input) || input.length < 16) throw new Error('sticker data is empty');
+    const inputMetadata = await sharp(input, { animated: true }).metadata();
+    const inputPages = inputMetadata.pages || 1;
+    if (inputMetadata.format !== 'webp') throw new Error('sticker is not a WebP image');
+
+    // Do not send animated WebP through this FFmpeg build's libwebp fallback:
+    // libwebp can flatten the animation and libwebp_anim is corrupt on some
+    // panel builds when its input is already an animated WebP. Sharp keeps the
+    // page structure intact while resizing to WhatsApp's sticker canvas.
+    if (inputPages > 1) {
+        const animated = await sharp(input, { animated: true })
+            .resize({ width: 512, height: 512, fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+            .webp({ quality: 55, effort: 6, smartSubsample: true })
+            .toBuffer();
+        const metadata = await sharp(animated, { animated: true }).metadata();
+        const canvasHeight = metadata.pageHeight || metadata.height;
+        if (metadata.format !== 'webp' || metadata.width !== 512 || canvasHeight !== 512 || (metadata.pages || 1) < 2) {
+            throw new Error('animation-aware WebP conversion did not preserve multiple frames');
+        }
+        if (animated.length > MAX_OUTPUT_BYTES) throw new Error('normalized sticker is too large');
+        return animated;
+    }
+
     const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sukuna-take-'));
     const inputPath = path.join(workDir, 'input.webp');
     fs.writeFileSync(inputPath, input);

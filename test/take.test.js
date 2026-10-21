@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const { spawnSync } = require('node:child_process');
 const test = require('node:test');
 const sharp = require('sharp');
 const WebP = require('node-webpmux');
@@ -50,4 +51,24 @@ test('normalizes a sticker through FFmpeg before branding', async () => {
     assert.equal(metadata.format, 'webp');
     assert.equal(metadata.width, 512);
     assert.equal(metadata.pageHeight || metadata.height, 512);
+});
+
+test('preserves multiple frames in animated WebP stickers', async () => {
+    const fixture = spawnSync('ffmpeg', [
+        '-hide_banner', '-loglevel', 'error',
+        '-f', 'lavfi', '-i', 'testsrc2=size=321x241:rate=12',
+        '-t', '1.2', '-c:v', 'libvpx-vp9', '-pix_fmt', 'yuv420p',
+        '-f', 'webm', 'pipe:1',
+    ], { maxBuffer: 8 * 1024 * 1024 });
+    assert.equal(fixture.status, 0, fixture.stderr.toString());
+    const { videoToWebp } = require('../commands/general/sticker');
+    const animatedInput = await videoToWebp(fixture.stdout);
+    const inputMetadata = await sharp(animatedInput, { animated: true }).metadata();
+    assert.ok((inputMetadata.pages || 1) >= 2);
+    const normalized = await normalizeSticker(animatedInput);
+    const outputMetadata = await sharp(normalized, { animated: true }).metadata();
+    assert.equal(outputMetadata.format, 'webp');
+    assert.equal(outputMetadata.width, 512);
+    assert.equal(outputMetadata.pageHeight, 512);
+    assert.ok((outputMetadata.pages || 1) >= 2);
 });
