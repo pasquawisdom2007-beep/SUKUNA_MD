@@ -5,6 +5,7 @@ const test = require('node:test');
 const sharp = require('sharp');
 const WebP = require('node-webpmux');
 const { brandSticker, buildStickerExif } = require('../utils/stickerMetadata');
+const { normalizeSticker } = require('../utils/stickerFfmpeg');
 const take = require('../commands/general/take');
 
 test('brands a WebP sticker with the native SUKUNA MD EXIF metadata', async () => {
@@ -38,4 +39,15 @@ test('detects a sticker nested in a quoted extended message', () => {
     };
     assert.equal(take._private.quotedMessage(msg), stickerMessage);
     assert.ok(buildStickerExif().length > 24);
+});
+
+test('normalizes a sticker through FFmpeg before branding', async () => {
+    const source = await sharp({
+        create: { width: 321, height: 241, channels: 4, background: { r: 20, g: 90, b: 30, alpha: 1 } },
+    }).webp().toBuffer();
+    const normalized = await normalizeSticker(source);
+    const metadata = await sharp(normalized, { animated: true }).metadata();
+    assert.equal(metadata.format, 'webp');
+    assert.equal(metadata.width, 512);
+    assert.equal(metadata.pageHeight || metadata.height, 512);
 });

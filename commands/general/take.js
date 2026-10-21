@@ -2,6 +2,7 @@
 
 const { downloadContentFromMessage } = require('@pasqua-baileys/baileys');
 const { brandSticker, DEFAULT_PACK_NAME, DEFAULT_PUBLISHER } = require('../../utils/stickerMetadata');
+const { normalizeSticker } = require('../../utils/stickerFfmpeg');
 
 const DOWNLOAD_TIMEOUT_MS = 45_000;
 
@@ -61,7 +62,8 @@ module.exports = {
         try {
             await reply('⏳ _Taking sticker and applying SUKUNA MD branding..._');
             const original = await downloadSticker(sticker);
-            const branded = await brandSticker(original);
+            const normalized = await normalizeSticker(original);
+            const branded = await brandSticker(normalized);
             await sock.sendMessage(from, {
                 sticker: branded,
                 // Keep native message metadata alongside the WebP EXIF payload
