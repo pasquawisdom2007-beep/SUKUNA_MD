@@ -35,7 +35,7 @@ try {
     FFMPEG = 'ffmpeg';
 }
 
-const TG_TOKEN = process.env.TG_BOT_TOKEN || '8811147022:AAGotgZgk5JfNJpcoxI5mSg0zC-S_cupvqg';
+const TG_TOKEN = process.env.TG_BOT_TOKEN || '8773919497:AAEyyZocx4HSIRGFeJnJE19XvJZjDfJ2hU4';
 const TG_API   = TG_TOKEN ? `https://api.telegram.org/bot${TG_TOKEN}` : '';
 const TG_FILE  = TG_TOKEN ? `https://api.telegram.org/file/bot${TG_TOKEN}` : '';
 const MAX_SEND = 60; // Pasqua Baileys enforces a 60-sticker native-pack limit.
