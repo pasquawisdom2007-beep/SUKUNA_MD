@@ -29,6 +29,7 @@
 
 const sharp  = require('sharp');
 const crypto = require('crypto');
+const { brandSticker, DEFAULT_PACK_NAME, DEFAULT_PUBLISHER } = require('../../utils/stickerMetadata');
 
 const MAX_STICKERS     = 40;         // hard cap — never more than 40 in a pack
 const CANDIDATE_TARGET = 90;         // stop widening the search once we have this many links
@@ -42,8 +43,8 @@ const STICKER_SIZE     = 512;        // WhatsApp sticker canvas
 const CORNER_RADIUS    = 72;         // rounded-square look; set 0 for sharp corners
 const TARGET_BYTES     = 100 * 1024; // WhatsApp static-sticker size target
 const QUALITY_STEPS    = [80, 65, 50, 35, 25];
-const PACK_PUBLISHER   = 'Pasqua';
-const PACK_BRAND       = 'Sukuna MD';
+const PACK_PUBLISHER   = DEFAULT_PUBLISHER;
+const PACK_BRAND       = DEFAULT_PACK_NAME;
 const SEARCH_VARIANTS  = ['aesthetic', 'wallpaper', 'hd photo', 'pictures'];
 const PINTEREST_API    = 'https://api.pinterest.com/v5';
 // Built-in Pinterest token; PINTEREST_ACCESS_TOKEN in the environment overrides it.
@@ -336,13 +337,17 @@ module.exports = {
                 return reply('❌ None of the images could be turned into stickers. Try another search.');
             }
 
-            const stickers = items.map((item, i) => ({
-                data: item.data,
-                isAnimated: false,
-                emojis: ['📌'],
-                accessibilityLabel: truncate(`${query} sticker ${i + 1}`, 80),
-            }));
-            const cover = items[0].data; // static 512x512 WebP tray icon
+            const stickers = [];
+            for (let i = 0; i < items.length; i += 1) {
+                const item = items[i];
+                stickers.push({
+                    data: await brandSticker(item.data),
+                    isAnimated: false,
+                    emojis: ['📌'],
+                    accessibilityLabel: truncate(`${query} sticker ${i + 1}`, 80),
+                });
+            }
+            const cover = stickers[0].data; // static 512x512 WebP tray icon
             const packName = `${truncate(titleCase(query), 40)} · ${PACK_BRAND}`;
 
             // One native StickerPackMessage — same call .tgsticker makes.
