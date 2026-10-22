@@ -31,6 +31,7 @@
 const axios = require('axios');
 const { spawn } = require('child_process');
 const config = require('../../config');
+const { brandSticker } = require('../../utils/stickerMetadata');
 
 const KLIPY_KEY = (config.apiKeys && config.apiKeys.klipy) || '';
 const KLIPY_BASE = KLIPY_KEY ? `https://api.klipy.com/api/v1/${KLIPY_KEY}` : null;
@@ -176,8 +177,14 @@ async function resolveSticker(item) {
     const raw = await downloadBuffer(picked.url);
     if (!raw) return null;
 
-    if (picked.kind === 'webp') return raw; // already a valid sticker
-    return await transcodeToWebp(raw); // gif/mp4 → webp
+    const webp = picked.kind === 'webp' ? raw : await transcodeToWebp(raw);
+    if (!webp) return null;
+    try {
+        return await brandSticker(webp);
+    } catch (error) {
+        console.error('[stickersearch] sticker branding failed:', error.message);
+        return null;
+    }
 }
 
 async function gatherStickers(query, wanted) {

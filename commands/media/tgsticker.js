@@ -26,6 +26,7 @@ const path   = require('path');
 const crypto = require('crypto');
 const zlib   = require('zlib');
 const { spawn, execSync } = require('child_process');
+const { brandSticker, DEFAULT_PACK_NAME, DEFAULT_PUBLISHER } = require('../../utils/stickerMetadata');
 
 let FFMPEG;
 try {
@@ -39,8 +40,8 @@ const TG_TOKEN = process.env.TG_BOT_TOKEN || '8773919497:AAEyyZocx4HSIRGFeJnJE19
 const TG_API   = TG_TOKEN ? `https://api.telegram.org/bot${TG_TOKEN}` : '';
 const TG_FILE  = TG_TOKEN ? `https://api.telegram.org/file/bot${TG_TOKEN}` : '';
 const MAX_SEND = 60; // Pasqua Baileys enforces a 60-sticker native-pack limit.
-const PACK_NAME = 'Sukuna MD by Pasqua';
-const PACK_PUBLISHER = 'Pasqua';
+const PACK_NAME = DEFAULT_PACK_NAME;
+const PACK_PUBLISHER = DEFAULT_PUBLISHER;
 
 function tmpFile(ext) {
     return path.join(os.tmpdir(), `tgs-${crypto.randomBytes(6).toString('hex')}${ext}`);
@@ -270,6 +271,9 @@ module.exports = {
             return reply('❌ Telegram sticker import is not configured. Add `TG_BOT_TOKEN` to the secure deployment environment.');
         }
 
+        await sock.sendMessage(from, { react: { text: '⏳', key: msg.key } }).catch(() => {});
+        await reply('⏳ _tgsticker is importing the sticker pack. Please wait..._');
+
         const packName = text.split('/addstickers/')[1].split(/[/?#]/)[0];
         try {
             const { data } = await axios.get(
@@ -317,6 +321,7 @@ module.exports = {
                         failed++;
                         continue;
                     }
+                    webpBuf = await brandSticker(webpBuf);
                     stickerItems.push({
                         data: webpBuf,
                         isAnimated: hasAnimationChunks(webpBuf),

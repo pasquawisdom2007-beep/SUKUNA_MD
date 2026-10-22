@@ -60,7 +60,6 @@ module.exports = {
         }
 
         try {
-            await reply('⏳ _Taking sticker and applying SUKUNA MD branding..._');
             const original = await downloadSticker(sticker);
             const normalized = await normalizeSticker(original);
             const branded = await brandSticker(normalized);
