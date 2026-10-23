@@ -39,14 +39,14 @@ function loadGcstatus() {
     const gcstatus = require('../general/gcstatus');
     const {
         downloadMedia,
-        fetchLinkPreview,
         postGroupStatus,
+        postGroupStatusLinkPreview,
         encodeOpus,
         getQuotedCtx,
         unwrapQuotedDeep,
         TEXT_BG_COLOR,
     } = gcstatus;
-    return { downloadMedia, fetchLinkPreview, postGroupStatus, encodeOpus, getQuotedCtx, unwrapQuotedDeep, TEXT_BG_COLOR };
+    return { downloadMedia, postGroupStatus, postGroupStatusLinkPreview, encodeOpus, getQuotedCtx, unwrapQuotedDeep, TEXT_BG_COLOR };
 }
 
 function helpText() {
@@ -90,7 +90,7 @@ module.exports = {
             return reply(`❌ *Global status is misconfigured:* _${err.message}_\n\nCheck the console log for the full error.`);
         }
         const {
-            downloadMedia, fetchLinkPreview, postGroupStatus,
+            downloadMedia, postGroupStatus, postGroupStatusLinkPreview,
             encodeOpus, getQuotedCtx, unwrapQuotedDeep, TEXT_BG_COLOR,
         } = helpers;
 
@@ -127,13 +127,13 @@ module.exports = {
             return reply('❌ *The bot is not currently in any groups.*');
         }
 
-        async function postToAllGroups(buildContent, label) {
+        async function postToAllGroups(buildContent, label, send = (gid, content) => postGroupStatus(sock, gid, content)) {
             await reply(`🌍 _Posting *${label}* status to *${groupIds.length}* group(s)…_`);
             let sent = 0;
             let failed = 0;
             for (const gid of groupIds) {
                 try {
-                    await postGroupStatus(sock, gid, buildContent());
+                    await send(gid, buildContent());
                     sent++;
                 } catch (err) {
                     failed++;
@@ -148,6 +148,14 @@ module.exports = {
                 `✅ Sent: ${sent}\n` +
                 (failed ? `❌ Failed: ${failed}\n` : ``) +
                 `📊 Total groups: ${groupIds.length}`
+            );
+        }
+
+        async function postLinksToAllGroups(url) {
+            return postToAllGroups(
+                () => null,
+                'Link',
+                (gid) => postGroupStatusLinkPreview(sock, gid, url)
             );
         }
 
@@ -196,14 +204,8 @@ module.exports = {
         if (quoted && quotedText && !caption) {
             const isUrl = /https?:\/\//i.test(quotedText);
             if (isUrl) {
-                const preview = await fetchLinkPreview(quotedText);
-                return postToAllGroups(() => ({
-                    text:        quotedText,
-                    richPreview: true,
-                    ...(preview.title       ? { previewTitle:       preview.title }       : {}),
-                    ...(preview.description ? { previewDescription: preview.description } : {}),
-                    ...(preview.imageBuffer ? { previewImage:       preview.imageBuffer } : {}),
-                }), 'Link');
+                const url = quotedText.match(/https?:\/\/[^\s]+/i)?.[0] || quotedText;
+                return postLinksToAllGroups(url);
             }
             return postToAllGroups(() => ({
                 text:            quotedText,
@@ -218,14 +220,8 @@ module.exports = {
 
         const isUrl = /https?:\/\//i.test(caption);
         if (isUrl) {
-            const preview = await fetchLinkPreview(caption);
-            return postToAllGroups(() => ({
-                text:        caption,
-                richPreview: true,
-                ...(preview.title       ? { previewTitle:       preview.title }       : {}),
-                ...(preview.description ? { previewDescription: preview.description } : {}),
-                ...(preview.imageBuffer ? { previewImage:       preview.imageBuffer } : {}),
-            }), 'Link');
+            const url = caption.match(/https?:\/\/[^\s]+/i)?.[0] || caption;
+            return postLinksToAllGroups(url);
         }
 
         return postToAllGroups(() => ({

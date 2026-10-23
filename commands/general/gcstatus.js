@@ -844,7 +844,7 @@ module.exports = Object.assign(module.exports, {
 
                 // If the quoted message had a link preview, relay it intact
                 const hasPreview = !!(quoted?.extendedTextMessage?.contextInfo?.externalAdReply);
-                if (hasPreview) {
+                if (hasPreview || isUrl) {
                     const quotedUrl = quotedText.match(/https?:\/\/[^\s]+/i)?.[0] || quotedText;
                     await postGroupStatusLinkPreview(sock, from, quotedUrl, selectedColor);
                 } else {
