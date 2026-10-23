@@ -95,8 +95,8 @@ function buildChannelCtx() {
     };
 }
 // WhatsApp uses this audience metadata when rendering a group-status entry in
-// the status list. Keeping it in contextInfo works for both the native
-// groupStatus:true path and the generated groupStatusMessageV2 fallback.
+// the status list. Keeping it in contextInfo works on generated
+// groupStatusMessageV2 messages and rich-preview link statuses.
 // The command remains fully compatible when older clients ignore these fields.
 function normaliseStatusColor(value) {
     const key = String(value || '').trim().toLowerCase();
@@ -270,38 +270,13 @@ function resolveGroupDisplayName(metadata, groupJid) {
 
 async function postGroupStatus(sock, groupJid, content) {
     const effectiveRingColor = normaliseStatusColor(content?.ringColor) || getStatusRingColor();
-    try {
-        const { backgroundColor, ringColor, previewTitle, previewDescription, previewImage, ...rest } = content;
-        // richPreview ONLY makes sense for text/link posts. WhatsApp rejects
-        // it on media (image/video/audio/document/sticker) with:
-        //   "richPreview requires a `text` field containing the URL"
-        const isTextPost = typeof rest.text === 'string' && rest.text.length > 0;
-        const hasMedia   = !!(rest.image || rest.video || rest.audio || rest.document || rest.sticker);
-        const payload = {
-            ...rest,
-            groupStatus: true,
-            contextInfo: { ...buildStatusAudienceCtx(effectiveRingColor), ...buildChannelCtx() },
-        };
-        if (isTextPost && !hasMedia) payload.richPreview = true;
-        if (backgroundColor && payload.text) payload.backgroundColor = backgroundColor;
-        if (isTextPost && !hasMedia) {
-            if (previewTitle)       payload.previewTitle       = previewTitle;
-            if (previewDescription) payload.previewDescription = previewDescription;
-            if (previewImage)       payload.previewImage       = previewImage;
-            // Keep the native color metadata on direct/fallback link posts too.
-            payload.backgroundArgb = hexToArgb(backgroundColor || TEXT_BG_COLOR);
-            payload.textArgb = STATUS_FG_ARGB;
-            payload.font = 0;
-        }
-        return await sock.sendMessage(groupJid, payload);
-    } catch (e) {
-        console.error('[gcstatus] groupStatus:true path failed, falling back to relay:', e.message);
-    }
-
-    const { backgroundColor, ringColor } = content;
-    const payload = { ...content };
-    delete payload.backgroundColor;
-    delete payload.ringColor;
+    // Do not use sendMessage({ groupStatus: true }) here. In this Baileys
+    // version that flag is only handled by the richPreview branch; normal text
+    // and media fall through to the regular group-chat sender and can appear to
+    // succeed without ever becoming a Status post. Build the status envelope
+    // explicitly for every non-link payload instead.
+    const { backgroundColor, ringColor, ...rest } = content;
+    const payload = { ...rest };
 
     const inner = await generateWAMessageContent(payload, {
         upload: sock.waUploadToServer,

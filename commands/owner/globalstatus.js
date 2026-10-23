@@ -73,7 +73,7 @@ module.exports = {
     category:    'owner',
     ownerOnly:   true,
 
-    async execute({ sock, msg, from, args, reply, isOwner }) {
+    async execute({ sock, msg, from, args, reply, isOwner, commandName }) {
         // Owner-only, on top of the automatic category:'owner' guard in
         // sessionManager.js (which already lets mods through too, via
         // context.isOwner = senderIsOwner || senderIsMod) — this is just a
@@ -96,12 +96,12 @@ module.exports = {
 
         // Works in DM AND inside groups — no isGroup restriction.
 
-        // Support both ".global status ..." and ".globalstatus ..." (alias).
-        // When invoked via the "global" name, the first arg must be "status".
+        // The base command is `.global status ...`; one-word aliases such as
+        // `.globalstatus ...` accept the content immediately after the alias.
         let rest = args;
         if (args[0] && args[0].toLowerCase() === 'status') {
             rest = args.slice(1);
-        } else if (args.length) {
+        } else if (args.length && (!commandName || commandName.toLowerCase() === 'global')) {
             // Called as ".global <something else>" — show help instead of guessing.
             return reply(helpText());
         }
