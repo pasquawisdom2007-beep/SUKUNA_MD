@@ -1,6 +1,6 @@
 /**
  * Supported command-processing presence mode.
- * Usage: .presence meta on | off | status
+ * Usage: .presence meta [on | off | status]
  *
  * WhatsApp exposes standard composing/paused states through Baileys. The
  * proprietary Meta Business Agent phrases shown in the WhatsApp UI cannot be
@@ -17,7 +17,9 @@ module.exports = {
 
     async execute({ reply, args, phoneNumber }) {
         const mode = String(args[0] || '').toLowerCase();
-        const action = String(args[1] || 'status').toLowerCase();
+        // The short form requested by the owner, `.presence meta`, enables
+        // the mode. Explicit `status` remains available for inspection.
+        const action = String(args[1] || (mode === 'meta' ? 'on' : 'status')).toLowerCase();
         const enabled = database.getMetaPresence(phoneNumber);
 
         if (mode !== 'meta' || action === 'status' || !action) {
@@ -25,6 +27,7 @@ module.exports = {
                 '🧠 *Meta-style command presence*\n\n' +
                 `Status: ${enabled ? '✅ ON' : '❌ OFF'}\n\n` +
                 '*Usage:*\n' +
+                '• .presence meta — enable processing presence\n' +
                 '• .presence meta on — show processing presence before commands\n' +
                 '• .presence meta off — disable it\n' +
                 '• .presence meta status — show current state\n\n' +
