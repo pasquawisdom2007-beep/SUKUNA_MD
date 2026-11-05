@@ -400,6 +400,21 @@ class Database {
         this.save('users');
     }
 
+    // ── Meta-style command presence (per session) ────────────────────
+    // Uses WhatsApp's supported composing/paused presence states. The
+    // proprietary Business Agent status strings are not exposed by Baileys.
+    getMetaPresence(phoneNumber) {
+        if (!this.data.users[phoneNumber]) this.data.users[phoneNumber] = {};
+        return this.data.users[phoneNumber].metaPresence === true;
+    }
+
+    setMetaPresence(phoneNumber, value) {
+        if (!this.data.users[phoneNumber]) this.data.users[phoneNumber] = {};
+        this.data.users[phoneNumber].metaPresence = !!value;
+        this.save('users');
+        return this.data.users[phoneNumber].metaPresence;
+    }
+
     // ── Command reactions (per bot session) ───────────────────────────
     getCmdReact(phoneNumber) {
         if (!this.data.users[phoneNumber]) this.data.users[phoneNumber] = {};
