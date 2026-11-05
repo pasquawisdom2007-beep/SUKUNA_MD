@@ -6,8 +6,8 @@
  *   .banchecker <number>        (e.g. .banchecker 2349127814853)
  *
  * Uses the Baron Ban Checker API as the sole verdict source.
- * Users can edit BARON_API_KEY below before deploying, or provide
- * BANCHECK_API_KEY through the deployment environment.
+ * Configure BANCHECK_API_KEY (preferred) or BARON_API_KEY in the deployment
+ * environment. Never commit a live API key to the repository.
  */
 'use strict';
 
@@ -15,9 +15,9 @@ const { sendRichHtml, sendSukunaBanCanvas, escapeHtml } = require('../../utils/g
 const database = require('../../utils/database');
 
 const BARON_API_BASE = 'https://baron0.com';
-// Edit this value before deploying if you do not use environment variables.
-// Never commit a real key to a public repository.
-const BARON_API_KEY = process.env.BANCHECK_API_KEY || 'bk_v1_rh9CFyYQ35g2_5DZFbW8UBTPV_j-eG-ozaw3rPVRA2lL8YXO3A5qyY9f-72uwVm0FDrmbCCyxkQ8FYDKDHJ5uEUqAqCVEWnk25ON9FNw5jL4BjR47wfiljt6ry2_qcVsHrHT7rIPcQ2o-iqt2rql3tnCvEzAWWjxBvZabb-_YQYIWVxP7OmFhNnxv6iLNBk05jSGmvdCpK3wrNcNygZcIe5QeoVXkROAkhTdglwZhEV6HLaHbS9V9kjPx8O_GRIII-yU2Oo-03uqs_f8jJVFjRf_lGc5_KkQwRYDLBQYSxiEYFFIdpusYcA-HS-Wpp2lPkWnAUXSimCQkfUBhMMyhMY4aCDOgjAUdUiKjznT-6vr18H57AabLnmQ3aFjsvyIfarJR6OLIW2DoXPoxJJRr3OsaPgg2ZodcLIbDD5lPjffpwEnL5KaclA1U29cK_k31izaJbcGyMV0SrDseAvMmQYarNxP9jVxscIRuv4GZkH43eVAVx2IbsPWxfwv6LxlI2R6etBKOVqxwvTuWCpBiUCJV1fEsvKWSIzrfSPZIVqRQyhKTiB8bdiB1nRXzqo7LrKKA1wqtBfIuxiU4KII';
+const BARON_API_KEY = String(
+    process.env.BANCHECK_API_KEY || process.env.BARON_API_KEY || ''
+).trim();
 const PLACEHOLDER_KEY = '';
 
 async function checkWithBaron(number) {
@@ -160,7 +160,7 @@ module.exports = {
         }
 
         if (!BARON_API_KEY || BARON_API_KEY === PLACEHOLDER_KEY) {
-            return reply('❌ Baron API key is not configured. Edit BARON_API_KEY in commands/utility/banchecker.js or set BANCHECK_API_KEY, then restart the bot.');
+            return reply('❌ Baron API key is not configured. Set BANCHECK_API_KEY (or BARON_API_KEY) in the deployment environment, then restart the bot.');
         }
 
         try {
