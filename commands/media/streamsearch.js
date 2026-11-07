@@ -2,7 +2,7 @@
 
 const crypto = require('crypto');
 const google = require('./google');
-const { generateWAMessageFromContent, proto } = require('@pasqua-baileys/baileys');
+const { generateWAMessageFromContent, proto } = require('@pasqua-dev/baileys');
 const { escapeHtml, sendRichHtml } = require('../../utils/genaiRich');
 
 const sources = google._sources || {};

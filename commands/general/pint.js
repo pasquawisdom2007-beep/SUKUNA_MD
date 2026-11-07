@@ -1,6 +1,6 @@
 'use strict';
 
-const { generateWAMessageFromContent, proto, prepareWAMessageMedia } = require('@pasqua-baileys/baileys');
+const { generateWAMessageFromContent, proto, prepareWAMessageMedia } = require('@pasqua-dev/baileys');
 
 // Pinterest image carousel powered exclusively by the public Prexzy Pinterest
 // search endpoint. The provider returns direct image URLs; this command

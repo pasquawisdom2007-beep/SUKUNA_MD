@@ -15,7 +15,7 @@
 
 const database = require('../../utils/database');
 
-const { downloadContentFromMessage } = require('@pasqua-baileys/baileys');
+const { downloadContentFromMessage } = require('@pasqua-dev/baileys');
 
 const TIMEOUT_MS = 30_000;
 

@@ -1,5 +1,5 @@
 'use strict';
-const { downloadMediaMessage } = require('@pasqua-baileys/baileys');
+const { downloadMediaMessage } = require('@pasqua-dev/baileys');
 
 module.exports = {
     name: 'setgpp',

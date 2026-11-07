@@ -4,7 +4,7 @@ const {
     normalizeMessageContent,
     getContentType,
     isJidBot,
-} = require('@pasqua-baileys/baileys');
+} = require('@pasqua-dev/baileys');
 const { matchedStamp } = require('./botIdStamp');
 
 const BOT_CONTENT_TYPES = new Set([

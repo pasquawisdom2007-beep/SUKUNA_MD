@@ -1,7 +1,7 @@
 'use strict';
 
 const axios = require('axios');
-const { generateWAMessageFromContent, proto } = require('@pasqua-baileys/baileys');
+const { generateWAMessageFromContent, proto } = require('@pasqua-dev/baileys');
 
 module.exports = {
     name: 'nexus',

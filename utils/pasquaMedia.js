@@ -6,7 +6,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
-const { downloadContentFromMessage } = require('@pasqua-baileys/baileys');
+const { downloadContentFromMessage } = require('@pasqua-dev/baileys');
 
 const execFileAsync = promisify(execFile);
 const MAX_IMAGE_BYTES = 6 * 1024 * 1024;

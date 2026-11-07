@@ -4,7 +4,7 @@
 // interactiveMessage.bloksWidget renders the A2UI visual surface, while
 // nativeFlowMessage keeps the real WhatsApp buttons underneath it.
 
-const { generateWAMessageFromContent, prepareWAMessageMedia } = require('@pasqua-baileys/baileys');
+const { generateWAMessageFromContent, prepareWAMessageMedia } = require('@pasqua-dev/baileys');
 const config = require('../config');
 const fs = require('fs');
 const CHANNEL_URL = 'https://whatsapp.com/channel/0029Vb8YB2T90x2zvQLnEb2k';

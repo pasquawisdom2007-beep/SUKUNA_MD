@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
-const { generateWAMessageFromContent, proto } = require('@pasqua-baileys/baileys');
+const { generateWAMessageFromContent, proto } = require('@pasqua-dev/baileys');
 const { sendRichHtml, escapeHtml } = require('../../utils/genaiRich');
 
 const SESSIONS = new Map();

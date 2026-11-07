@@ -223,7 +223,7 @@ The README branding files are kept in [`assets/branding`](./assets/branding):
 Creator: PASQUA
 Bot Name: SUKUNA MD
 Repository: pasquawisdom2007-beep/SUKUNA_MD
-Library: @pasqua-baileys/baileys
+Library: @pasqua-dev/baileys
 ```
 
 ## License

@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
-const { generateWAMessageFromContent, proto } = require('@pasqua-baileys/baileys');
+const { generateWAMessageFromContent, proto } = require('@pasqua-dev/baileys');
 
 function gameHtml() {
     return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>

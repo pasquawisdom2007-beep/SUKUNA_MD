@@ -107,7 +107,7 @@ function canReveal({ isGroup, isOwner, isAdmin }) {
 async function sendCopyCard({ sock, msg, from, body, title, copies = [], reply }) {
     const validCopies = copies.filter(item => item?.value);
     try {
-        const { generateWAMessageFromContent, proto } = require('@pasqua-baileys/baileys');
+        const { generateWAMessageFromContent, proto } = require('@pasqua-dev/baileys');
         const buttons = validCopies.map((item, index) => ({
             name: 'cta_copy',
             buttonParamsJson: JSON.stringify({

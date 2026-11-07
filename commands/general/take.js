@@ -1,6 +1,6 @@
 'use strict';
 
-const { downloadContentFromMessage } = require('@pasqua-baileys/baileys');
+const { downloadContentFromMessage } = require('@pasqua-dev/baileys');
 const { brandSticker, DEFAULT_PACK_NAME, DEFAULT_PUBLISHER } = require('../../utils/stickerMetadata');
 const { normalizeSticker } = require('../../utils/stickerFfmpeg');
 

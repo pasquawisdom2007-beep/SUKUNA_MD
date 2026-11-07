@@ -79,7 +79,7 @@ module.exports = {
             const buf = await renderBotStatsCard({
                 botName,
                 status: 'ONLINE',
-                packageName: '@pasqua-baileys/baileys',
+                packageName: '@pasqua-dev/baileys',
                 version,
                 prefix,
                 uptime: botUptime,

@@ -12,7 +12,7 @@
 
 'use strict';
 
-const { generateWAMessageFromContent, proto } = require('@pasqua-baileys/baileys');
+const { generateWAMessageFromContent, proto } = require('@pasqua-dev/baileys');
 
 function ctaUrl(displayText, url) {
     return {

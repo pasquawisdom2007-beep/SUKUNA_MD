@@ -1,7 +1,7 @@
 'use strict';
 
 const config = require('../../config');
-const { downloadContentFromMessage } = require('@pasqua-baileys/baileys');
+const { downloadContentFromMessage } = require('@pasqua-dev/baileys');
 
 const MAX_BYTES = 25 * 1024 * 1024;
 

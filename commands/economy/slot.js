@@ -2,7 +2,7 @@
 
 const crypto = require('crypto');
 const { economy, CURRENCY, SYMBOL } = require('../../utils/economyManager');
-const { generateWAMessageFromContent, proto } = require('@pasqua-baileys/baileys');
+const { generateWAMessageFromContent, proto } = require('@pasqua-dev/baileys');
 
 const sessions = new Map();
 const SESSION_TTL_MS = 30 * 60 * 1000;

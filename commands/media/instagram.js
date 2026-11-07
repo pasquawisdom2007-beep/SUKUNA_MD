@@ -1,7 +1,7 @@
 'use strict';
 
 const axios = require('axios');
-const { generateWAMessageFromContent, proto, wrapToBotForwardedMessage } = require('@pasqua-baileys/baileys');
+const { generateWAMessageFromContent, proto, wrapToBotForwardedMessage } = require('@pasqua-dev/baileys');
 const { escapeHtml, sendRichHtml } = require('../../utils/genaiRich');
 
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';

@@ -1,7 +1,7 @@
 'use strict';
 
 const axios = require('axios');
-const { generateWAMessageFromContent, generateWAMessageContent, proto } = require('@pasqua-baileys/baileys');
+const { generateWAMessageFromContent, generateWAMessageContent, proto } = require('@pasqua-dev/baileys');
 
 const MAX_HTML = 2 * 1024 * 1024;
 const MAX_IMAGE = 5 * 1024 * 1024;

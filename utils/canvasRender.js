@@ -1185,7 +1185,7 @@ async function renderCalendarCard({
 async function renderBotStatsCard({
     botName = 'SUKUNA · MD',
     status = 'ONLINE',
-    packageName = '@pasqua-baileys/baileys',
+    packageName = '@pasqua-dev/baileys',
     version = '—',
     prefix = '.',
     uptime = '—',

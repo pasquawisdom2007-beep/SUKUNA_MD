@@ -1,7 +1,7 @@
 'use strict';
 
 const path = require('path');
-const { generateWAMessageFromContent, proto } = require('@pasqua-baileys/baileys');
+const { generateWAMessageFromContent, proto } = require('@pasqua-dev/baileys');
 const { resolveMedia, downloadResolvedMedia, fetchUrlBuffer } = require('../../utils/mediaCommand');
 const { normalizeHttpUrl, prefixOf, truncate } = require('../../utils/commandHelpers');
 

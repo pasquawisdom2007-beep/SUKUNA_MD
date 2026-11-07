@@ -10,7 +10,7 @@
  */
 'use strict';
 
-const { downloadContentFromMessage } = require('@pasqua-baileys/baileys');
+const { downloadContentFromMessage } = require('@pasqua-dev/baileys');
 const { exec }  = require('child_process');
 const fs        = require('fs');
 const os        = require('os');

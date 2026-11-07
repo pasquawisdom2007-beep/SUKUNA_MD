@@ -10,7 +10,7 @@
  * Video stickers require ffmpeg on the server (optional)
  */
 
-const { downloadContentFromMessage } = require('@pasqua-baileys/baileys');
+const { downloadContentFromMessage } = require('@pasqua-dev/baileys');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');

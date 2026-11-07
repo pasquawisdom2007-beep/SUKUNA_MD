@@ -5,7 +5,7 @@ const test = require('node:test');
 const gcstatus = require('../commands/general/gcstatus');
 
 test('gcstatus uses the existing Pasqua Baileys implementation', () => {
-    assert.equal(gcstatus.baileysSource, '@pasqua-baileys/baileys');
+    assert.equal(gcstatus.baileysSource, '@pasqua-dev/baileys');
     assert.equal(typeof gcstatus.postGroupStatus, 'function');
     assert.equal(typeof gcstatus.postGroupStatusLinkPreview, 'function');
 });

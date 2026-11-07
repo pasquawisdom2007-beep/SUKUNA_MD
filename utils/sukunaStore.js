@@ -324,7 +324,7 @@ async function runApkScan(context) {
     if (!document.mediaKey && !document.url) return context.reply('❌ This APK is no longer downloadable from WhatsApp. Please send it again.');
 
     try {
-        const { downloadContentFromMessage } = require('@pasqua-baileys/baileys');
+        const { downloadContentFromMessage } = require('@pasqua-dev/baileys');
         const stream = await downloadContentFromMessage(document, 'document');
         const chunks = [];
         let total = 0;

@@ -1,6 +1,6 @@
 'use strict';
 
-const { downloadMediaMessage } = require('@pasqua-baileys/baileys');
+const { downloadMediaMessage } = require('@pasqua-dev/baileys');
 const upscaler = require('../../utils/upscale');
 
 const localUpscale = upscaler.localUpscale || upscaler.upscaleImage;

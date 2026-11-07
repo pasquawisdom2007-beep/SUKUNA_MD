@@ -23,7 +23,7 @@ const { normaliseBuffer } = require('../../lib/groupPhoto');
 
 let _baileys;
 let _baileysSource = 'unknown';
-const BAILEYS_CANDIDATES = ['@pasqua-baileys/baileys'];
+const BAILEYS_CANDIDATES = ['@pasqua-dev/baileys'];
 for (const pkg of BAILEYS_CANDIDATES) {
     try {
         _baileys = require(pkg);
@@ -31,7 +31,7 @@ for (const pkg of BAILEYS_CANDIDATES) {
         break;
     } catch (_) {}
 }
-if (!_baileys) throw new Error('No baileys package found. Install @pasqua-baileys/baileys');
+if (!_baileys) throw new Error('No baileys package found. Install @pasqua-dev/baileys');
 const {
     generateWAMessageContent,
     generateWAMessageFromContent,

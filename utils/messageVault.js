@@ -221,7 +221,7 @@ async function cacheMedia(phoneNumber, message) {
             const declared = Number(media.fileLength || 0);
             if (declared && declared > MAX_MEDIA_BYTES) return false;
 
-            const { downloadContentFromMessage } = require('@pasqua-baileys/baileys');
+            const { downloadContentFromMessage } = require('@pasqua-dev/baileys');
             const stream = await downloadContentFromMessage(media, kind);
             const chunks = [];
             let size = 0;

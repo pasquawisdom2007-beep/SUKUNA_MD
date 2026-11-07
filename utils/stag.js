@@ -1,6 +1,6 @@
 'use strict';
 
-const { downloadMediaMessage } = require('@pasqua-baileys/baileys');
+const { downloadMediaMessage } = require('@pasqua-dev/baileys');
 
 function stickerHash(stickerMessage) {
     const value = stickerMessage?.fileSha256 || stickerMessage?.fileEncSha256;

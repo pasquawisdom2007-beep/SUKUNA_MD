@@ -16,7 +16,7 @@ const DESIGNS = [
     // ── 10 new peak designs ──
     'crimson', 'oracle', 'glitch', 'runic', 'obsidian',
     'vapor', 'mirage', 'eclipse', 'phantom', 'monolith',
-    // ── Interactive design (renders quick-reply buttons via @pasqua-baileys/baileys) ──
+    // ── Interactive design (renders quick-reply buttons via @pasqua-dev/baileys) ──
     'chroma', 'relay',
     // ── Pasqua signature designs ──
     'crysnovax', 'pasqua',
@@ -1130,7 +1130,7 @@ function designOnyx(ctx) {
     c += `> ┃⭔ version : ${version}\n`;
     c += `> ┃⭔ status  : ${status}\n`;
     c += `> ┃⭔ platform: ${platform}\n`;
-    c += `> ┃⭔ library : ${library || '@pasqua-baileys/baileys'}\n`;
+    c += `> ┃⭔ library : ${library || '@pasqua-dev/baileys'}\n`;
     c += `> ┗❐\n\n`;
     c += `> ┏❐  ⌜ *COMMANDS* ⌟  ❐ \n\n`;
 

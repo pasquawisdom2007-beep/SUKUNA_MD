@@ -16,7 +16,7 @@
  */
 'use strict';
 
-const { downloadMediaMessage } = require('@pasqua-baileys/baileys');
+const { downloadMediaMessage } = require('@pasqua-dev/baileys');
 
 const DEFAULT_QUERIES = ['portrait', 'face', 'person', 'model', 'aesthetic'];
 

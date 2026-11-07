@@ -99,7 +99,7 @@ function detectorInfo() {
             'message bursts as weak evidence',
         ],
         knownLibraries: [
-            '@pasqua-baileys/baileys',
+            '@pasqua-dev/baileys',
             'baileys',
             '@adiwajshing/baileys',
             '@itsliaaa/baileys',

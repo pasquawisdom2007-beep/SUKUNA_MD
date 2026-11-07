@@ -9,7 +9,7 @@
  */
 'use strict';
 
-const { generateWAMessageFromContent, proto } = require('@pasqua-baileys/baileys');
+const { generateWAMessageFromContent, proto } = require('@pasqua-dev/baileys');
 const google = require('./google');
 
 const { ddg, wiki, ogImage } = google._sources;

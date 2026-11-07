@@ -4,7 +4,7 @@
  * When detected, sends them to owner's DM as view-once messages
  */
 
-const { downloadContentFromMessage } = require('@pasqua-baileys/baileys');
+const { downloadContentFromMessage } = require('@pasqua-dev/baileys');
 
 function enabled() {
     return /^(1|true|yes|on)$/i.test(String(process.env.AUTOVV_ENABLED || '').trim());

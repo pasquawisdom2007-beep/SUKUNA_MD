@@ -1,6 +1,6 @@
 'use strict';
 
-const { prepareWAMessageMedia, generateMessageIDV2 } = require('@pasqua-baileys/baileys');
+const { prepareWAMessageMedia, generateMessageIDV2 } = require('@pasqua-dev/baileys');
 
 module.exports = {
     name: 'invite',
