@@ -178,29 +178,64 @@ async function sendSukunaTTTCanvas({ sock, jid, quoted, board, players = [], sta
     return sock.sendMessage(jid, { image, caption: status || 'SUKUNA TTT', ...(mentions.length ? { mentions } : {}) }, { quoted });
 }
 
-async function sendSukunaBanCanvas({ sock, jid, quoted, number, banned, caption }) {
-    const status = banned ? 'BANNED' : 'NOT BANNED';
-    const statusColor = banned ? '#ff3158' : '#65ffad';
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1100">
-      <defs><linearGradient id="banBg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#050204"/><stop offset=".5" stop-color="#5c0916"/><stop offset="1" stop-color="#180309"/></linearGradient></defs>
-      <rect width="1200" height="1100" rx="40" fill="url(#banBg)"/>
-      <rect x="24" y="24" width="1152" height="1052" rx="34" fill="none" stroke="#ff3158" stroke-width="6"/>
-      <text x="600" y="94" text-anchor="middle" class="title">☠ SUKUNA BAN CHECK ☠</text>
-      <text x="600" y="142" text-anchor="middle" class="sub">CURSED ACCOUNT VERIFICATION</text>
-      <path d="M90 174H1110" stroke="#ff3158" stroke-width="3"/>
-      <rect x="90" y="225" width="1020" height="245" rx="24" fill="#110207" stroke="#b51d3d" stroke-width="4"/>
-      <text x="600" y="285" text-anchor="middle" class="label">CHECKED NUMBER</text>
-      <text x="600" y="395" text-anchor="middle" class="number">+${escapeXml(number)}</text>
-      <rect x="90" y="530" width="1020" height="300" rx="24" fill="#110207" stroke="${statusColor}" stroke-width="5"/>
-      <text x="600" y="600" text-anchor="middle" class="label">FINAL STATUS</text>
-      <text x="600" y="735" text-anchor="middle" class="status" fill="${statusColor}">${status}</text>
-      <path d="M240 780H960" stroke="${statusColor}" stroke-width="3" opacity=".8"/>
-      <text x="600" y="910" text-anchor="middle" class="footer">BARON API · CURSED VERIFICATION</text>
-      <text x="600" y="972" text-anchor="middle" class="hint">SUKUNA MD · BAN CHECKER</text>
-      <style>.title{font:900 48px Arial,sans-serif;fill:#fff2f6;letter-spacing:6px}.sub{font:700 20px monospace;fill:#f094ab;letter-spacing:4px}.label{font:700 24px monospace;fill:#ff9bb0;letter-spacing:5px}.number{font:900 67px monospace;fill:#fff5f8;letter-spacing:3px}.status{font:900 92px Arial,sans-serif;letter-spacing:7px}.footer{font:700 22px monospace;fill:#ffc4d2;letter-spacing:3px}.hint{font:600 18px monospace;fill:#e987a3;letter-spacing:3px}</style>
+async function sendSukunaBanCanvas({ sock, jid, quoted, number, banned, details = {}, reviewAvailable = false }) {
+    const blue = '#36b9ff';
+    const cyan = '#70eaff';
+    const green = '#48f0aa';
+    const red = '#ff637f';
+    const amber = '#ffd166';
+    const kind = String(details.banKind || 'UNKNOWN').toUpperCase();
+    const status = banned ? 'ACCOUNT RESTRICTED' : 'ACCOUNT CLEAR';
+    const statusColor = banned ? red : green;
+    const banTime = details.banTime ? String(details.banTime) : 'Not provided by API';
+    const banAge = details.banAge ? String(details.banAge) : 'Unavailable';
+    const reviewTime = details.reviewTime ? String(details.reviewTime) : 'No appeal submission recorded';
+    const appealStatus = details.appealStatus ? String(details.appealStatus).toUpperCase() : (reviewAvailable ? 'AVAILABLE' : 'NOT AVAILABLE');
+    const reason = details.reason ? String(details.reason) : 'No violation details provided';
+    const category = details.category ? String(details.category).toUpperCase() : 'NOT PROVIDED';
+    const typeText = details.banType ? String(details.banType).replace(/[_-]+/g, ' ').toUpperCase() : 'NOT PROVIDED';
+    const euText = details.isEu === true ? 'YES' : details.isEu === false ? 'NO' : 'NOT PROVIDED';
+    const xml = value => escapeXml(value).replace(/[\r\n]+/g, ' ').slice(0, 160);
+    const wrappedReason = (() => { const words = reason.split(/\s+/); const lines = []; let line = ''; for (const word of words) { if ((line + ' ' + word).trim().length > 96) { if (line) lines.push(line); line = word; } else line = (line + ' ' + word).trim(); } if (line) lines.push(line); return lines.slice(0, 2); })();
+    const reasonMarkup = wrappedReason.map((line, index) => `<text x="120" y="${1003 + index * 30}" class="panel-value">${xml(line)}</text>`).join('');
+    const title = banned ? 'BAN DETECTED' : 'NO BAN DETECTED';
+    const panel = (x,y,w,h,titleText,bodyLines,accent=blue) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="22" fill="#0b1423" stroke="${accent}" stroke-opacity=".42" stroke-width="2"/><text x="${x+24}" y="${y+34}" class="panel-title">${xml(titleText)}</text>${bodyLines.map((line,i)=>`<text x="${x+24}" y="${y+67+i*28}" class="panel-value">${xml(line)}</text>`).join('')}`;
+    const reviewCard = reviewAvailable
+      ? `<rect x="92" y="1122" width="1416" height="82" rx="18" fill="#0d2332" stroke="${cyan}" stroke-opacity=".48" stroke-width="2"/><circle cx="138" cy="1163" r="16" fill="${cyan}" fill-opacity=".18" stroke="${cyan}" stroke-width="2"/><path d="M131 1163l5 5 10-12" fill="none" stroke="${cyan}" stroke-width="3"/><text x="174" y="1159" class="review-title">IN-APP REVIEW ${reviewAvailable ? 'AVAILABLE' : ''}</text><text x="174" y="1185" class="review-copy">Submit from the banned number in WhatsApp. The checker cannot submit an appeal on your behalf.</text>`
+      : `<rect x="92" y="1122" width="1416" height="82" rx="18" fill="#111b29" stroke="#52718d" stroke-opacity=".38" stroke-width="2"/><text x="120" y="1160" class="review-title">REVIEW ACTION NOT AVAILABLE</text><text x="120" y="1185" class="review-copy">If WhatsApp shows Request a review in the banned account, submit it in that app.</text>`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1260" viewBox="0 0 1600 1260">
+      <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#050a16"/><stop offset=".5" stop-color="#07172c"/><stop offset="1" stop-color="#050d1d"/></linearGradient><radialGradient id="halo"><stop stop-color="#14629a" stop-opacity=".38"/><stop offset="1" stop-color="#061020" stop-opacity="0"/></radialGradient><pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#28a9ff" stroke-opacity=".07" stroke-width="1"/></pattern><filter id="glow"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+      <rect width="1600" height="1260" rx="36" fill="url(#bg)"/><rect width="1600" height="1260" rx="36" fill="url(#grid)"/><ellipse cx="800" cy="410" rx="690" ry="470" fill="url(#halo)"/><rect x="25" y="25" width="1550" height="1210" rx="32" fill="none" stroke="${blue}" stroke-opacity=".65" stroke-width="2"/>
+      <text x="92" y="93" class="brand">SUKUNA MD <tspan fill="${blue}">/</tspan> ACCOUNT BIOMETRICS</text><text x="1508" y="92" text-anchor="end" class="micro">SECURE DIAGNOSTIC · BARON API</text><path d="M92 124H1508" stroke="${blue}" stroke-opacity=".45" stroke-width="2"/>
+      <circle cx="800" cy="295" r="133" fill="#07101e" stroke="${statusColor}" stroke-opacity=".42" stroke-width="2"/><circle cx="800" cy="295" r="112" fill="none" stroke="${blue}" stroke-opacity=".24" stroke-width="2"/><circle cx="800" cy="295" r="91" fill="none" stroke="${blue}" stroke-opacity=".42" stroke-width="1" stroke-dasharray="4 11"/><path d="M800 156A139 139 0 0 1 937 275" fill="none" stroke="${statusColor}" stroke-width="5" stroke-linecap="round" filter="url(#glow)"/><path d="M800 172v30m0 186v30m-139-123h30m218 0h30" stroke="${blue}" stroke-opacity=".68" stroke-width="2"/><text x="800" y="281" text-anchor="middle" class="scan-label">SCAN COMPLETE</text><text x="800" y="329" text-anchor="middle" class="status" fill="${statusColor}">${title}</text><text x="800" y="385" text-anchor="middle" class="phone">+${xml(number)}</text>
+      <rect x="92" y="455" width="1416" height="106" rx="18" fill="#0a1423" stroke="${statusColor}" stroke-opacity=".58" stroke-width="2"/><text x="122" y="493" class="label">BAN TYPE</text><text x="122" y="535" class="headline" fill="${banned ? statusColor : green}">${banned ? typeText : 'NONE'}</text><text x="550" y="493" class="label">DURATION TYPE</text><text x="550" y="535" class="headline" fill="${kind === 'PERMANENT' ? red : kind === 'TEMPORARY' ? amber : cyan}">${banned ? kind : 'NOT BANNED'}</text><text x="1065" y="493" class="label">REVIEW ELIGIBILITY</text><text x="1065" y="535" class="headline" fill="${reviewAvailable ? cyan : '#8297ad'}">${reviewAvailable ? 'AVAILABLE IN APP' : 'NOT AVAILABLE'}</text>
+      ${panel(92,590,690,178,'BAN DETAILS',[`Type: ${typeText}`,`Category: ${category}`,`Started: ${banTime}`,`Elapsed: ${banAge}`],blue)}
+      ${panel(818,590,690,178,'APPEAL STATUS',[`Status: ${appealStatus}`,`Review filed: ${reviewTime}`,`Region / EU: ${euText}`,`Mode: ${kind}`],cyan)}
+      <rect x="92" y="915" width="1416" height="166" rx="22" fill="#0b1423" stroke="#2c6090" stroke-opacity=".65" stroke-width="2"/><text x="120" y="956" class="panel-title">VIOLATION / DIAGNOSTIC DETAILS</text>${reasonMarkup}<text x="120" y="1070" class="panel-small">BAN TIME SHOWN IN UTC · TEMPORARY EXPIRY IS NOT PROVIDED WHEN ABSENT FROM API</text>
+      ${reviewCard}<text x="800" y="1230" text-anchor="middle" class="footer">BIOMETRIC STATUS DISPLAY · NOT AN OFFICIAL WHATSAPP DECISION</text>
+      <style>.brand{font:700 26px Arial,sans-serif;fill:#d9efff;letter-spacing:4px}.micro{font:600 14px monospace;fill:#7194b7;letter-spacing:2px}.scan-label{font:700 15px monospace;fill:#83a9cc;letter-spacing:4px}.status{font:900 27px Arial,sans-serif;letter-spacing:2px}.phone{font:700 24px monospace;fill:#e5f4ff;letter-spacing:3px}.label{font:700 16px monospace;fill:#84a9cd;letter-spacing:3px}.headline{font:900 29px Arial,sans-serif;letter-spacing:1px}.panel-title{font:700 17px monospace;fill:#52c4ff;letter-spacing:3px}.panel-value{font:600 20px monospace;fill:#dcecff}.panel-small{font:600 13px monospace;fill:#6f91b2;letter-spacing:1px}.review-title{font:800 17px monospace;fill:${cyan};letter-spacing:2px}.review-copy{font:500 16px Arial,sans-serif;fill:#abc8df}.footer{font:600 13px monospace;fill:#577798;letter-spacing:2px}</style>
     </svg>`;
-    const image = await sharp(Buffer.from(svg)).jpeg({ quality: 88, chromaSubsampling: '4:4:4' }).toBuffer();
-    return sock.sendMessage(jid, { image, caption: caption || 'SUKUNA BAN CHECK' }, { quoted });
+    const image = await sharp(Buffer.from(svg)).png().toBuffer();
+    const sentCanvas = await sock.sendMessage(jid, { image }, { quoted });
+    if (reviewAvailable) {
+        const url = 'https://faq.whatsapp.com/465883178708358';
+        const button = { name: 'cta_url', buttonParamsJson: JSON.stringify({ display_text: 'REQUEST REVIEW', url, merchant_url: url }) };
+        const wrapped = generateWAMessageFromContent(jid, {
+            viewOnceMessage: {
+                message: {
+                    messageContextInfo: { deviceListMetadataVersion: 2, deviceListMetadata: {} },
+                    interactiveMessage: proto.Message.InteractiveMessage.fromObject({
+                        body: { text: 'To appeal, open WhatsApp using the banned number and tap Request a review on the ban screen. This checker cannot submit it on your behalf.' },
+                        footer: { text: 'WHATSAPP · ACCOUNT REVIEW' },
+                        header: { title: 'REVIEW AVAILABLE', hasMediaAttachment: false },
+                        nativeFlowMessage: { buttons: [button], messageParamsJson: '' },
+                    }),
+                },
+            },
+        }, { userJid: sock.user?.id, ...(quoted ? { quoted } : {}) });
+        await sock.relayMessage(jid, wrapped.message, { messageId: wrapped.key.id });
+    }
+    return sentCanvas;
 }
 
 function labelForCanvas(jid) {

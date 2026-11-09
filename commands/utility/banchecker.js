@@ -11,14 +11,10 @@
  */
 'use strict';
 
-const { sendRichHtml, sendSukunaBanCanvas, escapeHtml } = require('../../utils/genaiRich');
-const database = require('../../utils/database');
+const { sendSukunaBanCanvas } = require('../../utils/genaiRich');
 
 const BARON_API_BASE = 'https://baron0.com';
-const BARON_API_KEY = String(
-    process.env.BANCHECK_API_KEY || process.env.BARON_API_KEY || 'bk_v1_PmfOyQoZlzRuFLojg-nYvXUOAFe-CG4JHO_B32fDRm43uRjyYbE44ZExvGJCh0qgFEKdPJCQiqVW5ExhZBP1zeJePruh8RMUdsMQenraONJFunhh43VAkRQY1oxLPaxnGlhKx9ewXInCpyM6Ye51zkaVIkSviiy9UbGnXbQQgb74Z3RIv6B3QspX72pf5ISDWrtvfil-32RAC8l1bpJu5sap7NPk78_HAq7X6EiScQXhmY_U2RaA4lLPf4ERsjthcdLLpR5TN9Xg17DU4KShmS12OfaiVSJFbomMNWH9ErHiKkcM4gHx6E3FwGWuiytsOmyd5WIyyojtRCXhw7WWvLrOpXxVltcTyTMA1-luKnJ1aeIbowMCskX2ylHaeQWfu1saZgqezAZWKeM1CJ54c-y-kw9SLwDj6XHsWs_j2cStH0BOnIrDtYlogXrhqO5oybFNMGByxljzxKstXEWpuOQAiq5YCs2YCaxhdN0Y9iNWBiI1CvD_prXl5biJRSVYLT0Wdigrf827UkacvKNCQbtUcft81rKRL92Y0LC_ziSNrm-vfj4bMcanjsWmZxmsny_eJgUHNvhKuUGeuAg'
-).trim();
-const PLACEHOLDER_KEY = '';
+const BARON_API_KEY = String(process.env.BANCHECK_API_KEY || process.env.BARON_API_KEY || '').trim();
 
 async function checkWithBaron(number) {
     if (!BARON_API_KEY) return null;
@@ -49,6 +45,49 @@ async function checkWithBaron(number) {
         throw new Error('Baron API returned an invalid ban result');
     }
     return body;
+}
+
+async function getAppealStatus(number) {
+    if (!BARON_API_KEY) return null;
+    const url = `${BARON_API_BASE}/api/v2/appeal-status?phone=${encodeURIComponent(`+${number}`)}`;
+    const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${BARON_API_KEY}`, Accept: 'application/json' },
+        signal: AbortSignal.timeout(15000),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(body?.error || `Appeal status API returned HTTP ${res.status}`);
+    return body && typeof body === 'object' ? body : null;
+}
+
+function classifyBan(data = {}, appeal = null) {
+    if (!data.banned) return 'NONE';
+    const type = String(appeal?.ban_type || data.ban_type || '').toLowerCase();
+    if (appeal?.is_perma === true || /perma|hard/.test(type)) return 'PERMANENT';
+    if (appeal?.is_perma === false || /temp|soft|temporary/.test(type)) return 'TEMPORARY';
+    return 'UNKNOWN';
+}
+
+function formatUtc(value) {
+    if (!value) return null;
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return null;
+    return date.toISOString().replace('T', ' ').replace('.000Z', ' UTC').replace(/\.\d+Z$/, ' UTC');
+}
+
+function formatElapsed(value, now = Date.now()) {
+    if (!value) return null;
+    const time = new Date(value).getTime();
+    if (!Number.isFinite(time) || time > now) return null;
+    let seconds = Math.floor((now - time) / 1000);
+    const days = Math.floor(seconds / 86400); seconds %= 86400;
+    const hours = Math.floor(seconds / 3600); seconds %= 3600;
+    const minutes = Math.floor(seconds / 60);
+    if (days >= 365) return `${Math.floor(days / 365)}y ${Math.floor((days % 365) / 30)}mo ago`;
+    if (days >= 30) return `${Math.floor(days / 30)}mo ${days % 30}d ago`;
+    if (days) return `${days}d ${hours}h ago`;
+    if (hours) return `${hours}h ${minutes}m ago`;
+    return `${minutes}m ago`;
 }
 
 // ── Number parsing ───────────────────────────────────────────────────
@@ -100,28 +139,6 @@ function getCountry(num) {
     return 'Unknown';
 }
 
-function plain(value) {
-    return String(value || '').replace(/[ *_`]/g, '').replace(/\n{3,}/g, '\n\n');
-}
-
-function renderBanGenAI({ target, country, result, extras, registered, devices, page }) {
-    const status = plain(result.status);
-    const isBanned = /\bBANNED\b|OFF-WHATSAPP/i.test(status);
-    const isActive = /active|unbanned/i.test(status);
-    const tone = isBanned ? 'blood' : isActive ? 'alive' : 'warning';
-    const icon = isBanned ? '☠' : isActive ? '✓' : '⚠';
-    const registry = result.source === 'BARON' ? 'VERIFIED' : registered === true ? 'FOUND' : registered === false ? 'NOT FOUND' : 'TIMEOUT';
-    const deviceCount = result.source === 'BARON' ? 'BARON API' : devices === null ? 'N/A' : String(devices.length);
-    const profileState = page?.ok ? (page.generic ? 'HIDDEN' : 'VISIBLE') : 'TIMEOUT';
-    const safe = value => escapeHtml(plain(value));
-    const safeNumber = escapeHtml('+' + target);
-    const safeCountry = escapeHtml(country);
-    const profile = result.profile ? `<div class="profile">PROFILE: ${safe(result.profile)}</div>` : '';
-    return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>
-*{box-sizing:border-box}html,body{margin:0;background:transparent;font-family:Arial,sans-serif}body{padding:6px;background:#08040a;color:#f7e8ef}.card{padding:13px;border:2px solid #ff3158;border-radius:20px;background:#16070e;color:#f7e8ef;box-shadow:inset 0 0 0 3px #3e0d1c,0 8px 20px #000b}.title{text-align:center;color:#fff;font:bold 22px Arial Black,Arial,sans-serif;letter-spacing:1px;text-shadow:0 0 10px #ff1744}.sub{text-align:center;margin:2px 0 8px;color:#d58b9d;font:10px monospace}.scan{height:4px;margin:0 12px 8px;background:#ff1744;box-shadow:0 0 10px #ff1744;animation:scan 1.8s linear infinite}.verdict{display:flex;align-items:center;gap:9px;padding:9px;border:1px solid #ff3158;border-radius:10px;background:#090307}.verdict.alive{border-color:#36e58a}.verdict.warning{border-color:#ffbf55}.sig{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:#3b0714;color:#ff3158;font-size:20px}.alive .sig{background:#062b1b;color:#36e58a}.warning .sig{background:#2e2108;color:#ffbf55}.label{color:#a7687a;font:8px monospace;letter-spacing:1px}.value{margin-top:2px;color:#fff;font:bold 13px monospace}.number{text-align:center;margin:9px 0;color:#ffdce5;font:bold 16px monospace}.profile{text-align:center;margin:-4px 0 8px;color:#ff9cb1;font:9px monospace}.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}.metric{padding:7px;border:1px solid #5d1b2b;border-radius:8px;background:#0b0307}.metric .value{font-size:10px;color:#ffb1c1}.detail{margin-top:8px;padding:8px;border-left:3px solid #ff1744;background:#210710;color:#f2d8df;white-space:pre-wrap;overflow-wrap:anywhere;font:10px/1.4 monospace}.extras{margin-top:7px;color:#b98b99;white-space:pre-wrap;font:9px/1.35 monospace}.buttons{display:flex;gap:6px;margin-top:9px}.buttons button{flex:1;height:36px;border:1px solid #a71b3c;border-radius:8px;background:#3a0c1b;color:#ffdce5;font:bold 9px monospace}.buttons button:active{transform:scale(.95)}.footer{text-align:center;margin-top:8px;color:#884455;font:8px monospace;letter-spacing:1px}@keyframes scan{50%{opacity:.35}100%{opacity:1}}
-</style></head><body><div class="card"><div class="title">☠ BAN CHECKER ☠</div><div class="sub">SUKUNA MD // WHATSAPP ACCOUNT FORENSICS</div><div class="scan"></div><div class="verdict ${tone}"><div class="sig">${icon}</div><div><div class="label">FINAL VERDICT</div><div class="value">${safe(status)}</div></div></div><div class="number">${safeNumber}</div>${profile}<div class="grid"><div class="metric"><div class="label">REGISTRY</div><div class="value">${registry}</div></div><div class="metric"><div class="label">KEY DEVICES</div><div class="value">${deviceCount}</div></div><div class="metric"><div class="label">PUBLIC PROFILE</div><div class="value">${profileState}</div></div><div class="metric"><div class="label">REGION</div><div class="value">${safeCountry}</div></div></div><div class="detail">${safe(result.detail)}</div><div class="extras">${safe(extras || 'No carrier data returned.')}</div><div class="buttons"><button id="pulse">PULSE SCAN</button><button id="copy">COPY NUMBER</button><button id="evidence">EVIDENCE</button></div><div class="footer">GENAI RICH RESPONSE · ${result.source === 'BARON' ? 'BARON API VERIFICATION' : 'REGISTRY + PROFILE + KEY CHECK'}</div></div><script>(function(){var card=document.querySelector('.card'),pulse=document.getElementById('pulse'),copy=document.getElementById('copy'),evidence=document.getElementById('evidence');pulse.onclick=function(){card.style.opacity='.45';setTimeout(function(){card.style.opacity='1'},180)};copy.onclick=function(){copy.textContent='COPIED ✓';setTimeout(function(){copy.textContent='COPY NUMBER'},1200)};evidence.onclick=function(){evidence.textContent='CHECKS COMPLETE';setTimeout(function(){evidence.textContent='EVIDENCE'},1400)}})();</script></body></html>`;
-}
-
 // ── Command ──────────────────────────────────────────────────────────
 module.exports = {
     name: 'banchecker',
@@ -159,58 +176,42 @@ module.exports = {
             );
         }
 
-        if (!BARON_API_KEY || BARON_API_KEY === PLACEHOLDER_KEY) {
+        if (!BARON_API_KEY) {
             return reply('❌ Baron API key is not configured. Set BANCHECK_API_KEY (or BARON_API_KEY) in the deployment environment, then restart the bot.');
         }
 
         try {
             const baron = await checkWithBaron(target);
+            if (!baron) return reply('❌ Ban checker API key is not configured. Set BANCHECK_API_KEY or BARON_API_KEY in the deployment environment.');
             const isBanned = baron.banned === true;
-            const result = {
-                emoji: isBanned ? '🔴' : '🟢',
-                status: isBanned ? 'BANNED' : 'UNBANNED — ACTIVE',
-                detail: isBanned
-                    ? `Baron verified that +${target} is *BANNED*${baron.reason ? `\n_Reason: ${baron.reason}_` : '.'}`
-                    : `Baron verified that +${target} is *not banned* and can use WhatsApp normally.`,
-                profile: null,
-                source: 'BARON',
-            };
-            const bannedLabel = isBanned ? 'BANNED' : 'NOT BANNED';
-            const detailText =
-                `🛡️ SUKUNA BAN CHECK REPORT\n\n` +
-                `Number: +${target}\n` +
-                `Country: ${getCountry(target)}\n` +
-                `Status: ${isBanned ? '🔴 BANNED' : '🟢 UNBANNED — ACTIVE'}\n` +
-                (baron.reason ? `Reason: ${String(baron.reason)}\n` : '') +
-                `Source: Baron Ban Checker API\n` +
-                `Verification: Baron API response successfully validated.`;
-            if ((sock?.__sukunaDeviceMode || database.getDeviceMode()) === 'iphone') {
-                return sendSukunaBanCanvas({
-                    sock,
-                    jid: from,
-                    quoted: msg,
-                    number: target,
-                    banned: isBanned,
-                    caption: detailText,
-                });
+            let appeal = null;
+            if (isBanned) {
+                try { appeal = await getAppealStatus(target); }
+                catch (error) { console.warn('[banchecker] Appeal status unavailable:', error.message); }
             }
-            return await sendRichHtml({
+            const reviewAvailable = isBanned && baron.in_app_ban_appeal === true;
+            const banKind = classifyBan(baron, appeal);
+            const banTimestamp = appeal?.ban_time || baron.ban_time || baron.banTime || null;
+            const reviewTimestamp = appeal?.appeal_creation_time || null;
+            const details = {
+                banKind,
+                banType: appeal?.ban_type || baron.ban_type || null,
+                banTime: formatUtc(banTimestamp),
+                banAge: formatElapsed(banTimestamp),
+                appealStatus: appeal?.status || null,
+                reviewTime: formatUtc(reviewTimestamp),
+                reason: appeal?.reason || baron.violation_reason || baron.violation_label || null,
+                category: baron.violation_category || null,
+                isEu: typeof baron.is_eu === 'boolean' ? baron.is_eu : null,
+            };
+            return await sendSukunaBanCanvas({
                 sock,
                 jid: from,
                 quoted: msg,
-                html: renderBanGenAI({
-                    target,
-                    country: getCountry(target),
-                    result,
-                    extras: 'Source: Baron Ban Checker API\n',
-                    registered: null,
-                    devices: null,
-                    page: null,
-                }),
-                canvasText: `NUMBER\n+${target}\n\nFINAL STATUS\n${bannedLabel}`,
-                title: '☠ SUKUNA BAN CHECK ☠',
-                caption: detailText,
-                theme: 'sukuna',
+                number: target,
+                banned: isBanned,
+                details,
+                reviewAvailable,
             });
         } catch (error) {
             console.error('[banchecker] Baron API failed:', error.message);
@@ -218,9 +219,12 @@ module.exports = {
         }
     },
 
-    // Shared by the plain-text .bancheck command so both commands use the
-    // exact same endpoint, authentication, and response validation.
+    // Shared API helpers used by .bancheck and isolated regression tests.
     checkWithBaron,
+    getAppealStatus,
+    classifyBan,
+    formatUtc,
+    formatElapsed,
     normalizeNumber,
     getCountry,
 };

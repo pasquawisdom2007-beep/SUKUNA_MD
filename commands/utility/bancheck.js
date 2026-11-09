@@ -1,13 +1,12 @@
 'use strict';
 
-const { checkWithBaron, normalizeNumber, getCountry } = require('./banchecker');
+const { checkWithBaron, getAppealStatus, classifyBan, formatUtc, formatElapsed, normalizeNumber } = require('./banchecker');
 const { sendSukunaBanCanvas } = require('../../utils/genaiRich');
-const database = require('../../utils/database');
 
 module.exports = {
     name: 'bancheck',
     aliases: [],
-    description: 'Check WhatsApp ban status with a plain-text response',
+    description: 'Check WhatsApp ban status with a biometric canvas report',
     usage: '.bancheck <number>',
     category: 'utility',
 
@@ -26,25 +25,21 @@ module.exports = {
 
         try {
             const baron = await checkWithBaron(target);
+            if (!baron) return reply('❌ Ban checker API key is not configured. Set BANCHECK_API_KEY or BARON_API_KEY in the deployment environment.');
             const isBanned = baron.banned === true;
-            const reason = baron.reason ? `\nReason: ${String(baron.reason)}` : '';
-            const resultText =
-                `🛡️ SUKUNA BAN CHECK REPORT\n\n` +
-                `Number: +${target}\n` +
-                `Country: ${getCountry(target)}\n` +
-                `Status: ${isBanned ? '🔴 BANNED' : '🟢 UNBANNED — ACTIVE'}\n` +
-                `Source: Baron Ban Checker API${reason}`;
-            if ((sock?.__sukunaDeviceMode || database.getDeviceMode()) === 'iphone') {
-                return sendSukunaBanCanvas({
-                    sock,
-                    jid: from,
-                    quoted: msg,
-                    number: target,
-                    banned: isBanned,
-                    caption: resultText,
-                });
-            }
-            return reply(resultText);
+            let appeal = null;
+            if (isBanned) { try { appeal = await getAppealStatus(target); } catch (error) { console.warn('[bancheck] Appeal status unavailable:', error.message); } }
+            const reviewAvailable = isBanned && baron.in_app_ban_appeal === true;
+            return sendSukunaBanCanvas({
+                sock, jid: from, quoted: msg, number: target, banned: isBanned, reviewAvailable,
+                details: {
+                    banKind: classifyBan(baron, appeal), banType: appeal?.ban_type || baron.ban_type,
+                    banTime: formatUtc(appeal?.ban_time || baron.ban_time), banAge: formatElapsed(appeal?.ban_time || baron.ban_time),
+                    appealStatus: appeal?.status, reviewTime: formatUtc(appeal?.appeal_creation_time),
+                    reason: appeal?.reason || baron.violation_reason || baron.violation_label,
+                    category: baron.violation_category, isEu: typeof baron.is_eu === 'boolean' ? baron.is_eu : null,
+                },
+            });
         } catch (error) {
             console.error('[bancheck] Baron API failed:', error.message);
             return reply(`❌ Baron ban check failed: ${error.message}\nTry again or verify the API key.`);
