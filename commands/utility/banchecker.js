@@ -14,7 +14,7 @@
 const { sendSukunaBanCanvas } = require('../../utils/genaiRich');
 
 const BARON_API_BASE = 'https://baron0.com';
-const BARON_API_KEY = String(process.env.BANCHECK_API_KEY || process.env.BARON_API_KEY || '').trim();
+const BARON_API_KEY = String(process.env.BANCHECK_API_KEY || process.env.BARON_API_KEY || 'bk_v1_PmfOyQoZlzRuFLojg-nYvXUOAFe-CG4JHO_B32fDRm43uRjyYbE44ZExvGJCh0qgFEKdPJCQiqVW5ExhZBP1zeJePruh8RMUdsMQenraONJFunhh43VAkRQY1oxLPaxnGlhKx9ewXInCpyM6Ye51zkaVIkSviiy9UbGnXbQQgb74Z3RIv6B3QspX72pf5ISDWrtvfil-32RAC8l1bpJu5sap7NPk78_HAq7X6EiScQXhmY_U2RaA4lLPf4ERsjthcdLLpR5TN9Xg17DU4KShmS12OfaiVSJFbomMNWH9ErHiKkcM4gHx6E3FwGWuiytsOmyd5WIyyojtRCXhw7WWvLrOpXxVltcTyTMA1-luKnJ1aeIbowMCskX2ylHaeQWfu1saZgqezAZWKeM1CJ54c-y-kw9SLwDj6XHsWs_j2cStH0BOnIrDtYlogXrhqO5oybFNMGByxljzxKstXEWpuOQAiq5YCs2YCaxhdN0Y9iNWBiI1CvD_prXl5biJRSVYLT0Wdigrf827UkacvKNCQbtUcft81rKRL92Y0LC_ziSNrm-vfj4bMcanjsWmZxmsny_eJgUHNvhKuUGeuAg').trim();
 
 async function checkWithBaron(number) {
     if (!BARON_API_KEY) return null;
