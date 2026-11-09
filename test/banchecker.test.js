@@ -58,11 +58,12 @@ test('ban type, permanent flag, and ISO timestamps are interpreted safely', () =
     assert.equal(checker.formatElapsed('2026-06-08T14:29:42.000Z', Date.parse('2026-06-08T15:29:42.000Z')), '1h 0m ago');
 });
 
-test('ban report sends a PNG canvas without a duplicate text caption and includes the official review URL button when eligible', async () => {
+test('ban report sends one rich image card with REQUEST REVIEW and Dev quick replies', async () => {
     const sent = [];
     const relayed = [];
     const sock = {
         user: { id: '15550000000@s.whatsapp.net' },
+        waUploadToServer: async () => ({ mediaUrl: 'https://upload.test/canvas', directPath: '/mock/canvas' }),
         sendMessage: async (jid, content, options) => { sent.push({ jid, content, options }); return { key: { id: 'canvas-message' } }; },
         relayMessage: async (jid, message, options) => { relayed.push({ jid, message, options }); return { status: 'ok' }; },
     };
@@ -74,28 +75,29 @@ test('ban report sends a PNG canvas without a duplicate text caption and include
             reason: 'Age / regional verification failure', category: 'DEVICE', isEu: false,
         },
     });
-    assert.equal(sent.length, 1);
-    assert.ok(Buffer.isBuffer(sent[0].content.image));
-    assert.equal(sent[0].content.caption, undefined, 'full ban details must stay on the canvas, not in a duplicate text caption');
-    const imageMeta = await sharp(sent[0].content.image).metadata();
-    assert.equal(imageMeta.format, 'png');
-    assert.equal(imageMeta.width, 1600);
-    assert.equal(relayed.length, 1, 'eligible review should produce a URL-button message');
+    assert.equal(sent.length, 0, 'canvas and actions should be sent as one rich card');
+    assert.equal(relayed.length, 1);
     const payload = JSON.stringify(relayed[0].message);
+    assert.match(payload, /hasMediaAttachment\":true/);
+    assert.match(payload, /imageMessage/);
     assert.match(payload, /REQUEST REVIEW/);
-    assert.match(payload, /faq\.whatsapp\.com\/465883178708358/);
+    assert.match(payload, /banreview:request:1/);
+    assert.match(payload, /♲ Dev/);
+    assert.match(payload, /banreview:dev/);
 });
 
-test('no review button is sent if the BanCheck API says in-app appeal is unavailable', async () => {
-    const sent = [];
+test('review button remains actionable but carries an unavailable marker when appeals are not eligible', async () => {
+    let relayed;
     const sock = {
         user: { id: '15550000000@s.whatsapp.net' },
-        sendMessage: async (jid, content) => { sent.push(content); return {}; },
-        relayMessage: async () => { throw new Error('ineligible account must not receive an appeal CTA'); },
+        waUploadToServer: async () => ({ mediaUrl: 'https://upload.test/canvas', directPath: '/mock/canvas' }),
+        sendMessage: async () => { throw new Error('image should be embedded in the card'); },
+        relayMessage: async (jid, message) => { relayed = message; return {}; },
     };
     await sendSukunaBanCanvas({ sock, jid: '15550000000@s.whatsapp.net', number: '491701234567', banned: true, reviewAvailable: false });
-    assert.equal(sent.length, 1);
-    assert.equal(sent[0].caption, undefined);
+    const payload = JSON.stringify(relayed);
+    assert.match(payload, /banreview:request:0/);
+    assert.match(payload, /banreview:dev/);
 });
 
 test('banchecker command combines live check and appeal-status data into a canvas and no duplicate report text', async () => {
@@ -120,6 +122,7 @@ test('banchecker command combines live check and appeal-status data into a canva
     };
     const sock = {
         user: { id: '15550000000@s.whatsapp.net' },
+        waUploadToServer: async () => ({ mediaUrl: 'https://upload.test/canvas', directPath: '/mock/canvas' }),
         sendMessage: async (jid, content, options) => { sent.push({ jid, content, options }); return {}; },
         relayMessage: async (jid, message, options) => { relayed.push({ jid, message, options }); return {}; },
     };
@@ -131,9 +134,43 @@ test('banchecker command combines live check and appeal-status data into a canva
         assert.equal(requested.length, 2);
         assert.equal(requested[0].method, 'POST');
         assert.match(requested[1].url, /appeal-status\?phone=%2B491701234567$/);
-        assert.equal(sent.length, 1);
-        assert.equal(sent[0].content.caption, undefined);
+        assert.equal(sent.length, 0, 'successful command should not send a separate image or text report');
         assert.equal(relayed.length, 1);
+        const card = JSON.stringify(relayed[0].message);
+        assert.match(card, /hasMediaAttachment\":true/);
+        assert.match(card, /banreview:request:1/);
+        assert.match(card, /banreview:dev/);
         assert.equal(replies.length, 0, 'successful scan must not repeat the detailed report as text');
     } finally { global.fetch = previousFetch; }
+});
+
+test('REQUEST REVIEW quick reply gives the correct in-app instructions for eligible and ineligible checks', async () => {
+    const checker = require('../commands/utility/banchecker');
+    const replies = [];
+    const reply = async text => replies.push(text);
+    assert.equal(await checker.handleReviewButton('banreview:request:1', { reply }), true);
+    assert.match(replies[0], /tap “Request a review”/);
+    assert.match(replies[0], /faq\.whatsapp\.com\/465883178708358/);
+    assert.equal(await checker.handleReviewButton('banreview:request:0', { reply }), true);
+    assert.match(replies[1], /did not report an in-app review option/);
+});
+
+test('Dev quick reply invokes the owner contact card and preserves the owner-only gate', async () => {
+    const checker = require('../commands/utility/banchecker');
+    const sent = [];
+    const replies = [];
+    const sock = { sendMessage: async (jid, content) => { sent.push({ jid, content }); return {}; } };
+    const msg = { key: { remoteJid: '15550000000@s.whatsapp.net', id: 'button-message' } };
+    const reply = async text => replies.push(text);
+    assert.equal(await checker.handleReviewButton('banreview:dev', {
+        sock, msg, from: '15550000000@s.whatsapp.net', reply, isOwner: true,
+    }), true);
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].content.contacts.displayName, require('../config').owner?.name || 'PASQUA');
+    assert.match(sent[0].content.contacts.contacts[0].vcard, /waid=2349127814853/);
+    assert.equal(await checker.handleReviewButton('banreview:dev', {
+        sock, msg, from: '15550000000@s.whatsapp.net', reply, isOwner: false,
+    }), true);
+    assert.equal(sent.length, 1, 'non-owner must not receive the owner contact card');
+    assert.match(replies[0], /available to the bot owner only/);
 });

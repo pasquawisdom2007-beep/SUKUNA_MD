@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
-const { generateWAMessageFromContent, proto } = require('@pasqua-dev/baileys');
+const { generateWAMessageFromContent, generateWAMessageContent, proto } = require('@pasqua-dev/baileys');
 const sharp = require('sharp');
 const database = require('./database');
 
@@ -216,26 +216,58 @@ async function sendSukunaBanCanvas({ sock, jid, quoted, number, banned, details 
       <style>.brand{font:700 26px Arial,sans-serif;fill:#d9efff;letter-spacing:4px}.micro{font:600 14px monospace;fill:#7194b7;letter-spacing:2px}.scan-label{font:700 15px monospace;fill:#83a9cc;letter-spacing:4px}.status{font:900 27px Arial,sans-serif;letter-spacing:2px}.phone{font:700 24px monospace;fill:#e5f4ff;letter-spacing:3px}.label{font:700 16px monospace;fill:#84a9cd;letter-spacing:3px}.headline{font:900 29px Arial,sans-serif;letter-spacing:1px}.panel-title{font:700 17px monospace;fill:#52c4ff;letter-spacing:3px}.panel-value{font:600 20px monospace;fill:#dcecff}.panel-small{font:600 13px monospace;fill:#6f91b2;letter-spacing:1px}.review-title{font:800 17px monospace;fill:${cyan};letter-spacing:2px}.review-copy{font:500 16px Arial,sans-serif;fill:#abc8df}.footer{font:600 13px monospace;fill:#577798;letter-spacing:2px}</style>
     </svg>`;
     const image = await sharp(Buffer.from(svg)).png().toBuffer();
-    const sentCanvas = await sock.sendMessage(jid, { image }, { quoted });
-    if (reviewAvailable) {
-        const url = 'https://faq.whatsapp.com/465883178708358';
-        const button = { name: 'cta_url', buttonParamsJson: JSON.stringify({ display_text: 'REQUEST REVIEW', url, merchant_url: url }) };
+    const buttons = [
+        {
+            name: 'quick_reply',
+            buttonParamsJson: JSON.stringify({
+                display_text: 'REQUEST REVIEW',
+                id: `banreview:request:${reviewAvailable ? '1' : '0'}`,
+            }),
+        },
+        {
+            name: 'quick_reply',
+            buttonParamsJson: JSON.stringify({ display_text: '♲ Dev', id: 'banreview:dev' }),
+        },
+    ];
+    try {
+        if (typeof sock.waUploadToServer !== 'function') throw new Error('Image upload is not available for rich cards');
+        const media = await generateWAMessageContent({ image }, { upload: sock.waUploadToServer });
+        if (!media?.imageMessage) throw new Error('Baileys did not return an image header');
         const wrapped = generateWAMessageFromContent(jid, {
             viewOnceMessage: {
                 message: {
                     messageContextInfo: { deviceListMetadataVersion: 2, deviceListMetadata: {} },
                     interactiveMessage: proto.Message.InteractiveMessage.fromObject({
-                        body: { text: 'To appeal, open WhatsApp using the banned number and tap Request a review on the ban screen. This checker cannot submit it on your behalf.' },
-                        footer: { text: 'WHATSAPP · ACCOUNT REVIEW' },
-                        header: { title: 'REVIEW AVAILABLE', hasMediaAttachment: false },
-                        nativeFlowMessage: { buttons: [button], messageParamsJson: '' },
+                        body: { text: `Ban check complete for +${number}. The attached canvas contains the full diagnostic.` },
+                        footer: { text: 'SUKUNA MD · ACCOUNT BIOMETRICS' },
+                        header: { title: 'BAN CHECK · SCAN RESULT', hasMediaAttachment: true, imageMessage: media.imageMessage },
+                        nativeFlowMessage: { buttons, messageParamsJson: '' },
                     }),
                 },
             },
         }, { userJid: sock.user?.id, ...(quoted ? { quoted } : {}) });
         await sock.relayMessage(jid, wrapped.message, { messageId: wrapped.key.id });
+        return wrapped;
+    } catch (error) {
+        console.error('[banchecker rich card]', error?.message || error);
+        // Compatibility fallback for sockets without media upload support.
+        await sock.sendMessage(jid, { image }, { quoted });
+        const wrapped = generateWAMessageFromContent(jid, {
+            viewOnceMessage: {
+                message: {
+                    messageContextInfo: { deviceListMetadataVersion: 2, deviceListMetadata: {} },
+                    interactiveMessage: proto.Message.InteractiveMessage.fromObject({
+                        body: { text: 'Use the buttons below for review guidance or the developer contact. The report is in the image above.' },
+                        footer: { text: 'SUKUNA MD · ACCOUNT BIOMETRICS' },
+                        header: { title: 'BAN CHECK ACTIONS', hasMediaAttachment: false },
+                        nativeFlowMessage: { buttons, messageParamsJson: '' },
+                    }),
+                },
+            },
+        }, { userJid: sock.user?.id, ...(quoted ? { quoted } : {}) });
+        await sock.relayMessage(jid, wrapped.message, { messageId: wrapped.key.id });
+        return wrapped;
     }
-    return sentCanvas;
 }
 
 function labelForCanvas(jid) {

@@ -141,6 +141,28 @@ function getCountry(num) {
     return 'Unknown';
 }
 
+async function handleReviewButton(buttonId, { sock, msg, from, reply, isOwner }) {
+    const id = String(buttonId || '');
+    if (id === 'banreview:dev') {
+        if (!isOwner) {
+            await reply('🔒 The developer contact button is available to the bot owner only.');
+            return true;
+        }
+        const ownerCommand = require('../general/owner');
+        await ownerCommand.execute({ sock, msg, from, reply });
+        return true;
+    }
+
+    const reviewMatch = id.match(/^banreview:request:([01])$/);
+    if (!reviewMatch) return false;
+    if (reviewMatch[1] === '1') {
+        await reply('To request a review, open WhatsApp using the banned number and tap “Request a review” on the ban screen. This bot cannot submit it on your behalf. Official instructions: https://faq.whatsapp.com/465883178708358');
+    } else {
+        await reply('The BanCheck API did not report an in-app review option for this number. If WhatsApp itself shows “Request a review”, submit it from that banned account. Official instructions: https://faq.whatsapp.com/465883178708358');
+    }
+    return true;
+}
+
 // ── Command ──────────────────────────────────────────────────────────
 module.exports = {
     name: 'banchecker',
@@ -224,6 +246,7 @@ module.exports = {
     // Shared API helpers used by .bancheck and isolated regression tests.
     checkWithBaron,
     getAppealStatus,
+    handleReviewButton,
     classifyBan,
     formatUtc,
     formatElapsed,
