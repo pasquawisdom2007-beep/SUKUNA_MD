@@ -15,7 +15,7 @@ const { sendSukunaBanCanvas } = require('../../utils/genaiRich');
 
 const BARON_API_BASE = 'https://baron0.com';
 // Paste your API key between these quotes; this value takes priority.
-const BAN_CHECKER_API_KEY = '';
+const BAN_CHECKER_API_KEY = 'bk_v1_gHk0ttbC6RO3WU3xHOrlsna7fpQB5HHcmSk6Ugzf_6T2HM_fAZ7r4b54vFBexsCgP_aWTEG8u-JjXr_myVQfKrK5tUVQfndG02o-g_Jewovt-K4N8uDjFvYS4GwMdRJGDjZ_XQsRMcXo5HMW3N53RuaNAxi1uEzKwAF9dCav2iCLXp9oMRnTTuN7v-4lEL7BjCOlpOwb0vyxIHirAikr3BcCintUvvHWyrv_Nc5vEVsvPUaGHVRyLzx-oNIE-w1gzX6SV0vKCOd0gld41ZPvcXksZ4JMnojMGDTUJ0mPHUXlgPCuTTCHpJf3Xylv5Ra8YHzo9dovQbhW5XY_52Kkar2dI9BZtLNFTmfjHW-vm0n3E3CVAGTaIVsxaMfL50rZyHSbfujM6k9N-Ug8uVTi_KthsAeDtu7LxPN-r_8e8obOATmKDsEpU1UtyefJqJvQkjM2TsOxVgJFtKpSvxZW9ewSBfZxEeXd_IIav7aRYyqvIgYWATIJEQFcA4pasOW5VSmq3ujmK2njkLbAAElBM3o1MEUHSYfurKJYcUpnuCfFtZfYFX0ZcN4gTOpV15cztvYiJ7Hz1Sjp6v3lCA';
 const BARON_API_KEY = String(BAN_CHECKER_API_KEY || process.env.BANCHECK_API_KEY || process.env.BARON_API_KEY || '').trim();
 
 async function checkWithBaron(number) {
