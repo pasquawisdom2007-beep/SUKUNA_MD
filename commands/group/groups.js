@@ -20,7 +20,7 @@
  * Category: general (per request) — lives in commands/general/.
  */
 
-const { generateWAMessageFromContent, proto } = require('@pasqua-baileys/baileys');
+const { generateWAMessageFromContent, proto } = require('@pasqua-dev/baileys');
 const botIdentity = require('../../utils/botIdentity');
 
 const PAGE_SIZE   = Number(process.env.GROUPS_PAGE_SIZE || 20);
