@@ -23,7 +23,7 @@ const { normaliseBuffer } = require('../../lib/groupPhoto');
 
 let _baileys;
 let _baileysSource = 'unknown';
-const BAILEYS_CANDIDATES = ['@pasqua-dev/baileys'];
+const BAILEYS_CANDIDATES = ['@pasqua-baileys/baileys'];
 for (const pkg of BAILEYS_CANDIDATES) {
     try {
         _baileys = require(pkg);
@@ -31,7 +31,7 @@ for (const pkg of BAILEYS_CANDIDATES) {
         break;
     } catch (_) {}
 }
-if (!_baileys) throw new Error('No baileys package found. Install @pasqua-dev/baileys');
+if (!_baileys) throw new Error('No baileys package found. Install @pasqua-baileys/baileys');
 const {
     generateWAMessageContent,
     generateWAMessageFromContent,
@@ -95,8 +95,8 @@ function buildChannelCtx() {
     };
 }
 // WhatsApp uses this audience metadata when rendering a group-status entry in
-// the status list. Keeping it in contextInfo works on generated
-// groupStatusMessageV2 messages and rich-preview link statuses.
+// the status list. Keeping it in contextInfo works for both the native
+// groupStatus:true path and the generated groupStatusMessageV2 fallback.
 // The command remains fully compatible when older clients ignore these fields.
 function normaliseStatusColor(value) {
     const key = String(value || '').trim().toLowerCase();
@@ -268,42 +268,279 @@ function resolveGroupDisplayName(metadata, groupJid) {
     return 'WhatsApp Group';
 }
 
-async function postGroupStatus(sock, groupJid, content) {
-    const effectiveRingColor = normaliseStatusColor(content?.ringColor) || getStatusRingColor();
-    // Do not use sendMessage({ groupStatus: true }) here. In this Baileys
-    // version that flag is only handled by the richPreview branch; normal text
-    // and media fall through to the regular group-chat sender and can appear to
-    // succeed without ever becoming a Status post. Build the status envelope
-    // explicitly for every non-link payload instead.
-    const { backgroundColor, ringColor, ...rest } = content;
-    const payload = { ...rest };
+// ─── group-status delivery core ──────────────────────────────────────────────
+// Every group-status stanza needs the recipient list. Without it WhatsApp
+// accepts the relay and delivers the update to nobody, and the fork's
+// richPreview branch refuses outright:
+//
+//   if (!recipients?.length) throw new Boom(
+//       'groupStatus richPreview requires statusJidList', { statusCode: 400 })
+//   — lib/Socket/messages-send.js, richPreview branch
+//
+// That is why text/link posts never arrived while image/video/audio did:
+// media never sets `richPreview`, so it took the normal path, while every text
+// post hit the guard above, was caught, and fell through to a relay that was
+// built without recipients.
+async function resolveStatusRecipients(sock, groupJid) {
+    const fromGroup = await getGroupParticipantJids(sock, groupJid);
+    if (fromGroup.length) return fromGroup;
 
-    const inner = await generateWAMessageContent(payload, {
-        upload: sock.waUploadToServer,
-        backgroundColor: backgroundColor || TEXT_BG_COLOR,
-    });
-    attachChannelCtxToInner(inner, effectiveRingColor);
+    const cached = sock?.store?.groupMetadata?.[groupJid]?.participants
+        || sock?.groupMetadata?.[groupJid]?.participants;
+    if (Array.isArray(cached) && cached.length) {
+        const ids = cached.map(p => p?.id).filter(Boolean);
+        if (ids.length) return ids;
+    }
+    return [];
+}
 
-    const secret = crypto.randomBytes(32);
+/**
+ * Emit a raw groupStatusMessageV2 stanza — the exact envelope the fork's own
+ * interactive-handler emits (handleGroupStory), so text is delivered with the
+ * same structure media uses.
+ */
+async function relayGroupStatusInner(sock, groupJid, inner, opts = {}) {
+    const recipients = Array.isArray(opts.recipients) && opts.recipients.length
+        ? opts.recipients
+        : await resolveStatusRecipients(sock, groupJid);
+
+    if (!recipients.length) {
+        throw new Error('No group members resolved for the status audience');
+    }
+
+    const ringColor = normaliseStatusColor(opts.ringColor) || getStatusRingColor();
+    const message = opts.attachContext === false
+        ? { ...inner }
+        : attachChannelCtxToInner({ ...inner }, ringColor);
+
+    const secret = opts.secret || crypto.randomBytes(32);
     const msg = generateWAMessageFromContent(
         groupJid,
         {
             messageContextInfo: { messageSecret: secret },
             groupStatusMessageV2: {
-                message: {
-                    ...inner,
-                    messageContextInfo: { messageSecret: secret },
-                },
+                message: { ...message, messageContextInfo: { messageSecret: secret } },
             },
         },
         {}
     );
 
-    const statusJidList = await getGroupParticipantJids(sock, groupJid);
     await sock.relayMessage(groupJid, msg.message, {
         messageId: msg.key.id,
-        statusJidList,
+        statusJidList: recipients,
         additionalAttributes: { messageId: msg.key.id },
+    });
+
+    return { msg, recipients };
+}
+
+/** First argument that names a group JID, e.g. 120363...@g.us */
+function resolveTargetJid(args = []) {
+    for (const value of args) {
+        const match = String(value || '').match(/(\d{5,})@g\.us/i);
+        if (match) return `${match[1]}@g.us`;
+    }
+    return '';
+}
+
+// ── membership ───────────────────────────────────────────────────────────────
+// WHY THE OLD CHECK BLOCKED EVERY VALID JID
+// -----------------------------------------
+// It compared `sock.user.id`'s digits against each participant's digits. On a
+// modern paired session those two live in DIFFERENT namespaces:
+//   sock.user.id  → 233535590939:12@s.whatsapp.net   (phone number, :device)
+//   participants  → 99887766@lid                     (LID mode)
+// `233535590939` never equals `99887766`, so the guard answered
+// "not a member" for groups the bot was sitting in.
+//
+// The check now collects every identity WhatsApp gives us for the bot (PN jid,
+// LID, device-suffixed and bare), normalises both sides, and — crucially —
+// treats `groupFetchAllParticipating()` as the authority, because that call
+// returns ONLY groups the account is actually in.
+
+function botIdentityCandidates(sock) {
+    const jidNorm = require('@pasqua-baileys/baileys').jidNormalizedUser || ((v) => v);
+    const raw = [
+        sock?.user?.id,
+        sock?.user?.jid,
+        sock?.user?.lid,
+        sock?.authState?.creds?.me?.id,
+        sock?.authState?.creds?.me?.lid,
+        sock?.authState?.creds?.me?.phoneNumber,
+    ].filter(Boolean);
+
+    const full = new Set();
+    const bare = new Set();
+    for (const value of raw) {
+        const text = String(value).trim();
+        if (!text) continue;
+        const additions = [text];
+        try { additions.push(jidNorm(text)); } catch (_) { /* keep raw */ }
+        if (text.includes(':')) additions.push(`${text.split(':')[0]}@${text.split('@')[1] || 's.whatsapp.net'}`);
+        for (const candidate of additions) {
+            if (!candidate) continue;
+            full.add(candidate);
+            const user = candidate.split('@')[0].split(':')[0].replace(/\D/g, '');
+            if (user) bare.add(user);
+        }
+    }
+    return { full, bare };
+}
+
+function participantMatches(participants = [], self) {
+    for (const participant of participants) {
+        const ids = [participant?.id, participant?.jid, participant?.lid, participant?.phoneNumber].filter(Boolean);
+        for (const value of ids) {
+            const text = String(value).trim();
+            if (!text) continue;
+            if (self.full.has(text)) return text;
+            const user = text.split('@')[0].split(':')[0].replace(/\D/g, '');
+            if (user && self.bare.has(user)) return text;
+        }
+    }
+    return '';
+}
+
+/**
+ * Is the bot a member of `groupJid`?
+ *
+ * Returns { ok:true } when membership is proven, or when it cannot be
+ * determined at all (optimistic — a false "not a member" is worse than letting
+ * WhatsApp reject an impossible post). It returns { ok:false } only on positive
+ * evidence of absence.
+ */
+async function assertBotInGroup(sock, groupJid) {
+    const jid = String(groupJid || '').trim();
+    if (!/^\d{5,}@g\.us$/i.test(jid)) {
+        return { ok: false, reason: `\`${jid || '(empty)'}\` is not a valid group JID.`, jid };
+    }
+
+    const self = botIdentityCandidates(sock);
+    let meta = null;
+    let metaError = '';
+
+    try {
+        meta = await sock.groupMetadata(jid);
+    } catch (error) {
+        metaError = String(error?.message || error);
+    }
+
+    const participants = Array.isArray(meta?.participants) ? meta.participants : [];
+    if (participants.length) {
+        const matched = participantMatches(participants, self);
+        if (matched) {
+            return { ok: true, jid, subject: meta?.subject || '', members: participants.length, via: 'participants' };
+        }
+    }
+
+    // Authoritative list: every group this account is in.
+    let known = null;
+    if (typeof sock?.groupFetchAllParticipating === 'function') {
+        try {
+            const map = await sock.groupFetchAllParticipating();
+            if (map && typeof map === 'object') known = Object.keys(map);
+        } catch (error) {
+            console.error('[gcstatus] groupFetchAllParticipating failed:', error.message);
+        }
+    }
+
+    if (Array.isArray(known) && known.length) {
+        if (known.includes(jid)) {
+            return { ok: true, jid, subject: meta?.subject || '', members: participants.length, via: 'participating' };
+        }
+        return {
+            ok: false,
+            reason: `The bot is not a member of ${jid}. Get a valid JID with \`.groups\`.`,
+            jid,
+        };
+    }
+
+    // Membership could not be verified (throttled metadata, no group list).
+    // Proceed — the post itself will fail loudly if the bot truly is not there.
+    console.warn(`[gcstatus] membership unverified for ${jid}${metaError ? ` (${metaError.slice(0, 80)})` : ''} — attempting anyway`);
+    return { ok: true, jid, subject: meta?.subject || '', members: participants.length, via: 'unverified' };
+}
+
+async function postGroupStatus(sock, groupJid, content) {
+    const effectiveRingColor = normaliseStatusColor(content?.ringColor) || getStatusRingColor();
+    const recipients = await resolveStatusRecipients(sock, groupJid);
+
+    const {
+        backgroundColor, ringColor,
+        previewTitle, previewDescription, previewImage,
+        ...rest
+    } = content || {};
+
+    const hasMedia   = !!(rest.image || rest.video || rest.audio || rest.document || rest.sticker);
+    const rawText    = typeof rest.text === 'string' ? rest.text : '';
+    const isTextPost = !hasMedia && rawText.trim().length > 0;
+    const isLinkPost = isTextPost && /https?:\/\//i.test(rawText);
+
+    // ── TEXT / LINK ────────────────────────────────────────────────────────
+    // Handled explicitly and separately from media: no `richPreview` flag on
+    // plain text (it triggers the statusJidList guard and the link-card path),
+    // and the URL case always carries the recipient list.
+    if (isTextPost) {
+        // Text/link must travel through the SAME envelope media uses:
+        // sock.sendMessage(..., { groupStatus: true }) → generateWAMessageContent
+        // wraps it into groupStatusMessageV2 and enriches contextInfo
+        // (isGroupStatus + statusSourceType: TEXT). No `richPreview` flag here —
+        // that branch demands statusJidList and only builds a link card.
+        try {
+            return await sock.sendMessage(groupJid, {
+                text: rest.text,
+                groupStatus: true,
+                statusJidList: recipients,
+                backgroundColor: backgroundColor || TEXT_BG_COLOR,
+                contextInfo: buildStatusAudienceCtx(effectiveRingColor),
+            }, recipients.length ? { statusJidList: recipients } : undefined);
+        } catch (error) {
+            console.error('[gcstatus] groupStatus text send failed, relaying:', error.message);
+        }
+
+        // Fallback: emit the raw groupStatusMessageV2 stanza directly (the exact
+        // shape the fork's own handleGroupStory emits).
+        const textMessage = {
+            extendedTextMessage: {
+                text: rest.text,
+                backgroundArgb: hexToArgb(backgroundColor || TEXT_BG_COLOR),
+                textArgb: STATUS_FG_ARGB,
+                font: 0,
+                ...(isLinkPost
+                    ? { matchedText: rawText.match(/https?:\/\/\S+/i)?.[0] || rawText }
+                    : {}),
+            },
+        };
+        const { msg } = await relayGroupStatusInner(sock, groupJid, textMessage, {
+            recipients,
+            ringColor: effectiveRingColor,
+        });
+        return msg;
+    }
+
+    // ── MEDIA (unchanged working path, recipients now attached) ────────────
+    const payload = {
+        ...rest,
+        groupStatus: true,
+        statusJidList: recipients,
+        contextInfo: { ...buildStatusAudienceCtx(effectiveRingColor), ...buildChannelCtx() },
+    };
+
+    try {
+        return await sock.sendMessage(groupJid, payload,
+            recipients.length ? { statusJidList: recipients } : undefined);
+    } catch (error) {
+        console.error('[gcstatus] groupStatus media send failed, relaying:', error.message);
+    }
+
+    const inner = await generateWAMessageContent(rest, {
+        upload: sock.waUploadToServer,
+        backgroundColor: backgroundColor || TEXT_BG_COLOR,
+    });
+    const { msg } = await relayGroupStatusInner(sock, groupJid, inner, {
+        recipients,
+        ringColor: effectiveRingColor,
+        attachContext: false,
     });
     return msg;
 }
@@ -598,91 +835,58 @@ async function relayNativeGroupInviteStatus(sock, groupJid, meta, inviteLink, gr
 
 async function postGroupStatusLinkPreview(sock, groupJid, url, ringColorOverride) {
     const effectiveRingColor = normaliseStatusColor(ringColorOverride) || getStatusRingColor();
+    const recipients = await resolveStatusRecipients(sock, groupJid);
     const preview = await fetchLinkPreview(url);
 
     // Preferred path: let @pasqua-baileys build the complete rich preview.
-    // Its thumbnail-link upload carries the HQ direct path and media keys that
-    // WhatsApp clients need to render a clear large card inside group status.
+    // The recipient list is mandatory here — the fork throws
+    // 'groupStatus richPreview requires statusJidList' without it, which is
+    // what silently killed every link status before this fix.
     try {
         return await sock.sendMessage(groupJid, {
             text: url,
             richPreview: true,
             groupStatus: true,
-            statusJidList: await getGroupParticipantJids(sock, groupJid),
+            statusJidList: recipients,
             contextInfo: buildStatusAudienceCtx(effectiveRingColor),
-            ...(preview.title ? { previewTitle: preview.title } : {}),
+            ...(preview.title       ? { previewTitle: preview.title }             : {}),
             ...(preview.description ? { previewDescription: preview.description } : {}),
-            ...(preview.imageBuffer ? { previewImage: preview.imageBuffer } : {}),
-        });
+            ...(preview.imageBuffer ? { previewImage: preview.imageBuffer }       : {}),
+        }, recipients.length ? { statusJidList: recipients } : undefined);
     } catch (error) {
         console.error('[gcstatus] native rich link preview failed, falling back:', error.message);
     }
 
     // A native link preview is always rendered from a thumbnail by WhatsApp.
     // When an OG image is available, send that image as the actual group-status
-    // media instead. This is the only reliable way to keep the photo sharp on
-    // recipients' devices; the URL and page metadata remain in the caption.
+    // media instead — the only reliable way to keep the photo sharp on
+    // recipients' devices. The URL and page metadata stay in the caption.
     if (preview.imageBuffer) {
         const lines = [preview.title || 'Link', preview.description || '', url]
             .map(value => String(value || '').trim())
             .filter(Boolean);
         return postGroupStatus(sock, groupJid, {
             image: preview.imageBuffer,
-            caption: lines.join('\\n\\n'),
+            caption: lines.join('\n\n'),
             ringColor: effectiveRingColor,
         });
     }
 
-    const imagePrev = await createImageLinkPreview(
-        sock,
-        url,
-        preview.title || 'Link',
-        preview.description || url,
-        preview.imageBuffer,
-        preview.imageUrl,
-        preview.thumbnailBuffer
-    );
-
-    if (!imagePrev) {
-        // Thumbnail generation failed outright — fall back to WhatsApp's
-        // own (softer) auto-preview rather than posting nothing.
-        return postGroupStatus(sock, groupJid, {
-            text:        url,
-            richPreview: true,
-            ringColor: effectiveRingColor,
-            ...(preview.title       ? { previewTitle:       preview.title }       : {}),
-            ...(preview.description ? { previewDescription: preview.description } : {}),
-            ...(preview.imageBuffer ? { previewImage:       preview.imageBuffer } : {}),
-        });
-    }
-
-    const inner = { ...imagePrev };
-    if (inner.extendedTextMessage) {
-        inner.extendedTextMessage.backgroundArgb = STATUS_BG_ARGB;
-        inner.extendedTextMessage.textArgb = STATUS_FG_ARGB;
-        inner.extendedTextMessage.font = 0;
-    }
-    attachChannelCtxToInner(inner, effectiveRingColor);
-
-    const secret = crypto.randomBytes(32);
-    const msg_relay = generateWAMessageFromContent(
-        groupJid,
-        {
-            messageContextInfo: { messageSecret: secret },
-            groupStatusMessageV2: {
-                message: { ...inner, messageContextInfo: { messageSecret: secret } },
-            },
+    // No OG image: relay the URL as a text status card rather than risking the
+    // richPreview guard again.
+    const { msg } = await relayGroupStatusInner(sock, groupJid, {
+        extendedTextMessage: {
+            text: url,
+            matchedText: url,
+            canonicalUrl: url,
+            title: preview.title || 'Link',
+            description: preview.description || url,
+            backgroundArgb: STATUS_BG_ARGB,
+            textArgb: STATUS_FG_ARGB,
+            font: 0,
         },
-        {}
-    );
-
-    const statusJidList = await getGroupParticipantJids(sock, groupJid);
-    await sock.relayMessage(groupJid, msg_relay.message, {
-        messageId: msg_relay.key.id,
-        statusJidList,
-        additionalAttributes: { messageId: msg_relay.key.id },
-    });
-    return msg_relay;
+    }, { recipients, ringColor: effectiveRingColor });
+    return msg;
 }
 
 // ─── shared exports (used by gcstatusdm.js) ──────────────────────────────────
@@ -693,6 +897,10 @@ module.exports.postRelayGroupStatus     = postRelayGroupStatus;
 module.exports.postGroupStatusLinkPreview = postGroupStatusLinkPreview;
 module.exports.postNativeGroupInviteStatus = postNativeGroupInviteStatus;
 module.exports.resolveGroupDisplayName = resolveGroupDisplayName;
+module.exports.resolveStatusRecipients    = resolveStatusRecipients;
+module.exports.relayGroupStatusInner      = relayGroupStatusInner;
+module.exports.resolveTargetJid           = resolveTargetJid;
+module.exports.assertBotInGroup           = assertBotInGroup;
 module.exports.encodeOpus               = encodeOpus;
 module.exports.getQuotedCtx             = getQuotedCtx;
 module.exports.unwrapQuotedDeep         = unwrapQuotedDeep;
@@ -709,11 +917,32 @@ module.exports = Object.assign(module.exports, {
     usage:       '.gcstatus <text|link>  OR  reply to any message + .gcstatus [caption]',
     category:    'general',
 
-    async execute({ sock, msg, from, args, reply, isGroup }) {
-        if (!isGroup) {
-            return reply('👥 *This command only works inside a group.*');
+    async execute(cmdCtx) {
+        const { sock, msg, reply, isGroup, prefix = '.' } = cmdCtx || {};
+        const rawArgs = Array.isArray(cmdCtx?.args) ? cmdCtx.args.slice() : String(cmdCtx?.args || '').split(/\s+/);
+        let from = cmdCtx?.from;
+
+        // ── Optional target: `.gcstatus <group jid> [text]` from ANY chat ──
+        const targetJid = resolveTargetJid(rawArgs);
+        if (targetJid) {
+            const check = await assertBotInGroup(sock, targetJid);
+            if (!check.ok) return reply(`❌ _${check.reason}_`, { raw: true });
+            from = targetJid;
+            rawArgs.shift();
+        } else if (!isGroup) {
+            return reply(
+                '╭─❒ ◈ 𝗚𝗖𝗦𝗧𝗔𝗧𝗨𝗦 ❒\n│\n' +
+                `│ ▸ ${prefix}gcstatus <text>          (inside a group)\n` +
+                `│ ▸ ${prefix}gcstatus <group jid> <text>\n` +
+                `│ ▸ ${prefix}gcstatus <group jid>     (reply to a message/media)\n` +
+                '│\n' +
+                `│ Get every jid with: ${prefix}groups\n` +
+                '╰─⛧ Sukuna MD',
+                { raw: true }
+            );
         }
 
+        const args = rawArgs.filter((value) => value !== undefined && value !== null);
         const caption = args.join(' ').trim();
         const parsedCaption = parseStatusColor(caption);
         const statusCaption = parsedCaption.text;
@@ -819,7 +1048,7 @@ module.exports = Object.assign(module.exports, {
 
                 // If the quoted message had a link preview, relay it intact
                 const hasPreview = !!(quoted?.extendedTextMessage?.contextInfo?.externalAdReply);
-                if (hasPreview || isUrl) {
+                if (hasPreview) {
                     const quotedUrl = quotedText.match(/https?:\/\/[^\s]+/i)?.[0] || quotedText;
                     await postGroupStatusLinkPreview(sock, from, quotedUrl, selectedColor);
                 } else {
