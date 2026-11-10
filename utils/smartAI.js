@@ -392,24 +392,58 @@ async function askMultimodal({ key, system = '', user, media = [], remember = tr
     return reply;
 }
 
-/**
- * Generate an image from a text prompt. Uses Pollinations (KEYLESS) which is
- * reliable and needs no API key. Returns a Buffer, or null on failure.
- */
-async function generateImage(prompt, { width = 1024, height = 1024 } = {}) {
+/** Generate a detailed text-to-image result through Agnes Image 2.5 Flash. */
+async function generateImage(prompt, { width = 1024, height = 1024, size, ratio } = {}) {
     if (!prompt || !String(prompt).trim()) return null;
-    const seed = Math.floor(Math.random() * 1e9);
-    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(String(prompt).trim())}` +
-        `?width=${width}&height=${height}&seed=${seed}&nologo=true&model=flux`;
+    const apiKey = getAgnesApiKey();
+    if (!apiKey) return null;
+    const w = Math.max(1, Number(width) || 1024);
+    const h = Math.max(1, Number(height) || 1024);
+    const aspect = w / h;
+    const outputRatio = ratio || (aspect > 1.7 ? '16:9' : aspect > 1.25 ? '3:2' : aspect > 1.05 ? '4:3' : aspect < 0.65 ? '9:16' : aspect < 0.85 ? '3:4' : '1:1');
+    const outputSize = size || (Math.max(w, h) >= 1600 ? '2K' : '1K');
     try {
-        const res = await axios.get(url, { responseType: 'arraybuffer', timeout: 90000 });
-        const buf = Buffer.from(res.data);
+        const res = await axios.post('https://apihub.agnes-ai.com/v1/images/generations', {
+            model: 'agnes-image-2.5-flash',
+            prompt: String(prompt).trim(),
+            size: outputSize,
+            ratio: outputRatio,
+            return_base64: true,
+        }, {
+            headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            timeout: 240000,
+            validateStatus: () => true,
+        });
+        if (res.status < 200 || res.status >= 300) {
+            console.error('[AI:image] Agnes returned HTTP', res.status);
+            return null;
+        }
+        const payload = res.data || {};
+        const item = payload.data?.[0] || payload.images?.[0] || payload.result?.[0] || payload.result || payload;
+        const itemText = typeof item === 'string' ? item : '';
+        const encoded = item?.b64_json || item?.base64 || item?.image_base64 || payload.b64_json || payload.base64 ||
+            (itemText && !/^https?:\/\//i.test(itemText) ? itemText : null);
+        let buf = null;
+        if (typeof encoded === 'string') {
+            buf = Buffer.from(encoded.replace(/^data:[^;]+;base64,/i, ''), 'base64');
+        } else {
+            const imageUrl = (itemText && /^https?:\/\//i.test(itemText) ? itemText : null) || item?.url || item?.image_url || payload.url || payload.image_url;
+            if (typeof imageUrl === 'string' && /^https?:\/\//i.test(imageUrl)) {
+                const imageRes = await axios.get(imageUrl, { responseType: 'arraybuffer', timeout: 60000 });
+                buf = Buffer.from(imageRes.data);
+            }
+        }
         if (!buf || buf.length < 1024) return null;
         return buf;
     } catch (e) {
-        console.error('[AI:image] pollinations failed:', e.message);
+        console.error('[AI:image] Agnes image request failed:', e.response?.status || e.message);
         return null;
     }
+}
+
+// Internal-only accessor: returns the existing Agnes credential without logging it.
+function getAgnesApiKey() {
+    return String(AGNES_API_KEY_FILE || process.env.AGNES_API_KEY || '').trim();
 }
 
 function getLastAIError() {
@@ -438,4 +472,4 @@ function getProviderInfo() {
     };
 }
 
-module.exports = { ask, askMultimodal, generateImage, pushTurn, clearMemory, compactChatReply, getProviderInfo, getLastAIError, getAIStatus };
+module.exports = { ask, askMultimodal, generateImage, getAgnesApiKey, pushTurn, clearMemory, compactChatReply, getProviderInfo, getLastAIError, getAIStatus };

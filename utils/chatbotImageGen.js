@@ -1,16 +1,14 @@
 /**
  * chatbotImageGen — shared helper used by the DM chatbot and the group chatbot
  * to detect image-generation intent in a user's message and (if matched) send
- * a generated image. Uses the same prexzyvilla APIs as commands/ai/generate.js.
+ * a generated image. Uses the shared Agnes Image generator from smartAI.
  */
-const axios = require('axios');
-
-const PRIMARY  = 'https://apis.prexzyvilla.site/ai/dalle';
-const FALLBACK = 'https://apis.prexzyvilla.site/ai/realistic';
+const { generateImage } = require('./smartAI');
 
 // Match common "make me an image" style phrasings and capture the subject.
 const TRIGGERS = [
-    /(?:generate|create|make|draw|design|render|produce|give\s*me)\s+(?:an?\s+|me\s+(?:an?\s+)?)?(?:image|picture|pic|photo|art|drawing|illustration|painting)\s+(?:of|about|showing|with|for)\s+(.+)/i,
+    /(?:generate|create|make|draw|design|render|produce|give\s*me)\s+(?:an?\s+)?((?:(?:photorealistic|hyperrealistic|realistic|real|futuristic|cyberpunk|cinematic|surreal|anime)\s+)+(?:image|picture|pic|photo|portrait|art|drawing|illustration|painting)\s+(?:of|about|showing|with|for)\s+.+)/i,
+    /(?:generate|create|make|draw|design|render|produce|give\s*me)\s+(?:an?\s+|me\s+(?:an?\s+)?)?(?:image|picture|pic|photo|portrait|art|drawing|illustration|painting)\s+(?:of|about|showing|with|for)\s+(.+)/i,
     /(?:image|picture|pic|photo)\s+of\s+(.+)/i,
     /(?:draw|paint|sketch)\s+(?:me\s+)?(.+)/i,
 ];
@@ -28,31 +26,11 @@ function detectImagePrompt(text) {
     return null;
 }
 
-async function _fetchImageUrl(endpoint, prompt) {
-    try {
-        const { data } = await axios.get(endpoint, { params: { prompt }, timeout: 60000 });
-        if (!data || data.status !== true) return null;
-        const arr = data.image_url || data.images || data.result;
-        if (Array.isArray(arr) && arr.length) {
-            const first = arr[0];
-            return first?.image?.url || first?.url || (typeof first === 'string' ? first : null);
-        }
-        if (typeof data.result === 'string') return data.result;
-        if (typeof data.url === 'string') return data.url;
-        return null;
-    } catch (_) { return null; }
-}
-
 async function generateImageBuffer(prompt) {
-    let url = await _fetchImageUrl(PRIMARY, prompt);
-    let model = 'DALL·E 3 XL';
-    if (!url) { url = await _fetchImageUrl(FALLBACK, prompt); model = 'Realistic'; }
-    if (!url) return null;
     try {
-        const r = await axios.get(url, { responseType: 'arraybuffer', timeout: 60000 });
-        const buf = Buffer.from(r.data);
-        if (!buf || buf.length < 1024) return null;
-        return { buffer: buf, model };
+        const buffer = await generateImage(prompt);
+        if (!buffer || buffer.length < 1024) return null;
+        return { buffer, model: 'Agnes Image 2.5 Flash' };
     } catch (_) { return null; }
 }
 

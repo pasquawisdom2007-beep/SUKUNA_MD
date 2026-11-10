@@ -2,7 +2,7 @@
  * .imagine <prompt> — AI image generator
  *
  * Order of providers (first success wins):
- *   1. Pollinations (KEYLESS)  — real AI image generation, no API key needed
+ *   1. Agnes Image 2.5 Flash  — detailed AI image generation
  *   2. Unsplash                — real-photo fallback (needs UNSPLASH_ACCESS_KEY)
  *
  * Aliases: .aiimg, .genimage, .create
@@ -12,10 +12,10 @@ const { generateImage } = require('../../utils/smartAI');
 
 const UNSPLASH_ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY || '';
 
-async function tryPollinations(prompt) {
+async function tryAgnes(prompt) {
     const buf = await generateImage(prompt);
     if (!buf) return null;
-    return { buf, credit: null, model: 'Pollinations AI (Flux)' };
+    return { buf, credit: null, model: 'Agnes Image 2.5 Flash' };
 }
 
 async function tryUnsplash(prompt) {
@@ -54,14 +54,16 @@ module.exports = {
             return reply(
                 `🎨 *AI Image Generator*\n\n` +
                 `Usage: .imagine <description>\n` +
-                `Example: .imagine a cat wearing a spacesuit on the moon`
+                `Examples:\n` +
+                `• .imagine a photorealistic portrait of a woman in golden-hour light\n` +
+                `• .imagine a futuristic neon city above the clouds`
             );
         }
 
         const prompt = args.join(' ').trim();
         await reply('🎨 *Generating image...* please wait.');
 
-        let r = await tryPollinations(prompt);
+        let r = await tryAgnes(prompt);
         if (!r) r = await tryUnsplash(prompt);
 
         if (!r) {

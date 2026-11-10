@@ -23,7 +23,70 @@ const FAL_AI_ENDPOINTS = [
     { name: 'Wan v2.2-a14b', url: 'https://fal.run/fal-ai/wan/v2.2-a14b/text-to-video' }
 ];
 
+const AGNES_API_ORIGIN = 'https://apihub.agnes-ai.com';
+const AGNES_VIDEO_MODEL = 'agnes-video-2.5-flash';
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+function findAgnesVideoUrl(value) {
+    if (!value) return null;
+    if (typeof value === 'string') return /^https?:\/\//i.test(value) ? value : null;
+    if (Array.isArray(value)) {
+        for (const item of value) {
+            const found = findAgnesVideoUrl(item);
+            if (found) return found;
+        }
+        return null;
+    }
+    if (typeof value !== 'object') return null;
+    for (const candidate of [value.url, value.video_url, value.videoUrl, value.video, value.output, value.result, value.data, value.response]) {
+        const found = findAgnesVideoUrl(candidate);
+        if (found) return found;
+    }
+    return null;
+}
+
+async function generateAgnesVideo(prompt, {
+    apiKey = require('../../utils/smartAI').getAgnesApiKey(),
+    client = axios,
+    pollIntervalMs = 2000,
+    maxPolls = 90,
+    sleep = wait,
+} = {}) {
+    if (!String(apiKey || '').trim()) return null;
+    const headers = { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' };
+    const created = await client.post(`${AGNES_API_ORIGIN}/v1/videos`, {
+        model: AGNES_VIDEO_MODEL,
+        prompt: String(prompt).trim(),
+        mode: 'text',
+        seconds: '5',
+        size: '720P',
+        aspect_ratio: '16:9',
+        n: 1,
+    }, { headers, timeout: 30000, validateStatus: () => true });
+    if (created.status < 200 || created.status >= 300) throw new Error(`Agnes video create returned HTTP ${created.status}`);
+
+    const createData = created.data?.data || created.data || {};
+    const directUrl = findAgnesVideoUrl(created.data);
+    if (directUrl) return directUrl;
+    const videoId = createData.video_id || createData.id || createData.task_id;
+    if (!videoId) throw new Error('Agnes video response did not include a task ID');
+
+    const pollUrl = `${AGNES_API_ORIGIN}/agnesapi?video_id=${encodeURIComponent(videoId)}&model_name=${encodeURIComponent(AGNES_VIDEO_MODEL)}`;
+    for (let attempt = 0; attempt < maxPolls; attempt++) {
+        await sleep(pollIntervalMs);
+        const polled = await client.get(pollUrl, { headers, timeout: 20000, validateStatus: () => true });
+        if (polled.status < 200 || polled.status >= 300) throw new Error(`Agnes video poll returned HTTP ${polled.status}`);
+        const task = polled.data?.data || polled.data || {};
+        const videoUrl = findAgnesVideoUrl(polled.data);
+        const status = String(task.status || task.state || '').toLowerCase();
+        if (videoUrl && (status === 'completed' || status === 'succeeded' || !status)) return videoUrl;
+        if (status === 'failed' || status === 'error') throw new Error('Agnes video task failed');
+    }
+    throw new Error('Agnes video generation timed out while waiting for the result');
+}
+
 module.exports = {
+    generateAgnesVideo,
     name: 'aiartvideo',
     aliases: ['artvideo', 'videogen', 'av'],
     description: 'Generate a high-quality AI art video from text',
@@ -41,6 +104,14 @@ module.exports = {
             let videoUrl = null;
             let videoBuffer = null; // used by stages (like Google Veo) whose result URI needs an auth header to fetch
             let usedModel = '';
+
+            // --- STAGE 0: AGNES VIDEO 2.5 FLASH (shared Pasqua AI key) ---
+            try {
+                videoUrl = await generateAgnesVideo(prompt);
+                if (videoUrl) usedModel = 'Agnes Video 2.5 Flash';
+            } catch (e) {
+                console.error('[aiartvideo] Agnes Video failed:', e.message);
+            }
 
             // --- STAGE 1: REPLICATE (User's Key) ---
             const replicateModels = [

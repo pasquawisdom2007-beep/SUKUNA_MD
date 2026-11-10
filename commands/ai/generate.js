@@ -2,7 +2,7 @@
  * .generate <prompt> — AI image generator
  *
  * Order of providers (first success wins):
- *   1. Pollinations (KEYLESS)  — real AI image generation, no API key needed
+ *   1. Agnes Image 2.5 Flash  — detailed AI image generation
  *   2. Unsplash                — real-photo fallback (needs UNSPLASH_ACCESS_KEY)
  *
  * Aliases: .gen, .img
@@ -44,7 +44,9 @@ module.exports = {
             return reply(
                 `🎨 *AI Image Generator*\n\n` +
                 `Usage: .generate <description>\n` +
-                `Example: .generate a cat wearing a spacesuit on the moon`
+                `Examples:\n` +
+                `• .generate a photorealistic portrait of a woman in golden-hour light\n` +
+                `• .generate a futuristic neon city above the clouds`
             );
         }
 
@@ -53,7 +55,7 @@ module.exports = {
 
         let result = null;
         const buf = await generateImage(prompt);
-        if (buf) result = { buf, credit: null, model: 'Pollinations AI (Flux)' };
+        if (buf) result = { buf, credit: null, model: 'Agnes Image 2.5 Flash' };
         if (!result) result = await fetchFromUnsplash(prompt);
 
         if (!result) {
