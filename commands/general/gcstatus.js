@@ -31,7 +31,7 @@ for (const pkg of BAILEYS_CANDIDATES) {
         break;
     } catch (_) {}
 }
-if (!_baileys) throw new Error('No baileys package found. Install @pasqua-baileys/baileys');
+if (!_baileys) throw new Error('No baileys package found. Install @pasqua-dev/baileys');
 const {
     generateWAMessageContent,
     generateWAMessageFromContent,
@@ -359,7 +359,7 @@ function resolveTargetJid(args = []) {
 // returns ONLY groups the account is actually in.
 
 function botIdentityCandidates(sock) {
-    const jidNorm = require('@pasqua-baileys/baileys').jidNormalizedUser || ((v) => v);
+    const jidNorm = require('@pasqua-dev/baileys').jidNormalizedUser || ((v) => v);
     const raw = [
         sock?.user?.id,
         sock?.user?.jid,
@@ -838,7 +838,7 @@ async function postGroupStatusLinkPreview(sock, groupJid, url, ringColorOverride
     const recipients = await resolveStatusRecipients(sock, groupJid);
     const preview = await fetchLinkPreview(url);
 
-    // Preferred path: let @pasqua-baileys build the complete rich preview.
+    // Preferred path: let @pasqua-dev/baileys build the complete rich preview.
     // The recipient list is mandatory here — the fork throws
     // 'groupStatus richPreview requires statusJidList' without it, which is
     // what silently killed every link status before this fix.

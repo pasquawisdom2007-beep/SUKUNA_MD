@@ -145,7 +145,7 @@ function normalizeForAntiBot(message = {}) {
         forwardingScore: forwarding.forwardingScore,
         forwardedBotResponse: botResponse,
         botStyleCommandResponse,
-        source: 'pasqua-baileys',
+        source: 'pasqua-dev-baileys',
     };
 }
 

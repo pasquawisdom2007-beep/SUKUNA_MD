@@ -433,7 +433,7 @@ function failureText(error) {
 
 /** Rich card with View / Copy / React-again buttons; false when the relay fails. */
 async function sendUpdateCard({ sock, msg, from, target, payload, emoji, prefix, command }) {
-    const baileys = require('@pasqua-baileys/baileys');
+    const baileys = require('@pasqua-dev/baileys');
     const { generateWAMessageFromContent, proto } = baileys;
 
     const buttons = [
