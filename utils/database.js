@@ -71,6 +71,25 @@ class Database {
         return this.data.settings.aiBadge;
     }
 
+    // ── Sticker reaction toggle — isolated per group or personal chat ───────
+    // A chat-keyed setting keeps group configuration separate from DMs and
+    // also prevents one paired bot session's setting from leaking into another.
+    getStickerReaction(chatId) {
+        const key = String(chatId || '');
+        return this.data.settings.stickerReactionByChat?.[key] === true;
+    }
+
+    setStickerReaction(chatId, enabled) {
+        const key = String(chatId || '');
+        if (!key) return false;
+        if (!this.data.settings.stickerReactionByChat) {
+            this.data.settings.stickerReactionByChat = {};
+        }
+        this.data.settings.stickerReactionByChat[key] = enabled === true;
+        this.save('settings');
+        return this.data.settings.stickerReactionByChat[key];
+    }
+
     // ── Personal AntiBug — keyed by the paired bot session ────────────────
     // Personal protection is intentionally separate from group settings so
     // `.antibug p on` protects only the selected bot account's DM surface.
