@@ -1046,10 +1046,11 @@ module.exports = Object.assign(module.exports, {
             try {
                 const isUrl = /https?:\/\//i.test(quotedText);
 
-                // Keep every quoted URL on the same native rich-preview path,
-                // including plain URL messages that arrived without a preview.
-                // Non-URL quoted text keeps the existing text-status behavior.
-                if (isUrl) {
+                // If the quoted message already had a link preview, relay it
+                // through the existing preview path. Plain quoted text/URLs
+                // retain the stable normal group-status behavior.
+                const hasPreview = !!(quoted?.extendedTextMessage?.contextInfo?.externalAdReply);
+                if (hasPreview) {
                     const quotedUrl = quotedText.match(/https?:\/\/[^\s]+/i)?.[0] || quotedText;
                     await postGroupStatusLinkPreview(sock, from, quotedUrl, selectedColor);
                 } else {
