@@ -6,7 +6,7 @@
 
 'use strict';
 
-const fontmakerLib = require('../../utils/fontmakerLib');
+const fontmakerLib = require('./fontmakerLib');
 
 const TRIGGER = 'pasqua!';
 const REACTIONS = ['🔥', '💯', '🗿', '⚡', '👑'];
