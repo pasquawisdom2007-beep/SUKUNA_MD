@@ -725,6 +725,64 @@ async function createImageLinkPreview(sock, url, title, description, imageBuffer
     }
 }
 
+function extractGroupInviteCode(url) {
+    try {
+        const parsed = new URL(String(url || '').trim());
+        if (parsed.hostname.toLowerCase() !== 'chat.whatsapp.com') return null;
+        const code = parsed.pathname.split('/').filter(Boolean)[0];
+        return code ? decodeURIComponent(code) : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+async function resolveGroupInviteLinkPreview(sock, url) {
+    const code = extractGroupInviteCode(url);
+    if (!code || typeof sock?.groupGetInviteInfo !== 'function') return null;
+
+    const result = {
+        title: null,
+        description: 'Group chat invite',
+        imageBuffer: null,
+        canonicalUrl: url,
+    };
+
+    try {
+        const info = await sock.groupGetInviteInfo(code);
+        result.title = info?.subject || info?.name || 'WhatsApp Group';
+
+        // WhatsApp's invite-card preview uses the invited group's profile
+        // photo. The fork's richPreview path will upload this through its
+        // dedicated thumbnail-link route and attach the HQ media keys.
+        if (info?.id && typeof sock.profilePictureUrl === 'function') {
+            try {
+                const photoUrl = await sock.profilePictureUrl(info.id, 'image');
+                if (photoUrl) {
+                    const controller = new AbortController();
+                    const timer = setTimeout(() => controller.abort(), 8_000);
+                    try {
+                        const response = await fetch(photoUrl, {
+                            signal: controller.signal,
+                            headers: { 'User-Agent': 'WhatsApp/2.23.20.0 A' },
+                        });
+                        if (response.ok) result.imageBuffer = Buffer.from(await response.arrayBuffer());
+                    } finally {
+                        clearTimeout(timer);
+                    }
+                }
+            } catch (_) {
+                // The fork can resolve the invite image itself when this
+                // best-effort prefetch is unavailable.
+            }
+        }
+    } catch (_) {
+        // Returning a partial result keeps the stable richPreview path alive;
+        // Baileys can still resolve the invite metadata internally.
+    }
+
+    return result;
+}
+
 // Post a URL to group status with a crisp, non-blurry image preview —
 // the exact same prepareWAMessageMedia(mediaTypeOverride:'thumbnail-link')
 // technique commands/group/invite.js uses for group invite links, applied
@@ -835,7 +893,9 @@ async function relayNativeGroupInviteStatus(sock, groupJid, meta, inviteLink, gr
 async function postGroupStatusLinkPreview(sock, groupJid, url, ringColorOverride) {
     const effectiveRingColor = normaliseStatusColor(ringColorOverride) || getStatusRingColor();
     const recipients = await resolveStatusRecipients(sock, groupJid);
-    const preview = await fetchLinkPreview(url);
+    const preview = extractGroupInviteCode(url)
+        ? (await resolveGroupInviteLinkPreview(sock, url) || await fetchLinkPreview(url))
+        : await fetchLinkPreview(url);
     const previewTitle = preview.siteName && preview.title && !preview.title.includes(preview.siteName)
         ? `${preview.title} · ${preview.siteName}`
         : (preview.title || preview.siteName);
@@ -907,6 +967,8 @@ module.exports.encodeOpus               = encodeOpus;
 module.exports.getQuotedCtx             = getQuotedCtx;
 module.exports.unwrapQuotedDeep         = unwrapQuotedDeep;
 module.exports.createImageLinkPreview   = createImageLinkPreview;
+module.exports.extractGroupInviteCode   = extractGroupInviteCode;
+module.exports.resolveGroupInviteLinkPreview = resolveGroupInviteLinkPreview;
 module.exports.TEXT_BG_COLOR            = TEXT_BG_COLOR;
 module.exports.baileysSource            = _baileysSource;
 

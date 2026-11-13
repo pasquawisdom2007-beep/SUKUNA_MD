@@ -38,4 +38,34 @@ test('non-link posts are relayed as groupStatusMessageV2, not ordinary group mes
     assert.equal(relays[0][2].statusJidList[0], '15551234567@s.whatsapp.net');
 });
 
+test('WhatsApp invite links use the native group-chat-invite rich preview path', async () => {
+    const sends = [];
+    const sock = {
+        groupMetadata: async () => ({ participants: [{ id: '15551234567@s.whatsapp.net' }] }),
+        groupGetInviteInfo: async code => ({
+            id: '120363000000000000@g.us',
+            subject: `Sukuna ${code}`,
+            size: 12,
+        }),
+        sendMessage: async (...args) => {
+            sends.push(args);
+            return { key: { id: 'preview' } };
+        },
+    };
+
+    await gcstatus.postGroupStatusLinkPreview(
+        sock,
+        '120363000000000000@g.us',
+        'https://chat.whatsapp.com/INVITE123?mode=gi_t'
+    );
+
+    assert.equal(sends.length, 1);
+    assert.equal(sends[0][0], '120363000000000000@g.us');
+    assert.equal(sends[0][1].richPreview, true);
+    assert.equal(sends[0][1].groupStatus, true);
+    assert.equal(sends[0][1].previewTitle, 'Sukuna INVITE123');
+    assert.equal(sends[0][1].previewDescription, 'Group chat invite');
+    assert.deepEqual(sends[0][1].statusJidList, ['15551234567@s.whatsapp.net']);
+});
+
 console.log('gcstatus Pasqua Baileys regression passed');
