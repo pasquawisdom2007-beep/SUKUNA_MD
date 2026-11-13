@@ -66,6 +66,7 @@ test('WhatsApp invite links use the native group-chat-invite rich preview path',
     assert.equal(inner.title, 'Sukuna INVITE123');
     assert.equal(inner.description, 'Group chat invite');
     assert.equal(inner.previewType, 5);
+    assert.equal(relays[0][2].additionalAttributes.broadcast, 'true');
     assert.deepEqual(relays[0][2].statusJidList, ['15551234567@s.whatsapp.net']);
 });
 
@@ -94,6 +95,7 @@ test('link-preview fallback keeps preview metadata inside groupStatusMessageV2',
     assert.equal(inner.title, 'Sukuna Invite');
     assert.equal(inner.description, 'Group chat invite');
     assert.equal(inner.previewType, 5);
+    assert.equal(relays[0][2].additionalAttributes.broadcast, 'true');
     assert.equal(relays[0][2].statusJidList[0], '15551234567@s.whatsapp.net');
 });
 

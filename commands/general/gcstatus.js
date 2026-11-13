@@ -327,7 +327,10 @@ async function relayGroupStatusInner(sock, groupJid, inner, opts = {}) {
     await sock.relayMessage(groupJid, msg.message, {
         messageId: msg.key.id,
         statusJidList: recipients,
-        additionalAttributes: { messageId: msg.key.id },
+        additionalAttributes: {
+            broadcast: 'true',
+            messageId: msg.key.id,
+        },
     });
 
     return { msg, recipients };
@@ -885,7 +888,10 @@ async function relayNativeGroupInviteStatus(sock, groupJid, meta, inviteLink, gr
     await sock.relayMessage(groupJid, msg.message, {
         messageId: msg.key.id,
         statusJidList,
-        additionalAttributes: { messageId: msg.key.id },
+        additionalAttributes: {
+            broadcast: 'true',
+            messageId: msg.key.id,
+        },
     });
     return msg;
 }
