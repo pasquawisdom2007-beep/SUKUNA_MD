@@ -907,36 +907,6 @@ async function postGroupStatusLinkPreview(sock, groupJid, url, ringColorOverride
         ? `${preview.title} · ${preview.siteName}`
         : (preview.title || preview.siteName);
 
-    // Invite URLs are the most sensitive case: the generic richPreview
-    // wrapper can be unavailable on older deployed forks, even though raw
-    // group-status relay works. Build the complete card locally and use the
-    // same stable envelope as ordinary status media/text posts.
-    if (inviteUrl) {
-        const invitePreview = await createImageLinkPreview(
-            sock,
-            url,
-            previewTitle || 'WhatsApp Group',
-            preview.description || 'Group chat invite',
-            preview.imageBuffer,
-            preview.imageUrl,
-            preview.thumbnailBuffer
-        );
-        const { msg } = await relayGroupStatusInner(sock, groupJid, invitePreview || {
-            extendedTextMessage: {
-                text: url,
-                matchedText: url,
-                canonicalUrl: url,
-                title: previewTitle || 'WhatsApp Group',
-                description: preview.description || 'Group chat invite',
-                previewType: 5,
-            },
-        }, {
-            recipients,
-            ringColor: effectiveRingColor,
-        });
-        return msg;
-    }
-
     // Preferred path: let @pasqua-dev/baileys build the complete rich preview.
     // The recipient list is mandatory here — the fork throws
     // 'groupStatus richPreview requires statusJidList' without it, which is
