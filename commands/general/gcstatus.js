@@ -177,7 +177,7 @@ async function downloadMedia(mediaMsg, type) {
  * previewImage and lets WhatsApp do its own (blurry) fetch.
  */
 async function fetchLinkPreview(url) {
-    const result = { title: null, description: null, imageBuffer: null, thumbnailBuffer: null, imageUrl: null };
+    const result = { title: null, description: null, imageBuffer: null, thumbnailBuffer: null, imageUrl: null, siteName: null, canonicalUrl: url };
     try {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 10_000);
@@ -194,25 +194,24 @@ async function fetchLinkPreview(url) {
 
         const html = await res.text();
 
-        // Extract og:title / title
-        const ogTitle = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)?.[1] ||
-                        html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i)?.[1] ||
-                        html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1];
-        if (ogTitle) result.title = ogTitle.trim().slice(0, 120);
-
-        // Extract og:description / description
-        const ogDesc = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)?.[1] ||
-                       html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i)?.[1] ||
-                       html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i)?.[1] ||
-                       html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["']/i)?.[1];
-        if (ogDesc) result.description = ogDesc.trim().slice(0, 300);
-
-        // Extract og:image and download it at full resolution
-        const imgUrl = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1] ||
-                       html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)?.[1];
+        const decode = value => String(value || '').replace(/&amp;/gi, '&').replace(/&quot;/gi, '"').replace(/&#39;/gi, "'").replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').trim();
+        const meta = (key, attr = 'property') => {
+            const pattern = new RegExp(`<meta\\b[^>]*(?:${attr}=["']${key}["'][^>]*content=["']([^"']+)["']|content=["']([^"']+)["'][^>]*${attr}=["']${key}["'])`, 'i');
+            const match = html.match(pattern);
+            return decode(match?.[1] || match?.[2] || '');
+        };
+        const ogTitle = meta('og:title') || decode(html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]);
+        const ogDesc = meta('og:description') || meta('description', 'name');
+        const imgUrl = meta('og:image') || meta('twitter:image', 'name');
+        const siteName = meta('og:site_name');
+        const canonical = decode(html.match(/<link\\b[^>]*rel=["']canonical["'][^>]*href=["']([^"']+)["']/i)?.[1] || '');
+        if (ogTitle) result.title = ogTitle.slice(0, 120);
+        if (ogDesc) result.description = ogDesc.slice(0, 300);
+        if (siteName) result.siteName = siteName.slice(0, 80);
+        if (canonical) result.canonicalUrl = new URL(canonical, url).href;
 
         if (imgUrl) {
-            const absImg = imgUrl.startsWith('http') ? imgUrl : new URL(imgUrl, url).href;
+            const absImg = /^https?:\/\//i.test(imgUrl) ? imgUrl : new URL(imgUrl, url).href;
             // Keep the original remote URL. WhatsApp's thumbnail-link upload can
             // preserve better source metadata than a re-encoded low-res buffer.
             result.imageUrl = absImg;
@@ -837,6 +836,9 @@ async function postGroupStatusLinkPreview(sock, groupJid, url, ringColorOverride
     const effectiveRingColor = normaliseStatusColor(ringColorOverride) || getStatusRingColor();
     const recipients = await resolveStatusRecipients(sock, groupJid);
     const preview = await fetchLinkPreview(url);
+    const previewTitle = preview.siteName && preview.title && !preview.title.includes(preview.siteName)
+        ? `${preview.title} · ${preview.siteName}`
+        : (preview.title || preview.siteName);
 
     // Preferred path: let @pasqua-dev/baileys build the complete rich preview.
     // The recipient list is mandatory here — the fork throws
@@ -849,7 +851,7 @@ async function postGroupStatusLinkPreview(sock, groupJid, url, ringColorOverride
             groupStatus: true,
             statusJidList: recipients,
             contextInfo: buildStatusAudienceCtx(effectiveRingColor),
-            ...(preview.title       ? { previewTitle: preview.title }             : {}),
+            ...(previewTitle       ? { previewTitle }                              : {}),
             ...(preview.description ? { previewDescription: preview.description } : {}),
             ...(preview.imageBuffer ? { previewImage: preview.imageBuffer }       : {}),
         }, recipients.length ? { statusJidList: recipients } : undefined);
@@ -862,7 +864,7 @@ async function postGroupStatusLinkPreview(sock, groupJid, url, ringColorOverride
     // media instead — the only reliable way to keep the photo sharp on
     // recipients' devices. The URL and page metadata stay in the caption.
     if (preview.imageBuffer) {
-        const lines = [preview.title || 'Link', preview.description || '', url]
+        const lines = [previewTitle || 'Link', preview.description || '', preview.canonicalUrl || url]
             .map(value => String(value || '').trim())
             .filter(Boolean);
         return postGroupStatus(sock, groupJid, {
@@ -879,8 +881,8 @@ async function postGroupStatusLinkPreview(sock, groupJid, url, ringColorOverride
             text: url,
             matchedText: url,
             canonicalUrl: url,
-            title: preview.title || 'Link',
-            description: preview.description || url,
+            title: previewTitle || 'Link',
+            description: preview.description || preview.canonicalUrl || url,
             backgroundArgb: STATUS_BG_ARGB,
             textArgb: STATUS_FG_ARGB,
             font: 0,
