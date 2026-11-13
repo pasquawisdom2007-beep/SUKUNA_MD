@@ -39,7 +39,7 @@ test('non-link posts are relayed as groupStatusMessageV2, not ordinary group mes
 });
 
 test('WhatsApp invite links use the native group-chat-invite rich preview path', async () => {
-    const sends = [];
+    const relays = [];
     const sock = {
         groupMetadata: async () => ({ participants: [{ id: '15551234567@s.whatsapp.net' }] }),
         groupGetInviteInfo: async code => ({
@@ -47,9 +47,9 @@ test('WhatsApp invite links use the native group-chat-invite rich preview path',
             subject: `Sukuna ${code}`,
             size: 12,
         }),
-        sendMessage: async (...args) => {
-            sends.push(args);
-            return { key: { id: 'preview' } };
+        relayMessage: async (...args) => {
+            relays.push(args);
+            return { status: 'ok' };
         },
     };
 
@@ -59,13 +59,14 @@ test('WhatsApp invite links use the native group-chat-invite rich preview path',
         'https://chat.whatsapp.com/INVITE123?mode=gi_t'
     );
 
-    assert.equal(sends.length, 1);
-    assert.equal(sends[0][0], '120363000000000000@g.us');
-    assert.equal(sends[0][1].richPreview, true);
-    assert.equal(sends[0][1].groupStatus, true);
-    assert.equal(sends[0][1].previewTitle, 'Sukuna INVITE123');
-    assert.equal(sends[0][1].previewDescription, 'Group chat invite');
-    assert.deepEqual(sends[0][1].statusJidList, ['15551234567@s.whatsapp.net']);
+    assert.equal(relays.length, 1);
+    assert.equal(relays[0][0], '120363000000000000@g.us');
+    const inner = relays[0][1].groupStatusMessageV2.message.extendedTextMessage;
+    assert.equal(inner.text, 'https://chat.whatsapp.com/INVITE123?mode=gi_t');
+    assert.equal(inner.title, 'Sukuna INVITE123');
+    assert.equal(inner.description, 'Group chat invite');
+    assert.equal(inner.previewType, 5);
+    assert.deepEqual(relays[0][2].statusJidList, ['15551234567@s.whatsapp.net']);
 });
 
 test('link-preview fallback keeps preview metadata inside groupStatusMessageV2', async () => {

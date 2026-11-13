@@ -893,12 +893,43 @@ async function relayNativeGroupInviteStatus(sock, groupJid, meta, inviteLink, gr
 async function postGroupStatusLinkPreview(sock, groupJid, url, ringColorOverride) {
     const effectiveRingColor = normaliseStatusColor(ringColorOverride) || getStatusRingColor();
     const recipients = await resolveStatusRecipients(sock, groupJid);
-    const preview = extractGroupInviteCode(url)
+    const inviteUrl = !!extractGroupInviteCode(url);
+    const preview = inviteUrl
         ? (await resolveGroupInviteLinkPreview(sock, url) || await fetchLinkPreview(url))
         : await fetchLinkPreview(url);
     const previewTitle = preview.siteName && preview.title && !preview.title.includes(preview.siteName)
         ? `${preview.title} · ${preview.siteName}`
         : (preview.title || preview.siteName);
+
+    // Invite URLs are the most sensitive case: the generic richPreview
+    // wrapper can be unavailable on older deployed forks, even though raw
+    // group-status relay works. Build the complete card locally and use the
+    // same stable envelope as ordinary status media/text posts.
+    if (inviteUrl) {
+        const invitePreview = await createImageLinkPreview(
+            sock,
+            url,
+            previewTitle || 'WhatsApp Group',
+            preview.description || 'Group chat invite',
+            preview.imageBuffer,
+            preview.imageUrl,
+            preview.thumbnailBuffer
+        );
+        const { msg } = await relayGroupStatusInner(sock, groupJid, invitePreview || {
+            extendedTextMessage: {
+                text: url,
+                matchedText: url,
+                canonicalUrl: url,
+                title: previewTitle || 'WhatsApp Group',
+                description: preview.description || 'Group chat invite',
+                previewType: 5,
+            },
+        }, {
+            recipients,
+            ringColor: effectiveRingColor,
+        });
+        return msg;
+    }
 
     // Preferred path: let @pasqua-dev/baileys build the complete rich preview.
     // The recipient list is mandatory here — the fork throws
@@ -1107,13 +1138,14 @@ module.exports = Object.assign(module.exports, {
             await reply('⏳ _Posting quoted message to group status…_');
             try {
                 const isUrl = /https?:\/\//i.test(quotedText);
+                const quotedUrl = quotedText.match(/https?:\/\/[^\s]+/i)?.[0] ||
+                    quoted?.extendedTextMessage?.contextInfo?.externalAdReply?.sourceUrl || '';
 
                 // If the quoted message already had a link preview, relay it
                 // through the existing preview path. Plain quoted text/URLs
                 // retain the stable normal group-status behavior.
                 const hasPreview = !!(quoted?.extendedTextMessage?.contextInfo?.externalAdReply);
-                if (hasPreview) {
-                    const quotedUrl = quotedText.match(/https?:\/\/[^\s]+/i)?.[0] || quotedText;
+                if (quotedUrl && (isUrl || hasPreview)) {
                     await postGroupStatusLinkPreview(sock, from, quotedUrl, selectedColor);
                 } else {
                     await postGroupStatus(sock, from, {
