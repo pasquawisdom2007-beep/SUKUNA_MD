@@ -249,9 +249,20 @@ async function main() {
                 sessionIdUsed = true;
             }
 
-            const result = await sessionManager.startSession(pairNumber, false);
-            if (result && result.success === false) {
-                console.log(chalk.red(`[SESSION] Connection failed: ${result.error}`));
+            // loadExistingSessions() runs before this SESSION_ID branch and
+            // may already have opened this exact registered session from the
+            // persistent sessions/ directory. Starting it again creates two
+            // WhatsApp Web sockets for one number; WhatsApp then disconnects
+            // one with code 440 (connection replaced), which makes commands
+            // appear to stop working. Keep the first socket and never create
+            // a duplicate within the same process.
+            if (sessionManager.sessions?.has(pairNumber)) {
+                console.log(chalk.green(`[SESSION] ${pairNumber} is already restored; skipping duplicate SESSION_ID socket.`));
+            } else {
+                const result = await sessionManager.startSession(pairNumber, false);
+                if (result && result.success === false) {
+                    console.log(chalk.red(`[SESSION] Connection failed: ${result.error}`));
+                }
             }
         } catch (e) {
             console.log(chalk.red(`[SESSION] Invalid SESSION_ID (${e.message}).`));
