@@ -327,10 +327,7 @@ async function relayGroupStatusInner(sock, groupJid, inner, opts = {}) {
     await sock.relayMessage(groupJid, msg.message, {
         messageId: msg.key.id,
         statusJidList: recipients,
-        additionalAttributes: {
-            broadcast: 'true',
-            messageId: msg.key.id,
-        },
+        additionalAttributes: { messageId: msg.key.id },
     });
 
     return { msg, recipients };
@@ -728,64 +725,6 @@ async function createImageLinkPreview(sock, url, title, description, imageBuffer
     }
 }
 
-function extractGroupInviteCode(url) {
-    try {
-        const parsed = new URL(String(url || '').trim());
-        if (parsed.hostname.toLowerCase() !== 'chat.whatsapp.com') return null;
-        const code = parsed.pathname.split('/').filter(Boolean)[0];
-        return code ? decodeURIComponent(code) : null;
-    } catch (_) {
-        return null;
-    }
-}
-
-async function resolveGroupInviteLinkPreview(sock, url) {
-    const code = extractGroupInviteCode(url);
-    if (!code || typeof sock?.groupGetInviteInfo !== 'function') return null;
-
-    const result = {
-        title: null,
-        description: 'Group chat invite',
-        imageBuffer: null,
-        canonicalUrl: url,
-    };
-
-    try {
-        const info = await sock.groupGetInviteInfo(code);
-        result.title = info?.subject || info?.name || 'WhatsApp Group';
-
-        // WhatsApp's invite-card preview uses the invited group's profile
-        // photo. The fork's richPreview path will upload this through its
-        // dedicated thumbnail-link route and attach the HQ media keys.
-        if (info?.id && typeof sock.profilePictureUrl === 'function') {
-            try {
-                const photoUrl = await sock.profilePictureUrl(info.id, 'image');
-                if (photoUrl) {
-                    const controller = new AbortController();
-                    const timer = setTimeout(() => controller.abort(), 8_000);
-                    try {
-                        const response = await fetch(photoUrl, {
-                            signal: controller.signal,
-                            headers: { 'User-Agent': 'WhatsApp/2.23.20.0 A' },
-                        });
-                        if (response.ok) result.imageBuffer = Buffer.from(await response.arrayBuffer());
-                    } finally {
-                        clearTimeout(timer);
-                    }
-                }
-            } catch (_) {
-                // The fork can resolve the invite image itself when this
-                // best-effort prefetch is unavailable.
-            }
-        }
-    } catch (_) {
-        // Returning a partial result keeps the stable richPreview path alive;
-        // Baileys can still resolve the invite metadata internally.
-    }
-
-    return result;
-}
-
 // Post a URL to group status with a crisp, non-blurry image preview —
 // the exact same prepareWAMessageMedia(mediaTypeOverride:'thumbnail-link')
 // technique commands/group/invite.js uses for group invite links, applied
@@ -888,10 +827,7 @@ async function relayNativeGroupInviteStatus(sock, groupJid, meta, inviteLink, gr
     await sock.relayMessage(groupJid, msg.message, {
         messageId: msg.key.id,
         statusJidList,
-        additionalAttributes: {
-            broadcast: 'true',
-            messageId: msg.key.id,
-        },
+        additionalAttributes: { messageId: msg.key.id },
     });
     return msg;
 }
@@ -899,10 +835,7 @@ async function relayNativeGroupInviteStatus(sock, groupJid, meta, inviteLink, gr
 async function postGroupStatusLinkPreview(sock, groupJid, url, ringColorOverride) {
     const effectiveRingColor = normaliseStatusColor(ringColorOverride) || getStatusRingColor();
     const recipients = await resolveStatusRecipients(sock, groupJid);
-    const inviteUrl = !!extractGroupInviteCode(url);
-    const preview = inviteUrl
-        ? (await resolveGroupInviteLinkPreview(sock, url) || await fetchLinkPreview(url))
-        : await fetchLinkPreview(url);
+    const preview = await fetchLinkPreview(url);
     const previewTitle = preview.siteName && preview.title && !preview.title.includes(preview.siteName)
         ? `${preview.title} · ${preview.siteName}`
         : (preview.title || preview.siteName);
@@ -926,28 +859,30 @@ async function postGroupStatusLinkPreview(sock, groupJid, url, ringColorOverride
         console.error('[gcstatus] native rich link preview failed, falling back:', error.message);
     }
 
-    // Fallback: keep the message a real link preview. The former fallback
-    // converted the URL into plain text (or an image with a caption), which
-    // cannot render the WhatsApp link card. Build the same extended-text
-    // preview shape as the fork's richPreview branch and relay it inside the
-    // stable groupStatusMessageV2 envelope.
-    const fallbackPreview = await createImageLinkPreview(
-        sock,
-        url,
-        previewTitle || 'Link',
-        preview.description || preview.canonicalUrl || url,
-        preview.imageBuffer,
-        preview.imageUrl,
-        preview.thumbnailBuffer
-    );
-    const { msg } = await relayGroupStatusInner(sock, groupJid, fallbackPreview || {
+    // A native link preview is always rendered from a thumbnail by WhatsApp.
+    // When an OG image is available, send that image as the actual group-status
+    // media instead — the only reliable way to keep the photo sharp on
+    // recipients' devices. The URL and page metadata stay in the caption.
+    if (preview.imageBuffer) {
+        const lines = [previewTitle || 'Link', preview.description || '', preview.canonicalUrl || url]
+            .map(value => String(value || '').trim())
+            .filter(Boolean);
+        return postGroupStatus(sock, groupJid, {
+            image: preview.imageBuffer,
+            caption: lines.join('\n\n'),
+            ringColor: effectiveRingColor,
+        });
+    }
+
+    // No OG image: relay the URL as a text status card rather than risking the
+    // richPreview guard again.
+    const { msg } = await relayGroupStatusInner(sock, groupJid, {
         extendedTextMessage: {
             text: url,
             matchedText: url,
             canonicalUrl: url,
             title: previewTitle || 'Link',
             description: preview.description || preview.canonicalUrl || url,
-            previewType: 5,
             backgroundArgb: STATUS_BG_ARGB,
             textArgb: STATUS_FG_ARGB,
             font: 0,
@@ -972,8 +907,6 @@ module.exports.encodeOpus               = encodeOpus;
 module.exports.getQuotedCtx             = getQuotedCtx;
 module.exports.unwrapQuotedDeep         = unwrapQuotedDeep;
 module.exports.createImageLinkPreview   = createImageLinkPreview;
-module.exports.extractGroupInviteCode   = extractGroupInviteCode;
-module.exports.resolveGroupInviteLinkPreview = resolveGroupInviteLinkPreview;
 module.exports.TEXT_BG_COLOR            = TEXT_BG_COLOR;
 module.exports.baileysSource            = _baileysSource;
 
@@ -1114,14 +1047,13 @@ module.exports = Object.assign(module.exports, {
             await reply('⏳ _Posting quoted message to group status…_');
             try {
                 const isUrl = /https?:\/\//i.test(quotedText);
-                const quotedUrl = quotedText.match(/https?:\/\/[^\s]+/i)?.[0] ||
-                    quoted?.extendedTextMessage?.contextInfo?.externalAdReply?.sourceUrl || '';
 
                 // If the quoted message already had a link preview, relay it
                 // through the existing preview path. Plain quoted text/URLs
                 // retain the stable normal group-status behavior.
                 const hasPreview = !!(quoted?.extendedTextMessage?.contextInfo?.externalAdReply);
-                if (quotedUrl && (isUrl || hasPreview)) {
+                if (hasPreview) {
+                    const quotedUrl = quotedText.match(/https?:\/\/[^\s]+/i)?.[0] || quotedText;
                     await postGroupStatusLinkPreview(sock, from, quotedUrl, selectedColor);
                 } else {
                     await postGroupStatus(sock, from, {
