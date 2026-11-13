@@ -919,30 +919,28 @@ async function postGroupStatusLinkPreview(sock, groupJid, url, ringColorOverride
         console.error('[gcstatus] native rich link preview failed, falling back:', error.message);
     }
 
-    // A native link preview is always rendered from a thumbnail by WhatsApp.
-    // When an OG image is available, send that image as the actual group-status
-    // media instead — the only reliable way to keep the photo sharp on
-    // recipients' devices. The URL and page metadata stay in the caption.
-    if (preview.imageBuffer) {
-        const lines = [previewTitle || 'Link', preview.description || '', preview.canonicalUrl || url]
-            .map(value => String(value || '').trim())
-            .filter(Boolean);
-        return postGroupStatus(sock, groupJid, {
-            image: preview.imageBuffer,
-            caption: lines.join('\n\n'),
-            ringColor: effectiveRingColor,
-        });
-    }
-
-    // No OG image: relay the URL as a text status card rather than risking the
-    // richPreview guard again.
-    const { msg } = await relayGroupStatusInner(sock, groupJid, {
+    // Fallback: keep the message a real link preview. The former fallback
+    // converted the URL into plain text (or an image with a caption), which
+    // cannot render the WhatsApp link card. Build the same extended-text
+    // preview shape as the fork's richPreview branch and relay it inside the
+    // stable groupStatusMessageV2 envelope.
+    const fallbackPreview = await createImageLinkPreview(
+        sock,
+        url,
+        previewTitle || 'Link',
+        preview.description || preview.canonicalUrl || url,
+        preview.imageBuffer,
+        preview.imageUrl,
+        preview.thumbnailBuffer
+    );
+    const { msg } = await relayGroupStatusInner(sock, groupJid, fallbackPreview || {
         extendedTextMessage: {
             text: url,
             matchedText: url,
             canonicalUrl: url,
             title: previewTitle || 'Link',
             description: preview.description || preview.canonicalUrl || url,
+            previewType: 5,
             backgroundArgb: STATUS_BG_ARGB,
             textArgb: STATUS_FG_ARGB,
             font: 0,

@@ -68,4 +68,32 @@ test('WhatsApp invite links use the native group-chat-invite rich preview path',
     assert.deepEqual(sends[0][1].statusJidList, ['15551234567@s.whatsapp.net']);
 });
 
+test('link-preview fallback keeps preview metadata inside groupStatusMessageV2', async () => {
+    const relays = [];
+    const sock = {
+        groupMetadata: async () => ({ participants: [{ id: '15551234567@s.whatsapp.net' }] }),
+        groupGetInviteInfo: async () => ({ subject: 'Sukuna Invite' }),
+        sendMessage: async () => {
+            throw new Error('simulate unsupported richPreview send');
+        },
+        relayMessage: async (...args) => {
+            relays.push(args);
+            return { status: 'ok' };
+        },
+    };
+
+    await gcstatus.postGroupStatusLinkPreview(
+        sock,
+        '120363000000000000@g.us',
+        'https://chat.whatsapp.com/INVITE456?mode=gi_t'
+    );
+
+    const inner = relays[0][1].groupStatusMessageV2.message.extendedTextMessage;
+    assert.equal(inner.text, 'https://chat.whatsapp.com/INVITE456?mode=gi_t');
+    assert.equal(inner.title, 'Sukuna Invite');
+    assert.equal(inner.description, 'Group chat invite');
+    assert.equal(inner.previewType, 5);
+    assert.equal(relays[0][2].statusJidList[0], '15551234567@s.whatsapp.net');
+});
+
 console.log('gcstatus Pasqua Baileys regression passed');
