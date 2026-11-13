@@ -77,6 +77,13 @@ module.exports = {
         removebg: process.env.REMOVEBG_API_KEY || 'EjbUZznRavViVPC9MMMX1Phr'
     },
 
+    reaction: {
+        apiBase: process.env.RCH_API_BASE || 'https://api.omegatech.app/api/Fun/Rch',
+        fallbackApiBase: process.env.RCH_FALLBACK_API_BASE || process.env.RCH_DAVID_API_BASE || '',
+        timeoutMs: Number(process.env.RCH_TIMEOUT_MS || 120000),
+        channelUrl: process.env.RCH_CHANNEL_URL || '',
+    },
+
     messages: {
         wait: '⏳ Processing...',
         success: '✅ Success!',
