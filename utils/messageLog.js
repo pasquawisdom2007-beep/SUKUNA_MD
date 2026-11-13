@@ -20,7 +20,7 @@
 let chalk = null;
 try { chalk = require('chalk'); } catch (_) { chalk = null; }
 
-const WIDTH    = 62;
+const WIDTH    = 78;
 const MAX_BODY = 180;
 
 // ── Colour helpers (all failure-tolerant) ──────────────────────────
@@ -60,6 +60,14 @@ const clock = () => {
     }
 };
 
+const clock12 = () => {
+    try {
+        return new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    } catch (_) {
+        return clock();
+    }
+};
+
 const digits = (v) => String(v || '').split('@')[0].split(':')[0].replace(/\D/g, '');
 
 /** Collapse to a single tidy line and truncate. */
@@ -72,18 +80,27 @@ function oneLine(value, max = MAX_BODY) {
 
 const rule = (char = '─') => char.repeat(WIDTH);
 
-function top(title, accent) {
-    const head = `┌─ ${title} `;
+function top(title, accent, lead = '─') {
+    const head = `╭${lead} ${title} `;
     const tail = rule();
     return accent(head) + c.grey(tail.slice(Math.min(tail.length, head.length + 2)));
 }
 
 function bottom() {
-    return c.grey(`└${rule()}`);
+    return c.grey(`╰${rule('─')}`);
 }
 
 function row(label, value, tint = c.white) {
-    return `${c.violet('│')} ${c.grey(label.padEnd(9))} ${tint(value)}`;
+    return `${c.violet('│')} ${c.grey(label.padEnd(11))} ${tint(value)}`;
+}
+
+function badge(label, tint) {
+    return tint(` ${String(label).toUpperCase()} `);
+}
+
+function commandFromBody(body) {
+    const match = String(body || '').trim().match(/^[.!#$\/\\]([a-z][a-z0-9_-]{1,31})\b/i);
+    return match ? match[1].toLowerCase() : '';
 }
 
 function block(lines) {
@@ -178,22 +195,23 @@ function logIncoming({ msg, isGroup, jid, groupName, entry } = {}) {
         const name   = data?.pushName || msg?.pushName || '';
         const outgoing = data?.fromMe ?? !!key.fromMe;
 
-        const scope = isGroup === true || String(chat).endsWith('@g.us')
-            ? `GROUP ${c.bold(oneLine(groupName || chat, 32))}`
-            : `DM ${c.bold(oneLine(name || chat, 32))}`;
-
-        const direction = outgoing ? c.yellow('SENT') : c.green('RECV');
-        const title = `${meta.icon} ${c.bold('MESSAGE')} ${c.grey('·')} ${c.cyan(clock())} ${c.grey('·')} ${scope} ${c.grey('·')} ${direction}`;
-
+        const isGroupChat = isGroup === true || String(chat).endsWith('@g.us');
+        const scope = isGroupChat
+            ? `GROUP ${c.bold(oneLine(groupName || chat, 34))}`
+            : `DM ${c.bold(oneLine(name || chat, 34))}`;
         const body = info.body || info.caption || '';
         const length = body ? `${body.length} chars` : (info.fileName ? oneLine(info.fileName, 40) : '—');
+        const command = commandFromBody(body);
 
         block([
-            top(title, c.purple),
-            row('FROM', `${senderNum ? `+${senderNum}` : 'unknown'}${name ? ` · ${oneLine(name, 26)}` : ''}`),
-            row('TYPE', `${info.type}${info.mimetype ? ` · ${info.mimetype.split(';')[0]}` : ''} · ${length}`, meta.tint),
-            body ? row(info.body ? 'BODY' : 'CAPTION', oneLine(body), meta.tint) : '',
-            row('ID', c.grey(oneLine(key.id || data?.id || 'unknown', 40))),
+            top(`${meta.icon} ${c.bold('SUKUNA MD')}`, outgoing ? c.yellow : c.purple, command ? '─────────' : '─'),
+            row('ROUTE', `${scope} ${c.grey('·')} ${outgoing ? 'SENT' : 'INCOMING'}`),
+            row('SENDER', `${senderNum ? `+${senderNum}` : 'unknown'}${name ? ` ${c.grey('·')} ${oneLine(name, 28)}` : ''}`),
+            row('PAYLOAD', `${String(info.type || 'unknown').toUpperCase()} ${info.mimetype ? `${info.mimetype.split(';')[0]} ${c.grey('·')} ` : ''}${length}`, meta.tint),
+            body ? row(info.body ? 'MESSAGE' : 'CAPTION', oneLine(body), meta.tint) : '',
+            row('MESSAGE ID', c.grey(oneLine(key.id || data?.id || 'unknown', 48))),
+            row('TIME', clock12(), c.cyan),
+            command ? row('COMMAND', command, c.yellow) : '',
             bottom(),
         ]);
     } catch (_) { /* noop */ }

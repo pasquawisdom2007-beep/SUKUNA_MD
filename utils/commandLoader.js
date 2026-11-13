@@ -9,6 +9,7 @@ class CommandLoader {
     constructor() {
         this.commands = new Map();
         this.aliases = new Map();
+        this.plugins = new Map();
     }
 
     loadCommands() {
@@ -21,9 +22,46 @@ class CommandLoader {
             this.loadFromDir(path.join(commandsDir, category), category);
         }
 
+        this.loadPlugins();
+
         console.log(`[LOADER] Loaded ${this.commands.size} commands across ${categories.length} categories`);
         return this.commands;
     }
+
+    loadPlugins() {
+        try {
+            const registry = require('./pluginRegistry');
+            for (const plugin of registry.load()) this.registerPlugin(plugin);
+        } catch (error) {
+            console.error('[LOADER] Plugin registry unavailable:', error.message);
+        }
+    }
+
+    registerPlugin(plugin) {
+        if (!plugin || !plugin.name || typeof plugin.execute !== 'function') return false;
+        const name = String(plugin.name).toLowerCase();
+        if (!/^[a-z0-9][a-z0-9_-]{0,31}$/.test(name) || this.commands.has(name)) return false;
+        const command = { ...plugin, name, category: 'plugin' };
+        this.commands.set(name, command);
+        for (const alias of Array.isArray(command.aliases) ? command.aliases : []) {
+            const clean = String(alias).toLowerCase();
+            if (/^[a-z0-9][a-z0-9_-]{0,31}$/.test(clean) && !this.commands.has(clean)) this.aliases.set(clean, name);
+        }
+        this.plugins.set(name, command);
+        return true;
+    }
+
+    unregisterPlugin(name) {
+        const clean = String(name || '').toLowerCase();
+        const command = this.plugins.get(clean);
+        if (!command) return false;
+        this.commands.delete(clean);
+        for (const [alias, target] of this.aliases) if (target === clean) this.aliases.delete(alias);
+        this.plugins.delete(clean);
+        return true;
+    }
+
+    getPlugins() { return Array.from(this.plugins.values()); }
 
     loadFromDir(dir, category) {
         if (!fs.existsSync(dir)) return;
@@ -38,6 +76,7 @@ class CommandLoader {
 
                 if (command.name) {
                     command.category = category;
+                    command.sourcePath = filePath;
                     this.commands.set(command.name, command);
 
                     if (command.aliases && Array.isArray(command.aliases)) {

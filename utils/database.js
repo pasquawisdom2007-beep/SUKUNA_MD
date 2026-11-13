@@ -383,6 +383,34 @@ class Database {
         this.save('users');
     }
 
+    getPrivateChat(phoneNumber, chatId) {
+        const key = String(chatId || '').trim();
+        return !!key && this.data.users[phoneNumber]?.privateChats?.[key] === true;
+    }
+
+    setPrivateChat(phoneNumber, chatId, value) {
+        const session = String(phoneNumber || '').trim();
+        const key = String(chatId || '').trim();
+        if (!session || !key) return false;
+        if (!this.data.users[session]) this.data.users[session] = {};
+        if (!this.data.users[session].privateChats) this.data.users[session].privateChats = {};
+        this.data.users[session].privateChats[key] = value === true;
+        this.save('users');
+        return this.data.users[session].privateChats[key];
+    }
+
+    getConsoleLogs(phoneNumber) {
+        if (!this.data.users[phoneNumber]) this.data.users[phoneNumber] = {};
+        return this.data.users[phoneNumber].consoleLogs !== false;
+    }
+
+    setConsoleLogs(phoneNumber, value) {
+        if (!this.data.users[phoneNumber]) this.data.users[phoneNumber] = {};
+        this.data.users[phoneNumber].consoleLogs = value === true;
+        this.save('users');
+        return this.data.users[phoneNumber].consoleLogs;
+    }
+
     // ── Menu design (per session) ────────────────────────────────────
     getMenuDesign(phoneNumber) {
         if (!this.data.users[phoneNumber]) this.data.users[phoneNumber] = {};
