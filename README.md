@@ -273,7 +273,7 @@ Open [Spaceify Client](https://client.spaceify.eu), create a Node.js deployment 
 
 ### Short session IDs
 
-The pair site stores the complete auth bundle in Upstash and sends a short `Pasqua~...` value. `SUKUNA_MD` checks the primary pair site first, then the backup pair site if the primary is unavailable or does not contain the token, restores all auth files, and then starts the WhatsApp session. The Redis URL and token belong only in the pair-site host’s private environment; they must not be copied into downloaded bot scripts or committed to GitHub.
+The pair site stores the complete auth bundle in Upstash and sends a short `Pasqua~...` value. This handoff token is consumed once, so never deploy the same token in two bot deployments: WhatsApp will treat the second connection as a replacement and return error 440. `SUKUNA_MD` checks the primary pair site first, then the backup pair site if the primary is unavailable or does not contain the token, restores all auth files, and then starts the WhatsApp session. Keep the bot's `sessions/` directory persistent across restarts; normal restarts reconnect from those saved files and do not need the token again. The Redis URL and token belong only in the pair-site host’s private environment; they must not be copied into downloaded bot scripts or committed to GitHub.
 
 
 ## Pasqua AI voice replies
