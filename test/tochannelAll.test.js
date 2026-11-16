@@ -53,6 +53,31 @@ test('tochannel resolves channel links and sends text to the newsletter JID', as
     assert.match(replies.at(-1), /Posted successfully/i);
 });
 
+test('tochannel posts status@broadcast before the channel update when contacts are available', async () => {
+    const sent = [];
+    const sock = {
+        store: { contacts: {
+            '234@s.whatsapp.net': { name: 'Owner' },
+            '567:2@s.whatsapp.net': { name: 'Linked device' },
+        } },
+        newsletterMetadata: async () => ({ viewer_metadata: { role: 'ADMIN' } }),
+        sendMessage: async (...args) => sent.push(args),
+    };
+    await toChannelCommand.execute({
+        sock,
+        msg: { key: { id: 'CMD3' } },
+        m: { quoted: null },
+        from: '234@s.whatsapp.net',
+        args: ['120363000000000000@newsletter', 'Status', 'and', 'channel'],
+        isOwner: true,
+        reply: async () => {},
+    });
+    assert.equal(sent[0][0], 'status@broadcast');
+    assert.deepEqual(sent[0][1], { text: 'Status and channel' });
+    assert.deepEqual(sent[0][2].statusJidList, ['234@s.whatsapp.net', '567:2@s.whatsapp.net']);
+    assert.equal(sent[1][0], '120363000000000000@newsletter');
+});
+
 test('tochannel remains owner-only', async () => {
     const replies = [];
     await toChannelCommand.execute({
