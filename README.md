@@ -300,3 +300,16 @@ Cartesia’s `[laughter]` nonverbalism is used when the AI is genuinely amused, 
 When global mode is active, `.pasqua voice on` in a group enables voice for all globally enabled groups; `.pasqua voice off` switches those global replies back to text. Use `.pasqua voice on g` or `.pasqua voice off g` when you want to change global voice explicitly.
 
 If the host does not provide environment variables, open `config.js` and replace `PASTE_CARTESIA_API_KEY_HERE` in `apiKeys.cartesia` with the key before starting the bot. Keep that edited file private and do not push it to a public fork.
+
+
+## Sukuna Agent dashboard
+
+The bot now serves the responsive Sukuna Agent dashboard from the existing HTTP server at `/agent/`. It provides a Meta-style assistant surface with task cards, activity signals, navigation, and a local Ask Sukuna composer without changing WhatsApp session behavior.
+
+After deployment, open:
+
+```text
+https://your-deployment-host.example/agent/
+```
+
+For local testing, use `http://localhost:3000/agent/` (or the configured `PORT`).
