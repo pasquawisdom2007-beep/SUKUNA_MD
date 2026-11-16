@@ -36,11 +36,12 @@ async function loadMentionSticker(source, options = {}) {
 }
 
 async function sendMentionSticker(sock, jid, source, options = {}) {
-    const sticker = await loadMentionSticker(source, options);
+    const { quoted, ...loaderOptions } = options || {};
+    const sticker = await loadMentionSticker(source, loaderOptions);
     if (sticker.kind !== 'sticker') {
         throw new Error('Lottie mention stickers require a preserved WAProto relay payload; configure a WebP sticker for automatic replies.');
     }
-    return sock.sendMessage(jid, { sticker: sticker.buffer });
+    return sock.sendMessage(jid, { sticker: sticker.buffer }, quoted ? { quoted } : undefined);
 }
 
 module.exports = { loadMentionSticker, sendMentionSticker, isWebp, isGzip, readSource };

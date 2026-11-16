@@ -90,7 +90,7 @@ module.exports = {
             if (!mentionedJids.length) return false;
             const setting = database.getMentionSticker(phoneNumber);
             if (!setting?.enabled || !setting.source) return false;
-            await sendMentionSticker(sock, from, setting.source);
+            await sendMentionSticker(sock, from, setting.source, { quoted: msg });
             return true;
         } catch (error) {
             console.error('[MENTIONSTICKER]', error.message);

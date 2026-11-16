@@ -62,6 +62,7 @@ test('mentionsticker automatic handler sends once for an explicit mention', asyn
     assert.equal(sent.length, 1);
     assert.equal(sent[0][0], '123@g.us');
     assert.deepEqual(sent[0][1].sticker, webpBuffer());
+    assert.deepEqual(sent[0][2], { quoted: { key: { id: 'M1' } } });
 });
 
 test('mentionsticker does not trigger without a native mention', async () => {
