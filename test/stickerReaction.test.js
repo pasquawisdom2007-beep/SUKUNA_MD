@@ -8,6 +8,7 @@ const {
     buildStickerReactionMessage,
     relayStickerReaction,
     isStickerReactionMessage,
+    getQuotedStickerMessage,
 } = require('../utils/stickerReaction');
 
 function context(overrides = {}) {
@@ -83,4 +84,23 @@ test('relayStickerReaction forwards the exact destination, payload, and empty op
     assert.equal(calls[0][2] && Object.keys(calls[0][2]).length, 0);
     assert.equal(calls[0][1].messageContextInfo.messageAssociation.associationType, 11);
     assert.deepEqual(calls[0][1].messageContextInfo.messageAssociation.parentMessageKey, key);
+});
+
+test('sreact sends the supplied associated sticker when replying to a message', async () => {
+    const ctx = context({
+        args: ['2'],
+        sock: { relayMessage: async (...args) => { ctx.calls.push(args); } },
+        m: { quoted: { key: { remoteJid: '123@g.us', id: 'PARENT', fromMe: false }, message: { conversation: 'hello' } } },
+    });
+    ctx.calls = [];
+    await command.execute(ctx);
+    assert.equal(ctx.calls.length, 2);
+    assert.equal(ctx.calls[0][0], '123@g.us');
+    assert.equal(ctx.calls[0][1].messageContextInfo.messageAssociation.associationType, 11);
+    assert.deepEqual(ctx.calls[0][1].stickerMessage, STICKER_REACTION);
+});
+
+test('quoted sticker extraction reads the normalized message context', () => {
+    const sticker = { mimetype: 'image/webp', isAnimated: true };
+    assert.deepEqual(getQuotedStickerMessage({ message: { stickerMessage: sticker } }), sticker);
 });
