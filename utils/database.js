@@ -1139,6 +1139,22 @@ class Database {
         return results;
     }
 
+    // ── Mention Sticker — one configured sticker per bot session ───────────
+    getMentionSticker(phoneNumber) {
+        if (!this.data.users[phoneNumber]) this.data.users[phoneNumber] = {};
+        return this.data.users[phoneNumber].mentionSticker || { enabled: false, source: '' };
+    }
+
+    setMentionSticker(phoneNumber, value) {
+        if (!this.data.users[phoneNumber]) this.data.users[phoneNumber] = {};
+        this.data.users[phoneNumber].mentionSticker = {
+            enabled: value?.enabled === true,
+            source: String(value?.source || '').trim(),
+        };
+        this.save('users');
+        return this.data.users[phoneNumber].mentionSticker;
+    }
+
 }
 
 module.exports = new Database();
