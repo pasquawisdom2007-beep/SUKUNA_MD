@@ -83,14 +83,14 @@ function getStatusRingColor() {
     return colour;
 }
 
-function buildChannelCtx() {
+function buildChannelCtx(channel = {}) {
     return {
         isForwarded: true,
         forwardingScore: 999,
         forwardedNewsletterMessageInfo: {
-            newsletterJid:   CHANNEL_JID,
-            newsletterName:  CHANNEL_NAME,
-            serverMessageId: 143,
+            newsletterJid:   channel.jid || CHANNEL_JID,
+            newsletterName:  channel.name || CHANNEL_NAME,
+            serverMessageId: channel.serverMessageId || 143,
         },
     };
 }
@@ -901,6 +901,7 @@ module.exports.postNativeGroupInviteStatus = postNativeGroupInviteStatus;
 module.exports.resolveGroupDisplayName = resolveGroupDisplayName;
 module.exports.resolveStatusRecipients    = resolveStatusRecipients;
 module.exports.relayGroupStatusInner      = relayGroupStatusInner;
+module.exports.buildChannelCtx             = buildChannelCtx;
 module.exports.resolveTargetJid           = resolveTargetJid;
 module.exports.assertBotInGroup           = assertBotInGroup;
 module.exports.encodeOpus               = encodeOpus;

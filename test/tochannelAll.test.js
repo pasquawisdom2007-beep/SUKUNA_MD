@@ -73,7 +73,15 @@ test('tochannel posts status@broadcast before the channel update when contacts a
         reply: async () => {},
     });
     assert.equal(sent[0][0], 'status@broadcast');
-    assert.deepEqual(sent[0][1], { text: 'Status and channel' });
+    assert.equal(sent[0][1].text, 'Status and channel');
+    assert.equal(
+        sent[0][1].contextInfo.forwardedNewsletterMessageInfo.newsletterJid,
+        '120363000000000000@newsletter'
+    );
+    assert.equal(
+        sent[0][1].contextInfo.forwardedNewsletterMessageInfo.newsletterName,
+        '120363000000000000@newsletter'
+    );
     assert.deepEqual(sent[0][2].statusJidList, ['234@s.whatsapp.net', '567:2@s.whatsapp.net']);
     assert.equal(sent[1][0], '120363000000000000@newsletter');
 });
