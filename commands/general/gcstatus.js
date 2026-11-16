@@ -901,7 +901,6 @@ module.exports.postNativeGroupInviteStatus = postNativeGroupInviteStatus;
 module.exports.resolveGroupDisplayName = resolveGroupDisplayName;
 module.exports.resolveStatusRecipients    = resolveStatusRecipients;
 module.exports.relayGroupStatusInner      = relayGroupStatusInner;
-module.exports.buildChannelCtx             = buildChannelCtx;
 module.exports.resolveTargetJid           = resolveTargetJid;
 module.exports.assertBotInGroup           = assertBotInGroup;
 module.exports.encodeOpus               = encodeOpus;

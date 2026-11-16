@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const allCommand = require('../commands/owner/all');
 const toChannelCommand = require('../commands/owner/tochannel');
+const { proto } = require('@pasqua-dev/baileys');
 
 test('.all sends WhatsApp native mentionAll in groups', async () => {
     const calls = [];
@@ -32,12 +33,13 @@ test('.all rejects non-group use', async () => {
     assert.match(replies[0], /only be used in a group/i);
 });
 
-test('tochannel resolves channel links and sends text to the newsletter JID', async () => {
+test('tochannel resolves channel links and publishes only a raw channel status', async () => {
     const sent = [];
     const replies = [];
     const sock = {
         newsletterGetInviteInfo: async link => ({ id: '120363000000000000@newsletter', viewer_metadata: { role: 'ADMIN' }, link }),
-        sendMessage: async (...args) => sent.push(args),
+        sendMessage: async (...args) => sent.push(['sendMessage', ...args]),
+        sendNode: async node => sent.push(['sendNode', node]),
     };
     await toChannelCommand.execute({
         sock,
@@ -48,42 +50,37 @@ test('tochannel resolves channel links and sends text to the newsletter JID', as
         isOwner: true,
         reply: async text => replies.push(text),
     });
-    assert.equal(sent[0][0], '120363000000000000@newsletter');
-    assert.deepEqual(sent[0][1], { text: 'Sukuna update' });
-    assert.match(replies.at(-1), /Posted successfully/i);
+    assert.equal(sent.filter(entry => entry[0] === 'sendMessage' && entry[1] === '120363000000000000@newsletter').length, 0);
+    const status = sent.find(entry => entry[0] === 'sendNode')[1];
+    assert.equal(status.tag, 'status');
+    assert.equal(status.attrs.to, '120363000000000000@newsletter');
+    const message = proto.Message.decode(Buffer.from(status.content[0].content));
+    assert.equal(message.extendedTextMessage.text, 'Sukuna update');
+    assert.match(replies.at(-1), /Posted successfully.*channel status/i);
 });
 
-test('tochannel posts status@broadcast before the channel update when contacts are available', async () => {
+test('tochannel never targets the normal channel feed', async () => {
     const sent = [];
     const sock = {
-        store: { contacts: {
-            '234@s.whatsapp.net': { name: 'Owner' },
-            '567:2@s.whatsapp.net': { name: 'Linked device' },
-        } },
         newsletterMetadata: async () => ({ viewer_metadata: { role: 'ADMIN' } }),
-        sendMessage: async (...args) => sent.push(args),
+        sendMessage: async (...args) => sent.push(['sendMessage', ...args]),
+        sendNode: async node => sent.push(['sendNode', node]),
     };
     await toChannelCommand.execute({
         sock,
         msg: { key: { id: 'CMD3' } },
         m: { quoted: null },
         from: '234@s.whatsapp.net',
-        args: ['120363000000000000@newsletter', 'Status', 'and', 'channel'],
+        args: ['120363000000000000@newsletter', 'Status', 'only'],
         isOwner: true,
         reply: async () => {},
     });
-    assert.equal(sent[0][0], 'status@broadcast');
-    assert.equal(sent[0][1].text, 'Status and channel');
-    assert.equal(
-        sent[0][1].contextInfo.forwardedNewsletterMessageInfo.newsletterJid,
-        '120363000000000000@newsletter'
-    );
-    assert.equal(
-        sent[0][1].contextInfo.forwardedNewsletterMessageInfo.newsletterName,
-        '120363000000000000@newsletter'
-    );
-    assert.deepEqual(sent[0][2].statusJidList, ['234@s.whatsapp.net', '567:2@s.whatsapp.net']);
-    assert.equal(sent[1][0], '120363000000000000@newsletter');
+    assert.equal(sent.filter(entry => entry[0] === 'sendMessage' && entry[1] === '120363000000000000@newsletter').length, 0);
+    assert.equal(sent.filter(entry => entry[0] === 'sendNode').length, 1);
+    const status = sent.find(entry => entry[0] === 'sendNode')[1];
+    assert.equal(status.tag, 'status');
+    assert.equal(status.attrs.to, '120363000000000000@newsletter');
+    assert.equal(proto.Message.decode(Buffer.from(status.content[0].content)).extendedTextMessage.text, 'Status only');
 });
 
 test('tochannel remains owner-only', async () => {

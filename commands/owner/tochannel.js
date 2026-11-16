@@ -5,7 +5,7 @@ const os = require('os');
 const path = require('path');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
-const { buildChannelCtx } = require('../general/gcstatus');
+const { postNewsletterStatus } = require('../../utils/newsletterStatus');
 
 const execFileAsync = promisify(execFile);
 const CHANNEL_JID_RE = /^[0-9]+@newsletter$/i;
@@ -89,44 +89,10 @@ async function toVoiceNote(buffer) {
     }
 }
 
-function getStatusRecipients(sock) {
-    const contacts = sock?.store?.contacts || {};
-    return Object.keys(contacts).filter(jid => /^(?:[0-9]+|[0-9]+:[0-9]+)@s\.whatsapp\.net$/i.test(jid));
-}
-
-async function postToStatus(sock, payload, channel) {
-    const statusJidList = getStatusRecipients(sock);
-    if (!statusJidList.length) return false;
-    const channelCtx = buildChannelCtx(channel);
-    const mediaKey = ['image', 'video', 'audio', 'document', 'sticker']
-        .find(key => Object.prototype.hasOwnProperty.call(payload, key));
-    const statusPayload = {
-        ...payload,
-        contextInfo: {
-            ...(payload.contextInfo || {}),
-            ...channelCtx,
-        },
-    };
-    if (mediaKey && statusPayload[mediaKey] && typeof statusPayload[mediaKey] === 'object' && !Buffer.isBuffer(statusPayload[mediaKey])) {
-        statusPayload[mediaKey] = {
-            ...statusPayload[mediaKey],
-            contextInfo: {
-                ...(statusPayload[mediaKey].contextInfo || {}),
-                ...channelCtx,
-            },
-        };
-    }
-    await sock.sendMessage('status@broadcast', statusPayload, {
-        statusJidList,
-        broadcast: true,
-    });
-    return true;
-}
-
 module.exports = {
     name: 'tochannel',
     aliases: ['channelpost', 'sendchannel'],
-    description: 'Post text or replied media to a WhatsApp channel (owner only).',
+    description: 'Post text or replied media to a WhatsApp channel status (owner only).',
     usage: '.tochannel <channel JID or invite link> <text> (or reply to text/media)',
     category: 'owner',
     ownerOnly: true,
@@ -176,24 +142,14 @@ module.exports = {
                 };
             }
 
-            // A channel update is delivered in two stages: the status story
-            // envelope, then the newsletter post itself. The fork requires a
-            // non-empty statusJidList for status@broadcast; if no contacts are
-            // cached, preserve the channel post instead of failing the command.
-            const postedToStatus = await postToStatus(sock, payload, {
-                jid,
-                name: metadata?.name || metadata?.subject || metadata?.title || jid,
-            });
-            await sock.sendMessage(jid, payload);
+            await postNewsletterStatus(sock, jid, payload);
             await sock.sendMessage(from, { react: { text: '✅', key: msg?.key } }).catch(() => {});
-            return reply(postedToStatus
-                ? 'ᯤ *Posted successfully to Status & Channel.*'
-                : 'ᯤ *Posted successfully to the channel.*\n⚠️ Status recipients were unavailable, so no status copy was sent.');
+            return reply('ᯤ *Posted successfully to the channel status.*');
         } catch (error) {
             console.error('[TOCHANNEL ERROR]', error);
             if (isAdminPublishError(error)) return reply('✘ The bot is not an admin in that channel.');
-            return reply(`✘ Could not post to the channel: ${error?.message || 'unknown error'}`);
+            return reply(`✘ Could not post to the channel status: ${error?.message || 'unknown error'}`);
         }
     },
-    helpers: { resolveTarget, hasExplicitNonAdminRole, getQuotedMessageContent, isAdminPublishError, toVoiceNote, getStatusRecipients, postToStatus },
+    helpers: { resolveTarget, hasExplicitNonAdminRole, getQuotedMessageContent, isAdminPublishError, toVoiceNote, postNewsletterStatus },
 };
