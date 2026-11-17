@@ -6,29 +6,24 @@
  */
 
 const { extractViewOnce, findMedia, downloadMedia } = require('../../utils/viewOnce');
+const messageVault = require('../../utils/messageVault');
 
-/**
- * Extract the quoted / replied-to message from a message object.
- * Checks all known contextInfo locations in Baileys.
- */
-function getQuotedMessage(msg) {
-    const msgContent = msg.message;
-    if (!msgContent) return null;
-
-    // All possible paths where contextInfo can live
-    const contextInfo =
-        msgContent?.extendedTextMessage?.contextInfo ||
-        msgContent?.imageMessage?.contextInfo       ||
-        msgContent?.videoMessage?.contextInfo       ||
-        msgContent?.audioMessage?.contextInfo       ||
-        msgContent?.documentMessage?.contextInfo    ||
-        msgContent?.stickerMessage?.contextInfo     ||
+function getQuotedContextInfo(msg) {
+    const msgContent = msg?.message;
+    return msgContent?.extendedTextMessage?.contextInfo ||
+        msgContent?.imageMessage?.contextInfo ||
+        msgContent?.videoMessage?.contextInfo ||
+        msgContent?.audioMessage?.contextInfo ||
+        msgContent?.documentMessage?.contextInfo ||
+        msgContent?.stickerMessage?.contextInfo ||
         msgContent?.buttonsResponseMessage?.contextInfo ||
         msgContent?.listResponseMessage?.contextInfo ||
         msgContent?.templateButtonReplyMessage?.contextInfo ||
         null;
+}
 
-    return contextInfo?.quotedMessage || null;
+function canDownload(mediaMsg) {
+    return !!(mediaMsg?.mediaKey && (mediaMsg.directPath || mediaMsg.url));
 }
 
 module.exports = {
@@ -38,9 +33,10 @@ module.exports = {
     usage: '.vv (reply to a view-once message)',
     category: 'fun',
 
-    async execute({ sock, msg, from, reply }) {
+    async execute({ sock, msg, from, reply, phoneNumber }) {
         // ── 1. Get the quoted message ─────────────────────────────────────
-        const quotedMsg = getQuotedMessage(msg);
+        const quotedContext = getQuotedContextInfo(msg);
+        const quotedMsg = quotedContext?.quotedMessage || null;
 
         if (!quotedMsg) {
             return reply(
@@ -54,7 +50,22 @@ module.exports = {
         }
 
         // ── 2. Find the view-once content ─────────────────────────────────
-        const found = extractViewOnce(quotedMsg);
+        let found = extractViewOnce(quotedMsg);
+
+        // WhatsApp may put a redacted view-once copy in contextInfo after the
+        // media has been previewed. The original notify stanza is captured by
+        // sessionManager before command parsing, so prefer that full copy when
+        // the quoted media has no usable URL/directPath.
+        const quotedId = quotedContext?.stanzaId;
+        const cachedRaw = phoneNumber && quotedId
+            ? messageVault.getRaw(phoneNumber, from, quotedId)
+            : null;
+        const cachedFound = cachedRaw
+            ? (extractViewOnce(cachedRaw.message || {}) || findMedia(cachedRaw.message || {}))
+            : null;
+        if ((!found || !canDownload(found.mediaMsg)) && cachedFound) {
+            found = cachedFound;
+        }
 
         if (!found) {
             // Try treating the quoted message directly as media (some clients
@@ -67,8 +78,10 @@ module.exports = {
                     `_Only view-once images and videos can be revealed._`
                 );
             }
-            // Use direct media if no view-once wrapper found
-            Object.assign(found || {}, directMedia);
+            // Use direct media if no view-once wrapper found. Assign the
+            // object itself; Object.assign(found || {}, ...) would assign
+            // into a throwaway object when `found` is null.
+            found = directMedia;
         }
 
         const { mediaType, mediaMsg } = found || (() => {
@@ -84,9 +97,16 @@ module.exports = {
             );
         }
 
+        // If WhatsApp has already removed the encrypted descriptor, use the
+        // bytes captured by messageVault while the message was still alive.
+        const cachedRecord = phoneNumber && quotedId
+            ? messageVault.lookup(phoneNumber, from, quotedId)
+            : null;
+        const cachedBuffer = cachedRecord?.mediaBuffer;
+
         // ── 3. Download and re-send (clean, no text) ───────────────────────
         try {
-            const buffer = await downloadMedia(mediaMsg, mediaType);
+            const buffer = cachedBuffer || await downloadMedia(mediaMsg, mediaType);
 
             if (mediaType === 'image') {
                 await sock.sendMessage(from, {
