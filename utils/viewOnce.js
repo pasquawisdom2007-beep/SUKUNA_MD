@@ -95,15 +95,20 @@ function extractViewOnce(node, depth = 0, seen = new Set()) {
     return null;
 }
 
-async function downloadMedia(mediaMsg, mediaType, retries = 3) {
-    const { downloadContentFromMessage } = require('@pasqua-dev/baileys');
+async function downloadMedia(mediaMsg, mediaType, retries = 3, fullMessage = null) {
+    const { downloadContentFromMessage, downloadMediaMessage } = require('@pasqua-dev/baileys');
     let lastError;
     for (let attempt = 1; attempt <= retries; attempt += 1) {
         try {
-            const stream = await downloadContentFromMessage(mediaMsg, mediaType);
-            const chunks = [];
-            for await (const chunk of stream) chunks.push(Buffer.from(chunk));
-            const buffer = Buffer.concat(chunks);
+            let buffer;
+            if (fullMessage && typeof downloadMediaMessage === 'function') {
+                buffer = await downloadMediaMessage(fullMessage, 'buffer');
+            } else {
+                const stream = await downloadContentFromMessage(mediaMsg, mediaType);
+                const chunks = [];
+                for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+                buffer = Buffer.concat(chunks);
+            }
             if (!buffer.length) throw new Error('Empty media buffer received');
             return buffer;
         } catch (error) {

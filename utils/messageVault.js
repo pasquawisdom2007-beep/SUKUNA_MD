@@ -50,6 +50,17 @@ function unwrap(message) {
     return content;
 }
 
+function hasViewOnceEnvelope(message) {
+    let content = message?.message || message || {};
+    for (let i = 0; i < 8; i += 1) {
+        if (content?.viewOnceMessage || content?.viewOnceMessageV2 || content?.viewOnceMessageV2Extension) return true;
+        const nested = content?.ephemeralMessage?.message || content?.documentWithCaptionMessage?.message;
+        if (!nested) break;
+        content = nested;
+    }
+    return false;
+}
+
 const MEDIA_TYPES = {
     imageMessage:    'image',
     videoMessage:    'video',
@@ -221,16 +232,22 @@ async function cacheMedia(phoneNumber, message) {
             const declared = Number(media.fileLength || 0);
             if (declared && declared > MAX_MEDIA_BYTES) return false;
 
-            const { downloadContentFromMessage } = require('@pasqua-dev/baileys');
-            const stream = await downloadContentFromMessage(media, kind);
-            const chunks = [];
-            let size = 0;
-            for await (const chunk of stream) {
-                size += chunk.length;
-                if (size > MAX_MEDIA_BYTES) return false;
-                chunks.push(chunk);
+            const { downloadContentFromMessage, downloadMediaMessage } = require('@pasqua-dev/baileys');
+            let buf;
+            if (hasViewOnceEnvelope(message) && typeof downloadMediaMessage === 'function') {
+                buf = await downloadMediaMessage(message, 'buffer');
+            } else {
+                const stream = await downloadContentFromMessage(media, kind);
+                const chunks = [];
+                let size = 0;
+                for await (const chunk of stream) {
+                    size += chunk.length;
+                    if (size > MAX_MEDIA_BYTES) return false;
+                    chunks.push(chunk);
+                }
+                buf = Buffer.concat(chunks);
             }
-            const buf = Buffer.concat(chunks);
+            if (buf.length > MAX_MEDIA_BYTES) return false;
             if (buf.length < 100) return false;
 
             record.mediaBuffer        = buf;

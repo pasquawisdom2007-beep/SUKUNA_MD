@@ -113,7 +113,12 @@ module.exports = {
                     console.warn('[VV] normalized quote download failed:', error.message);
                 }
             }
-            if (!buffer) buffer = await downloadMedia(mediaMsg, mediaType);
+            if (!buffer) {
+                const completeQuotedMessage = quoted?.message
+                    ? { key: quoted.key || {}, message: quoted.message }
+                    : null;
+                buffer = await downloadMedia(mediaMsg, mediaType, 3, completeQuotedMessage);
+            }
 
             if (mediaType === 'image') {
                 await sock.sendMessage(from, {
