@@ -71,7 +71,9 @@ function buildRelayWidget({ sortedCategories, byCategory, total, prefix }) {
                 components,
             },
         }),
-        fallback: `${config.botName || 'SUKUNA MD'}\n${total} Plugins | ${categories.length} Categories`,
+        // Keep the WhatsApp fallback empty: relay design is intentionally an
+        // A2UI-only surface, not a caption plus an A2UI card.
+        fallback: '',
         responseId: crypto.randomUUID().replace(/-/g, ''),
     };
 }
@@ -104,8 +106,9 @@ async function sendRelayMenu({ sock, msg, from, caption, commands, sortedCategor
     const responseId = widget.responseId;
     const interactiveMessage = proto.Message.InteractiveMessage.fromObject({
         header: { imageMessage, hasMediaAttachment: true },
-        body: { text: caption },
-        footer: { text: `${botName || config.botName || 'SUKUNA MD'} · COMMAND CENTER` },
+        // Do not duplicate the design caption outside the A2UI surface. Some
+        // WhatsApp clients render body/footer text above the dark widget.
+        body: { text: '' },
         nativeFlowMessage: {
             buttons: [
                 { name: 'single_select', buttonParamsJson: JSON.stringify({ title: `📂 OPEN MENU (${commands.size})`, sections }) },
