@@ -33,10 +33,10 @@ module.exports = {
     usage: '.vv (reply to a view-once message)',
     category: 'fun',
 
-    async execute({ sock, msg, from, reply, phoneNumber }) {
+    async execute({ sock, msg, from, reply, phoneNumber, quoted }) {
         // ── 1. Get the quoted message ─────────────────────────────────────
         const quotedContext = getQuotedContextInfo(msg);
-        const quotedMsg = quotedContext?.quotedMessage || null;
+        const quotedMsg = quoted?.message || quotedContext?.quotedMessage || null;
 
         if (!quotedMsg) {
             return reply(
@@ -56,9 +56,10 @@ module.exports = {
         // media has been previewed. The original notify stanza is captured by
         // sessionManager before command parsing, so prefer that full copy when
         // the quoted media has no usable URL/directPath.
-        const quotedId = quotedContext?.stanzaId;
+        const quotedId = quoted?.key?.id || quotedContext?.stanzaId;
+        const quotedChat = quoted?.key?.remoteJid || from;
         const cachedRaw = phoneNumber && quotedId
-            ? messageVault.getRaw(phoneNumber, from, quotedId)
+            ? messageVault.getRaw(phoneNumber, quotedChat, quotedId)
             : null;
         const cachedFound = cachedRaw
             ? (extractViewOnce(cachedRaw.message || {}) || findMedia(cachedRaw.message || {}))
@@ -100,13 +101,19 @@ module.exports = {
         // If WhatsApp has already removed the encrypted descriptor, use the
         // bytes captured by messageVault while the message was still alive.
         const cachedRecord = phoneNumber && quotedId
-            ? messageVault.lookup(phoneNumber, from, quotedId)
+            ? messageVault.lookup(phoneNumber, quotedChat, quotedId)
             : null;
         const cachedBuffer = cachedRecord?.mediaBuffer;
 
         // ── 3. Download and re-send (clean, no text) ───────────────────────
         try {
-            const buffer = cachedBuffer || await downloadMedia(mediaMsg, mediaType);
+            let buffer = cachedBuffer;
+            if (!buffer && quoted?.download) {
+                try { buffer = await quoted.download(); } catch (error) {
+                    console.warn('[VV] normalized quote download failed:', error.message);
+                }
+            }
+            if (!buffer) buffer = await downloadMedia(mediaMsg, mediaType);
 
             if (mediaType === 'image') {
                 await sock.sendMessage(from, {
