@@ -12,6 +12,7 @@
 const os   = require('os');
 const fs   = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const config         = require('../../config');
 const commandLoader  = require('../../utils/commandLoader');
 const database       = require('../../utils/database');
@@ -19,12 +20,126 @@ const { buildCaption } = require('../../utils/menuDesigns');
 const { boldItalic } = require('../../utils/styleBox');
 const { sendChromaMenu } = require('../../utils/chromaMenu');
 const fontSystem     = require('../../utils/fontSystem');
-const langSystem     = require('../../utils/langSystem');
+const langSystem      = require('../../utils/langSystem');
+const { generateWAMessageFromContent, prepareWAMessageMedia, proto } = require('@pasqua-dev/baileys');
 
 const VIDEO_PATH  = path.join(__dirname, '..', '..', 'assets', 'menuvideo.mp4');
 const IMAGE_PATH         = path.join(__dirname, '..', '..', 'assets', 'menuimage.jpg');
 const DEFAULT_IMAGE_PATH = path.join(__dirname, '..', '..', 'assets', 'default-menuimage.png');
 const GIF_PATH           = path.join(__dirname, '..', '..', 'assets', 'menugif.mp4');
+
+const RELAY_CHANNEL_URL = 'https://whatsapp.com/channel/0029Vb912f9It5rxMNf1Sf2n';
+
+function buildRelayWidget({ sortedCategories, byCategory, total, prefix }) {
+    const categories = sortedCategories.filter(cat => byCategory[cat]?.length);
+    const directory = categories.map(cat => `〔 ${cat.toUpperCase()} 〕 — ${byCategory[cat].length} cmds`).join('\n');
+    const components = [
+        { id: 'root', component: 'Card', child: 'main' },
+        { id: 'main', component: 'Column', children: ['brand', 'version', 'heading', 'description', 'stats', 'divider', 'directoryTitle', 'directory', 'footerDivider', 'footer'] },
+        { id: 'brand', component: 'Text', text: `༺ ${config.botName || 'SUKUNA MD'} ༻`, variant: 'h2' },
+        { id: 'version', component: 'Text', text: `PASQUA TECH / ${total} PLUGINS`, variant: 'caption' },
+        { id: 'heading', component: 'Text', text: 'Command Center', variant: 'h3' },
+        { id: 'description', component: 'Text', text: `Select a category below to view commands. Prefix: ${prefix}`, variant: 'body' },
+        { id: 'stats', component: 'Row', children: ['total', 'cats', 'status'] },
+        { id: 'total', component: 'Card', child: 'totalValue' },
+        { id: 'totalValue', component: 'Column', children: ['totalLabel', 'totalNumber'] },
+        { id: 'totalLabel', component: 'Text', text: 'PLUGINS', variant: 'caption' },
+        { id: 'totalNumber', component: 'Text', text: String(total), variant: 'h2' },
+        { id: 'cats', component: 'Card', child: 'catsValue' },
+        { id: 'catsValue', component: 'Column', children: ['catsLabel', 'catsNumber'] },
+        { id: 'catsLabel', component: 'Text', text: 'CATEGORIES', variant: 'caption' },
+        { id: 'catsNumber', component: 'Text', text: String(categories.length), variant: 'h2' },
+        { id: 'status', component: 'Card', child: 'statusValue' },
+        { id: 'statusValue', component: 'Column', children: ['statusLabel', 'statusNumber'] },
+        { id: 'statusLabel', component: 'Text', text: 'STATUS', variant: 'caption' },
+        { id: 'statusNumber', component: 'Text', text: 'ONLINE', variant: 'h2' },
+        { id: 'divider', component: 'Divider' },
+        { id: 'directoryTitle', component: 'Text', text: 'COMMAND CATEGORIES', variant: 'h3' },
+        { id: 'directory', component: 'Text', text: directory || 'No categories', variant: 'body' },
+        { id: 'footerDivider', component: 'Divider' },
+        { id: 'footer', component: 'Text', text: `${config.botName || 'SUKUNA MD'} · ${total} plugins · ${categories.length} categories`, variant: 'caption' },
+    ];
+    return {
+        uuid: crypto.randomUUID(),
+        type: 'im_a2ui',
+        data: JSON.stringify({
+            version: 'v0.9',
+            createSurface: {
+                surfaceId: `sukuna-relay=${crypto.randomUUID()}`,
+                catalogId: 'https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json',
+                sendDataModel: true,
+                components,
+            },
+        }),
+        fallback: `${config.botName || 'SUKUNA MD'}\n${total} Plugins | ${categories.length} Categories`,
+        responseId: crypto.randomUUID().replace(/-/g, ''),
+    };
+}
+
+async function sendRelayMenu({ sock, msg, from, caption, commands, sortedCategories, byCategory, prefix, botName }) {
+    const imagePath = fs.existsSync(IMAGE_PATH) ? IMAGE_PATH : DEFAULT_IMAGE_PATH;
+    if (!fs.existsSync(imagePath)) throw new Error('relay menu image is unavailable');
+    const { imageMessage } = await prepareWAMessageMedia(
+        { image: fs.readFileSync(imagePath) },
+        { upload: sock.waUploadToServer.bind(sock) }
+    );
+    const sections = [];
+    for (const category of sortedCategories) {
+        const list = (byCategory[category] || []).slice().sort();
+        for (let index = 0; index < list.length; index += 10) {
+            const rows = list.slice(index, index + 10).map(name => ({
+                title: `${prefix}${name}`,
+                description: String(commands.get(name)?.description || commands.get(name)?.desc || `${category} command`).slice(0, 72),
+                id: `chroma:${prefix}${name}`,
+            }));
+            if (rows.length) {
+                const page = Math.floor(index / 10) + 1;
+                const pages = Math.ceil(list.length / 10);
+                sections.push({ title: pages > 1 ? `${category.toUpperCase()} ${page}/${pages}` : category.toUpperCase(), rows });
+            }
+        }
+    }
+    if (!sections.length) sections.push({ title: 'MENU', rows: [{ title: `${prefix}menu`, description: 'Open the command menu', id: 'chroma:menu' }] });
+    const widget = buildRelayWidget({ sortedCategories, byCategory, total: commands.size, prefix });
+    const responseId = widget.responseId;
+    const interactiveMessage = proto.Message.InteractiveMessage.fromObject({
+        header: { imageMessage, hasMediaAttachment: true },
+        body: { text: caption },
+        footer: { text: `${botName || config.botName || 'SUKUNA MD'} · COMMAND CENTER` },
+        nativeFlowMessage: {
+            buttons: [
+                { name: 'single_select', buttonParamsJson: JSON.stringify({ title: `📂 OPEN MENU (${commands.size})`, sections }) },
+                { name: 'cta_url', buttonParamsJson: JSON.stringify({ display_text: '📢 Support Channel', url: RELAY_CHANNEL_URL, merchant_url: RELAY_CHANNEL_URL }) },
+            ],
+            messageParamsJson: '{}',
+            messageVersion: 1,
+        },
+        bloksWidget: widget,
+        contextInfo: {
+            isForwarded: true,
+            forwardingScore: 1,
+            forwardedAiBotMessageInfo: { botJid: '867051314767696@bot' },
+            forwardOrigin: 'META_AI',
+            botMessageSharingInfo: { botEntryPointOrigin: 'FAVICON', forwardScore: 1 },
+        },
+    });
+    const wrapped = generateWAMessageFromContent(from, {
+        messageContextInfo: { messageSecret: crypto.randomBytes(32) },
+        interactiveMessage,
+    }, { userJid: sock.user?.id, raw: true, quoted: msg });
+    const additionalNodes = [
+        ...(!String(from).endsWith('@g.us') ? [{ tag: 'bot', attrs: { biz_bot: '1' } }] : []),
+        {
+            tag: 'biz',
+            attrs: { actual_actors: '2', host_storage: '2', privacy_mode_ts: String(Math.floor(Date.now() / 1000)) },
+            content: [
+                { tag: 'interactive', attrs: { type: 'native_flow', v: '1' }, content: [{ tag: 'native_flow', attrs: { v: '9', name: 'mixed' } }] },
+                { tag: 'quality_control', attrs: { decision_id: responseId, source_type: 'third_party' }, content: [{ tag: 'decision_source', attrs: { value: 'df' } }] },
+            ],
+        },
+    ];
+    return sock.relayMessage(from, wrapped.message, { messageId: wrapped.key.id, additionalNodes });
+}
 
 
 function fmtUptime(sec) {
@@ -270,9 +385,12 @@ module.exports = {
         const DEFAULT_READ_MORE_ANCHOR = '\u2063';
         if (designKey === 'default' && caption.includes(DEFAULT_READ_MORE_ANCHOR)) {
             caption = caption.replace(DEFAULT_READ_MORE_ANCHOR, READ_MORE);
+        } else if (designKey === 'relay') {
+            // The relay surface has its own A2UI layout and must not receive
+            // the legacy caption-collapse padding.
         } else {
             const anchorLine = caption.match(/^.*latform.*$/im) || caption.match(/^.*status.*$/im);
-            if (designKey !== 'relay' && anchorLine) {
+            if (anchorLine) {
             const cutAt = caption.indexOf(anchorLine[0]) + anchorLine[0].length;
             caption = caption.slice(0, cutAt) + '\n' + READ_MORE + caption.slice(cutAt);
             } else {
@@ -333,37 +451,16 @@ module.exports = {
             }
 
             if (designKey === 'relay') {
-                return await sock.relayMessage(from, {
-                    buttonsMessage: {
-                        text: caption,
-                        contentText: caption,
-                        footerText: '「 𝙏𝙞𝙢𝙚 - 𝙏𝙞𝙢𝙚𝙡𝙚𝙨𝙨 」',
-                        locationMessage: {
-                            name: botName || 'SUKUNA MD',
-                            address: 'SUKUNA MD Menu',
-                            jpegThumbnail: fs.existsSync(IMAGE_PATH)
-                                ? fs.readFileSync(IMAGE_PATH)
-                                : fs.existsSync(DEFAULT_IMAGE_PATH)
-                                    ? fs.readFileSync(DEFAULT_IMAGE_PATH)
-                                : undefined,
-                        },
-                        buttons: [
-                            { buttonId: 'commands_btn', buttonText: { displayText: '📋 Commands' }, type: 1 },
-                            { buttonId: 'alive_btn', buttonText: { displayText: '💚 Alive' }, type: 1 },
-                            { buttonId: 'ping_btn', buttonText: { displayText: '⚡ Ping' }, type: 1 },
-                        ],
-                        headerType: 6,
-                    },
-                }, {
-                    additionalNodes: [{
-                        tag: 'biz',
-                        attrs: {},
-                        content: [{
-                            tag: 'interactive',
-                            attrs: { type: 'native_flow', v: '1' },
-                            content: [{ tag: 'native_flow', attrs: { v: '9', name: 'mixed' } }],
-                        }],
-                    }],
+                return await sendRelayMenu({
+                    sock,
+                    msg,
+                    from,
+                    caption,
+                    commands,
+                    sortedCategories,
+                    byCategory,
+                    prefix,
+                    botName,
                 });
             }
 
